@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>CheManca?</title>
+  <meta name="theme-color" content="#F3F5F1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="CheManca?">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="shell">
+    <!-- la fotocamera vive fuori da #app, così i ridisegni non la spengono -->
+    <div id="camera" aria-label="Fotocamera">
+      <video id="video" playsinline muted></video>
+      <div class="mirino" aria-hidden="true"><span></span><span></span><span></span><span></span><i></i></div>
+    </div>
+    <main id="app"><p class="vuoto">Caricamento…</p></main>
+  </div>
+  <nav id="nav" aria-label="Sezioni"></nav>
+  <div id="sheet" role="dialog" aria-modal="true"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.js"></script>
+  <script src="config.js"></script>
+  <script src="logica.js"></script>
+  <script src="catalogo.js"></script>
+  <script src="importa_pdf.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

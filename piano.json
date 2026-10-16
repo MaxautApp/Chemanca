@@ -1,0 +1,3652 @@
+{
+ "inizio": "2026-10-12",
+ "fonte": "2° MESE/genera_piano.py",
+ "settimane": [
+  [
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      },
+      {
+       "nome": "Avocado",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Mandorle",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [
+      "Insalatona con gamberi"
+     ],
+     "voci": [
+      {
+       "nome": "Gamberi",
+       "max": 200,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Misto verdure crude",
+       "max": 300,
+       "vale": 300,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Prosciutto crudo magro",
+       "max": 40,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Parmigiano",
+       "max": null,
+       "vale": 20,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pastina",
+       "max": 80,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Fagioli in scatola",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Uovo di gallina",
+       "max": 2,
+       "vale": 2,
+       "u": "n."
+      },
+      {
+       "nome": "Ricotta di vacca",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      },
+      {
+       "nome": "Miele millefiori",
+       "max": 1,
+       "vale": 1,
+       "u": "cucchiaino"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Noci secche",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Hamburger di tacchino",
+       "max": 200,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Parmigiano",
+       "max": 30,
+       "vale": 20,
+       "u": "g"
+      },
+      {
+       "nome": "Crackers non salati",
+       "max": 30,
+       "vale": null,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Merluzzo o nasello",
+       "max": 250,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      },
+      {
+       "nome": "Avocado",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Mandorle",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [
+      "Insalatona con tonno sott'olio"
+     ],
+     "voci": [
+      {
+       "nome": "Tonno sott'olio",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Misto verdure crude",
+       "max": 300,
+       "vale": 300,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Yogurt greco 2%",
+       "max": 1,
+       "vale": null,
+       "u": "vasetto"
+      },
+      {
+       "nome": "Mirtilli",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Parmigiano",
+       "max": null,
+       "vale": 20,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Riso Basmati integrale",
+       "max": 80,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Bocconcini di pollo",
+       "max": 200,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Uovo di gallina",
+       "max": 2,
+       "vale": 2,
+       "u": "n."
+      },
+      {
+       "nome": "Albume d'uovo",
+       "max": 100,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Ricotta di vacca",
+       "max": null,
+       "vale": 50,
+       "u": "g"
+      },
+      {
+       "nome": "Miele millefiori",
+       "max": 1,
+       "vale": 1,
+       "u": "cucchiaino"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Noci secche",
+       "max": 10,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Arachidi tostate",
+       "max": null,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Petto di pollo",
+       "max": 200,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Parmigiano",
+       "max": 30,
+       "vale": 20,
+       "u": "g"
+      },
+      {
+       "nome": "Crackers non salati",
+       "max": 30,
+       "vale": null,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pasta integrale",
+       "max": 80,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Ricotta di vacca",
+       "max": 100,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Mozzarella",
+       "max": null,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      },
+      {
+       "nome": "Avocado",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Mandorle",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Uovo di gallina",
+       "max": 2,
+       "vale": 2,
+       "u": "n."
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Prosciutto crudo magro",
+       "max": 40,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Parmigiano",
+       "max": null,
+       "vale": 20,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Spigola",
+       "max": 250,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Patate",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Farina di cocco",
+       "max": 30,
+       "vale": 30,
+       "u": "g"
+      },
+      {
+       "nome": "Albume d'uovo",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Ricotta di vacca",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Noci secche",
+       "max": 10,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Anacardi",
+       "max": null,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pesce spada",
+       "max": 250,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Parmigiano",
+       "max": 30,
+       "vale": 20,
+       "u": "g"
+      },
+      {
+       "nome": "Crackers non salati",
+       "max": 30,
+       "vale": null,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": true,
+     "piatti": [],
+     "voci": []
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Farina di cocco",
+       "max": 30,
+       "vale": 30,
+       "u": "g"
+      },
+      {
+       "nome": "Albume d'uovo",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Ricotta di vacca",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Mandorle",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pasta integrale",
+       "max": 80,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Pesto",
+       "max": 40,
+       "vale": 30,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Yogurt greco 2%",
+       "max": 1,
+       "vale": null,
+       "u": "vasetto"
+      },
+      {
+       "nome": "Mirtilli",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Parmigiano",
+       "max": null,
+       "vale": 20,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Vellutata di zucca",
+       "max": 250,
+       "vale": 250,
+       "u": "g"
+      },
+      {
+       "nome": "Manzo magro",
+       "max": 200,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      }
+     ]
+    }
+   ]
+  ],
+  [
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      },
+      {
+       "nome": "Avocado",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Mandorle",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [
+      "Insalatona con gamberi e mais"
+     ],
+     "voci": [
+      {
+       "nome": "Gamberi",
+       "max": 100,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Misto verdure crude",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Mais in scatola",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pane integrale",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Bresaola",
+       "max": 40,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Ricotta di pecora",
+       "max": null,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pastina",
+       "max": 80,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Fagioli in scatola",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [
+      "Frittata"
+     ],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Uovo di gallina",
+       "max": 2,
+       "vale": 2,
+       "u": "n."
+      },
+      {
+       "nome": "Ricotta di pecora",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      },
+      {
+       "nome": "Miele millefiori",
+       "max": 1,
+       "vale": 1,
+       "u": "cucchiaino"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Noci secche",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Hamburger di tacchino",
+       "max": 200,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Provolone",
+       "max": 30,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 60,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Parmigiano",
+       "max": null,
+       "vale": 20,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Platessa",
+       "max": 240,
+       "vale": 190,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      },
+      {
+       "nome": "Avocado",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Mandorle",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [
+      "Pomodoro e mozzarella light"
+     ],
+     "voci": [
+      {
+       "nome": "Mozzarella light",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Pomodori",
+       "max": 250,
+       "vale": 250,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Latte scremato",
+       "max": 300,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Mirtilli",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Ricotta di pecora",
+       "max": null,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Riso Basmati integrale",
+       "max": 80,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Bocconcini di pollo",
+       "max": 200,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Uovo di gallina",
+       "max": 2,
+       "vale": 2,
+       "u": "n."
+      },
+      {
+       "nome": "Albume d'uovo",
+       "max": 100,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Ricotta di pecora",
+       "max": null,
+       "vale": 50,
+       "u": "g"
+      },
+      {
+       "nome": "Miele millefiori",
+       "max": 1,
+       "vale": 1,
+       "u": "cucchiaino"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Noci secche",
+       "max": 10,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Arachidi tostate",
+       "max": null,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Hamburger di pollo",
+       "max": 150,
+       "vale": 120,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Parmigiano",
+       "max": 30,
+       "vale": 20,
+       "u": "g"
+      },
+      {
+       "nome": "Crackers non salati",
+       "max": 30,
+       "vale": null,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pasta integrale",
+       "max": 80,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Caciottina",
+       "max": 60,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      },
+      {
+       "nome": "Avocado",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Mandorle",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [
+      "Frittata con zucchine"
+     ],
+     "voci": [
+      {
+       "nome": "Uovo di gallina",
+       "max": 2,
+       "vale": 2,
+       "u": "n."
+      },
+      {
+       "nome": "Zucchine",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pane bianco",
+       "max": 40,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Fesa di pollo arrosto",
+       "max": 60,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Ricotta di pecora",
+       "max": null,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Dentice",
+       "max": 280,
+       "vale": 230,
+       "u": "g"
+      },
+      {
+       "nome": "Patate",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Farina di cocco",
+       "max": 30,
+       "vale": 30,
+       "u": "g"
+      },
+      {
+       "nome": "Albume d'uovo",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Ricotta di pecora",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Noci secche",
+       "max": 10,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Anacardi",
+       "max": null,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Orata",
+       "max": 200,
+       "vale": 160,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Provolone",
+       "max": 30,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Pane bianco",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Parmigiano",
+       "max": null,
+       "vale": 20,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": true,
+     "piatti": [],
+     "voci": []
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Farina di cocco",
+       "max": 30,
+       "vale": 30,
+       "u": "g"
+      },
+      {
+       "nome": "Albume d'uovo",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Ricotta di vacca",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Mandorle",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pasta integrale",
+       "max": 80,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Pesto",
+       "max": 40,
+       "vale": 30,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Yogurt greco 2%",
+       "max": 1,
+       "vale": null,
+       "u": "vasetto"
+      },
+      {
+       "nome": "Mirtilli",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Ricotta di pecora",
+       "max": null,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Vellutata di zucca",
+       "max": 250,
+       "vale": 250,
+       "u": "g"
+      },
+      {
+       "nome": "Petto di tacchino",
+       "max": 220,
+       "vale": 170,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      }
+     ]
+    }
+   ]
+  ],
+  [
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      },
+      {
+       "nome": "Avocado",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Mandorle",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [
+      "Insalatona con mozzarella light"
+     ],
+     "voci": [
+      {
+       "nome": "Mozzarella light",
+       "max": 100,
+       "vale": 70,
+       "u": "g"
+      },
+      {
+       "nome": "Misto verdure crude",
+       "max": 300,
+       "vale": 300,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Fesa di tacchino arrosto",
+       "max": 60,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Crescenza",
+       "max": null,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pastina",
+       "max": 80,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Fagioli in scatola",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [
+      "Frittata con zucchine"
+     ],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Uovo di gallina",
+       "max": 2,
+       "vale": 2,
+       "u": "n."
+      },
+      {
+       "nome": "Zucchine",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Crescenza",
+       "max": 30,
+       "vale": 30,
+       "u": "g"
+      },
+      {
+       "nome": "Miele millefiori",
+       "max": 1,
+       "vale": 1,
+       "u": "cucchiaino"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Noci secche",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Hamburger di tacchino",
+       "max": 200,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Parmigiano",
+       "max": 30,
+       "vale": 20,
+       "u": "g"
+      },
+      {
+       "nome": "Pane bianco",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Polpo",
+       "max": 300,
+       "vale": 250,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      },
+      {
+       "nome": "Avocado",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Mandorle",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [
+      "Insalatona fiocchi di formaggio e mais"
+     ],
+     "voci": [
+      {
+       "nome": "Fiocchi di formaggio magro",
+       "max": 120,
+       "vale": 120,
+       "u": "g"
+      },
+      {
+       "nome": "Lattuga",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Mais in scatola",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Yogurt greco 2%",
+       "max": 1,
+       "vale": null,
+       "u": "vasetto"
+      },
+      {
+       "nome": "Mirtilli",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Crescenza",
+       "max": null,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Riso Basmati integrale",
+       "max": 80,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Bocconcini di pollo",
+       "max": 200,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [
+      "Frittata"
+     ],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Uovo di gallina",
+       "max": 2,
+       "vale": 2,
+       "u": "n."
+      },
+      {
+       "nome": "Albume d'uovo",
+       "max": 100,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Crescenza",
+       "max": null,
+       "vale": 30,
+       "u": "g"
+      },
+      {
+       "nome": "Miele millefiori",
+       "max": 1,
+       "vale": 1,
+       "u": "cucchiaino"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Noci secche",
+       "max": 10,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Arachidi tostate",
+       "max": null,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Maiale magro",
+       "max": 150,
+       "vale": 110,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Groviera",
+       "max": 30,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Crackers non salati",
+       "max": 30,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Parmigiano",
+       "max": null,
+       "vale": 20,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pasta integrale",
+       "max": 80,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Crescenza",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Scamorza",
+       "max": null,
+       "vale": 80,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      },
+      {
+       "nome": "Avocado",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Mandorle",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [
+      "Frittata con parmigiano"
+     ],
+     "voci": [
+      {
+       "nome": "Uovo di gallina",
+       "max": 1,
+       "vale": 1,
+       "u": "n."
+      },
+      {
+       "nome": "Parmigiano grattugiato",
+       "max": 4,
+       "vale": 4,
+       "u": "cucchiaini"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pane integrale",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Bresaola",
+       "max": 40,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Crescenza",
+       "max": null,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Orata",
+       "max": 200,
+       "vale": 170,
+       "u": "g"
+      },
+      {
+       "nome": "Patate",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Farina di cocco",
+       "max": 30,
+       "vale": 30,
+       "u": "g"
+      },
+      {
+       "nome": "Albume d'uovo",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Crescenza",
+       "max": 30,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Noci secche",
+       "max": 10,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Anacardi",
+       "max": null,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Dentice",
+       "max": 280,
+       "vale": 230,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Groviera",
+       "max": 30,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 60,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Parmigiano",
+       "max": null,
+       "vale": 20,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": true,
+     "piatti": [],
+     "voci": []
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Farina di cocco",
+       "max": 30,
+       "vale": 30,
+       "u": "g"
+      },
+      {
+       "nome": "Albume d'uovo",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Ricotta di vacca",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Mandorle",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pasta integrale",
+       "max": 80,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Pesto",
+       "max": 40,
+       "vale": 30,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Latte scremato",
+       "max": 300,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Mirtilli",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Crescenza",
+       "max": null,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Vellutata di zucca",
+       "max": 250,
+       "vale": 250,
+       "u": "g"
+      },
+      {
+       "nome": "Coscia di pollo",
+       "max": 180,
+       "vale": 140,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      }
+     ]
+    }
+   ]
+  ],
+  [
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      },
+      {
+       "nome": "Avocado",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Mandorle",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [
+      "Insalatona con pollo (e mais)"
+     ],
+     "voci": [
+      {
+       "nome": "Petto di pollo",
+       "max": 80,
+       "vale": 120,
+       "u": "g"
+      },
+      {
+       "nome": "Misto verdure crude",
+       "max": 200,
+       "vale": 300,
+       "u": "g"
+      },
+      {
+       "nome": "Mais in scatola",
+       "max": 100,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pane bianco",
+       "max": 40,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Prosciutto crudo magro",
+       "max": 40,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Primosale",
+       "max": null,
+       "vale": 40,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pastina",
+       "max": 80,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Fagioli in scatola",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Uovo di gallina",
+       "max": 2,
+       "vale": 2,
+       "u": "n."
+      },
+      {
+       "nome": "Caciottina",
+       "max": 30,
+       "vale": 30,
+       "u": "g"
+      },
+      {
+       "nome": "Miele millefiori",
+       "max": 1,
+       "vale": 1,
+       "u": "cucchiaino"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Noci secche",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Hamburger di tacchino",
+       "max": 200,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Fontina",
+       "max": 30,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Crackers non salati",
+       "max": 30,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Parmigiano",
+       "max": null,
+       "vale": 20,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Sogliola",
+       "max": 220,
+       "vale": 180,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      },
+      {
+       "nome": "Avocado",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Mandorle",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [
+      "Insalatona mozzarella light e mais"
+     ],
+     "voci": [
+      {
+       "nome": "Mozzarella light",
+       "max": 60,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Misto verdure crude",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Mais in scatola",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Latte scremato",
+       "max": 300,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Mirtilli",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Primosale",
+       "max": null,
+       "vale": 40,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Riso Basmati integrale",
+       "max": 80,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Bocconcini di pollo",
+       "max": 200,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [
+      "Frittata con zucchine"
+     ],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Uovo di gallina",
+       "max": 2,
+       "vale": 2,
+       "u": "n."
+      },
+      {
+       "nome": "Zucchine",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Albume d'uovo",
+       "max": 100,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Caciottina",
+       "max": null,
+       "vale": 30,
+       "u": "g"
+      },
+      {
+       "nome": "Miele millefiori",
+       "max": 1,
+       "vale": 1,
+       "u": "cucchiaino"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Noci secche",
+       "max": 10,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Arachidi tostate",
+       "max": null,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Petto di tacchino",
+       "max": 180,
+       "vale": 140,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Fontina",
+       "max": 30,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 60,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Parmigiano",
+       "max": null,
+       "vale": 20,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pasta integrale",
+       "max": 80,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Ricotta di pecora",
+       "max": 90,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Primosale",
+       "max": null,
+       "vale": 110,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      },
+      {
+       "nome": "Avocado",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Mandorle",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [
+      "Frittata"
+     ],
+     "voci": [
+      {
+       "nome": "Uovo di gallina",
+       "max": 2,
+       "vale": 2,
+       "u": "n."
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pane integrale di segale",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Fesa di tacchino arrosto",
+       "max": 60,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Primosale",
+       "max": null,
+       "vale": 40,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Spigola",
+       "max": 250,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Patate",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Farina di cocco",
+       "max": 30,
+       "vale": 30,
+       "u": "g"
+      },
+      {
+       "nome": "Albume d'uovo",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Caciottina",
+       "max": 30,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Noci secche",
+       "max": 10,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Anacardi",
+       "max": null,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pesce spada",
+       "max": 250,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      },
+      {
+       "nome": "Pane integrale",
+       "max": 50,
+       "vale": 30,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Parmigiano",
+       "max": 30,
+       "vale": 20,
+       "u": "g"
+      },
+      {
+       "nome": "Pane bianco",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": true,
+     "piatti": [],
+     "voci": []
+    }
+   ],
+   [
+    {
+     "pasto": "Colazione",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Caffè",
+       "max": 1,
+       "vale": 1,
+       "u": "tazzina"
+      },
+      {
+       "nome": "Farina di cocco",
+       "max": 30,
+       "vale": 30,
+       "u": "g"
+      },
+      {
+       "nome": "Albume d'uovo",
+       "max": 100,
+       "vale": 100,
+       "u": "g"
+      },
+      {
+       "nome": "Ricotta di vacca",
+       "max": 50,
+       "vale": 50,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Metà mattina",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Frutta di stagione",
+       "max": 150,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Mandorle",
+       "max": 10,
+       "vale": 10,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Pranzo",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Pasta integrale",
+       "max": 80,
+       "vale": 60,
+       "u": "g"
+      },
+      {
+       "nome": "Pesto",
+       "max": 40,
+       "vale": 30,
+       "u": "g"
+      },
+      {
+       "nome": "Verdura di stagione",
+       "max": 200,
+       "vale": 200,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Merenda",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Yogurt greco 2%",
+       "max": 1,
+       "vale": null,
+       "u": "vasetto"
+      },
+      {
+       "nome": "Mirtilli",
+       "max": 50,
+       "vale": null,
+       "u": "g"
+      },
+      {
+       "nome": "Primosale",
+       "max": null,
+       "vale": 40,
+       "u": "g"
+      }
+     ]
+    },
+    {
+     "pasto": "Cena",
+     "libero": false,
+     "piatti": [],
+     "voci": [
+      {
+       "nome": "Vellutata di zucca",
+       "max": 250,
+       "vale": 250,
+       "u": "g"
+      },
+      {
+       "nome": "Coscia di tacchino",
+       "max": 200,
+       "vale": 150,
+       "u": "g"
+      },
+      {
+       "nome": "Pane bianco",
+       "max": 40,
+       "vale": null,
+       "u": "g"
+      }
+     ]
+    }
+   ]
+  ]
+ ],
+ "extra": [
+  {
+   "nome": "Cioccolato fondente",
+   "max": 10,
+   "vale": null,
+   "u": "g"
+  },
+  {
+   "nome": "Olio extra vergine di oliva",
+   "max": 4,
+   "vale": 4,
+   "u": "cucchiaini"
+  }
+ ],
+ "categorie": {
+  "PANE, CEREALI E DISPENSA": [
+   "Pane integrale di segale",
+   "Pane integrale",
+   "Pane bianco",
+   "Crackers non salati",
+   "Pasta integrale",
+   "Pastina",
+   "Riso Basmati integrale",
+   "Farina di cocco",
+   "Fagioli in scatola",
+   "Mais in scatola",
+   "Tonno sott'olio",
+   "Pesto",
+   "Miele millefiori",
+   "Cioccolato fondente",
+   "Olio extra vergine di oliva",
+   "Caffè"
+  ],
+  "CARNE E SALUMI": [
+   "Petto di pollo",
+   "Hamburger di pollo",
+   "Bocconcini di pollo",
+   "Coscia di pollo",
+   "Hamburger di tacchino",
+   "Petto di tacchino",
+   "Coscia di tacchino",
+   "Manzo magro",
+   "Maiale magro",
+   "Prosciutto crudo magro",
+   "Bresaola",
+   "Fesa di pollo arrosto",
+   "Fesa di tacchino arrosto"
+  ],
+  "PESCE": [
+   "Gamberi",
+   "Merluzzo o nasello",
+   "Platessa",
+   "Polpo",
+   "Sogliola",
+   "Pesce spada",
+   "Spigola",
+   "Orata",
+   "Dentice"
+  ],
+  "UOVA E LATTICINI": [
+   "Uovo di gallina",
+   "Albume d'uovo",
+   "Parmigiano",
+   "Parmigiano grattugiato",
+   "Provolone",
+   "Groviera",
+   "Fontina",
+   "Ricotta di vacca",
+   "Ricotta di pecora",
+   "Crescenza",
+   "Caciottina",
+   "Primosale",
+   "Scamorza",
+   "Mozzarella",
+   "Mozzarella light",
+   "Fiocchi di formaggio magro",
+   "Yogurt greco 2%",
+   "Latte scremato"
+  ],
+  "VERDURA": [
+   "Verdura di stagione",
+   "Misto verdure crude",
+   "Lattuga",
+   "Pomodori",
+   "Zucchine",
+   "Patate",
+   "Vellutata di zucca"
+  ],
+  "FRUTTA E FRUTTA SECCA": [
+   "Frutta di stagione",
+   "Mirtilli",
+   "Avocado",
+   "Mandorle",
+   "Noci secche",
+   "Arachidi tostate",
+   "Anacardi"
+  ]
+ }
+}
