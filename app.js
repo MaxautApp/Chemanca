@@ -715,6 +715,18 @@
         <label class="btn sec" style="cursor:pointer">Ripristina una copia<input type="file" accept=".json,application/json" data-file="copia" class="sr"></label>
         <button class="btn rosso" data-a="svuota">Cancella tutto</button>
       </section>
+
+      <footer class="credits">
+        <img src="icon.svg" alt="" width="48" height="48">
+        <p class="credits-app">CheManca?</p>
+        <p>Sviluppata da <b>Massimo Autiero</b><br>© 2026 · Tutti i diritti riservati</p>
+        <hr>
+        <p>In collaborazione con lo studio medico della<br><b>Dott.ssa Ginevra Mochi</b><br><span class="credits-ruolo">Dietista - Nutrizionista</span></p>
+        <p class="credits-contatti">
+          <a href="tel:+393494906341">Cellulare: 349 490 6341</a>
+          <a href="mailto:ginevra.mochi@gmail.com">Email: ginevra.mochi@gmail.com</a>
+        </p>
+      </footer>
     </div>`;
     return h;
   }

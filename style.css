@@ -266,3 +266,13 @@ label.campo, .campo { display: flex; flex-direction: column; gap: 6px; font-size
 .sezione-imp p { font-size: 14px; color: var(--muted); line-height: 1.5; }
 .sezione-imp ol { margin: 0; padding-left: 20px; font-size: 14px; color: var(--muted); line-height: 1.6; }
 code { font-size: 13px; background: var(--line-soft); padding: 1px 5px; border-radius: 5px; }
+
+/* ---------- credits in fondo alle impostazioni ---------- */
+.credits { margin: 8px 0 4px; padding: 24px 16px 8px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.credits img { border-radius: 12px; }
+.credits-app { font-family: var(--display); font-size: 20px; font-weight: 700; color: var(--ink); }
+.credits b { color: var(--ink); }
+.credits hr { width: 48px; border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+.credits-ruolo { font-size: 12px; }
+.credits-contatti { display: flex; flex-direction: column; gap: 2px; }
+.credits-contatti a { color: var(--green); font-weight: 700; text-decoration: none; min-height: 32px; display: inline-flex; align-items: center; justify-content: center; }
