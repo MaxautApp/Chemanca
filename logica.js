@@ -57,7 +57,8 @@
 
   /* pasti ancora da mangiare da adesso per `giorni` giorni (oggi compreso).
      stati: { "2026-10-14|Pranzo": {stato:"fatto"} } — un pasto confermato non conta più.
-     ora: l'ora attuale; i pasti di oggi passati da più di un'ora non si contano (troppo tardi per comprare). */
+     ora: l'ora attuale. I pasti di oggi già passati (più di un'ora fa) si danno per mangiati:
+     consumano la scorta simulata ma non generano allarmi, ormai è tardi per comprare. */
   function pastiFinestra(piano, oggi, giorni, stati, ora) {
     const out = [];
     for (let i = 0; i < giorni; i++) {
@@ -67,8 +68,8 @@
       for (const p of g.pasti) {
         const k = chiavePasto(data, p.pasto);
         if (stati && stati[k]) continue;
-        if (i === 0 && ora != null && ORA[p.pasto] + 1 < ora) continue;
-        out.push({ data, chiave: k, ...p, settimana: g.settimana, ord: i * 100 + ORA[p.pasto] });
+        const passato = i === 0 && ora != null && ORA[p.pasto] + 1 < ora;
+        out.push({ data, chiave: k, ...p, passato, settimana: g.settimana, ord: i * 100 + ORA[p.pasto] });
       }
     }
     return out.sort((a, b) => a.ord - b.ord);
@@ -171,8 +172,9 @@
       for (const v of ordinaVoci(p.voci)) {
         const serve = quantoServe(v);
         if (serve <= 0) continue;
-        tutteVoci.add(v.nome);
         const { resta } = preleva(stock, v.nome, serve, v.u);
+        if (p.passato) continue;
+        tutteVoci.add(v.nome);
         if (resta <= 0) continue;
         let m = perVoce.get(v.nome);
         if (!m) {

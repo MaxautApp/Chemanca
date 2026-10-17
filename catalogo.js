@@ -78,5 +78,5 @@
     p("Pane", "dispensa", "Pane integrale", ["Pane integrale"], "g", 250),
     p("Pane", "dispensa", "Pane bianco", ["Pane bianco"], "g", 250),
   ];
-  root.GRUPPI_CATALOGO = ["Frutta", "Verdura", "Pesce", "Carne", "Banco", "Pane", "Altro"];
+  root.GRUPPI_CATALOGO = ["Frutta", "Verdura", "Pesce", "Carne", "Banco", "Pane", "Dal piano", "Altro"];
 })(typeof self !== "undefined" ? self : this);
