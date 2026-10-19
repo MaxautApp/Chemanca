@@ -392,7 +392,7 @@
     }
     const alternative = {};
     for (const x of lista) if (x.piano && x.piano.alternative && Object.keys(x.piano.alternative).length) alternative[x.id] = x.piano.alternative;
-    return { inizio, fonte, settimane: [settimana], extra: [], categorie: {}, alternative, fissate: {} };
+    return { inizio, lunedi: true, fonte, settimane: [settimana], extra: [], categorie: {}, alternative, fissate: {} };
   }
 
   /* dagli elementi di testo di pdf.js (getTextContent().items) alle righe.

@@ -669,7 +669,7 @@
       for (const m of mancanti) {
         const gr = GRUPPO_GENERICO[m.voce];
         if (gr) {
-          h += `<button class="chip chip-manca liv-${livello(m.data)}" data-a="vai-gruppo" data-gruppo="${esc(gr)}" aria-label="${esc(m.voce)}: scegli quale">
+          h += `<button class="chip chip-manca liv-${livello(m.data)}" data-a="vai-gruppo" data-gruppo="${esc(gr)}" data-voce="${esc(m.voce)}" aria-label="${esc(m.voce)}: scegli quale">
             <span class="punto-liv" aria-hidden="true"></span>${esc(m.voce)}<span style="font-weight:600;color:var(--muted)">${esc(L.quantitaSpesa(m))} · scegli</span></button>`;
           continue;
         }
@@ -999,10 +999,16 @@
     return { da, a, persona, giorni, pesi, fatti, saltati };
   }
 
+  // "Tutto" = dal primo pasto o dalla prima pesata registrati: l'intero percorso
+  function daStorico() {
+    if (S.storicoGiorni) return L.piuGiorni(oggi(), -(S.storicoGiorni - 1));
+    const date = [...S.db.pasti.map((r) => r.data), ...S.db.pesi.map((r) => r.data)].filter(Boolean).sort();
+    return date[0] || oggi();
+  }
+
   function pannelloStorico() {
-    const da = L.piuGiorni(oggi(), -(S.storicoGiorni - 1));
-    const rep = datiReport(da, oggi(), S.storicoPersona);
-    let h = `<div class="segmenti">${[7, 14, 30].map((n) => `<button aria-pressed="${S.storicoGiorni === n}" data-a="storico-giorni" data-v="${n}">${n} giorni</button>`).join("")}</div>`;
+    const rep = datiReport(daStorico(), oggi(), S.storicoPersona);
+    let h = `<div class="segmenti">${[[7, "7 giorni"], [30, "30 giorni"], [0, "Tutto"]].map(([n, t]) => `<button aria-pressed="${S.storicoGiorni === n}" data-a="storico-giorni" data-v="${n}">${t}</button>`).join("")}</div>`;
     if (persone().length > 1) {
       h += `<label class="campo">Di chi<select id="storico-persona" class="input">${sel(S.storicoPersona, [["tutti", "Tutti"], ...persone().map((p) => [p.id, p.nome])])}</select></label>`;
     }
@@ -1048,7 +1054,7 @@
   }
 
   function stampaReport() {
-    const rep = datiReport(L.piuGiorni(oggi(), -(S.storicoGiorni - 1)), oggi(), S.storicoPersona);
+    const rep = datiReport(daStorico(), oggi(), S.storicoPersona);
     const t = intestazioneReport(rep);
     let h = `<h1>${esc(t.titolo)}</h1><p>${esc(t.periodo)} · ${rep.fatti} pasti fatti, ${rep.saltati} saltati</p>`;
     if (rep.pesi.length) {
@@ -1067,7 +1073,7 @@
   }
 
   async function esportaTesto() {
-    const rep = datiReport(L.piuGiorni(oggi(), -(S.storicoGiorni - 1)), oggi(), S.storicoPersona);
+    const rep = datiReport(daStorico(), oggi(), S.storicoPersona);
     const nome = `CheManca-diario-${rep.da}-${rep.a}.txt`;
     const file = new File([testoReport(rep)], nome, { type: "text/plain" });
     // sul telefono si apre "Condividi" (WhatsApp, mail…); dove non c'è, si scarica il file
@@ -1131,6 +1137,10 @@
         <p>${S.piano ? `In uso il piano dal <b>${esc(ddmm(S.piano.inizio))}/${esc(S.piano.inizio.slice(0, 4))}</b>: ${S.piano.settimane.length === 1 ? "1 settimana che si ripete" : S.piano.settimane.length + " settimane a rotazione"} · da <code>${esc(S.piano.fonte || "piano.json")}</code>` : "<b>Nessun piano in uso.</b> Finché non ne carichi uno l'app non segnala cosa manca."}</p>
         <label class="btn" style="cursor:pointer">${ico("piu", 18)} Nuova dieta dai PDF della dietista<input type="file" accept="application/pdf,.pdf" multiple data-file="pdf" class="sr"></label>
         <p style="font-size:13px">Scegli insieme i PDF «Dieta a menu giornaliero» di tutte le persone di casa: l'app legge ogni giorno e unisce le dosi. Va bene anche uno solo.</p>
+        ${pianoSalvato() ? `<form data-form="inizio-piano" style="display:flex;gap:8px;align-items:flex-end">
+          <label class="campo" style="flex:1">Data di inizio della dieta<input type="date" id="inizio-piano" value="${esc(pianoSalvato().inizio)}"></label>
+          <button class="btn piccolo sec" style="min-height:52px">Cambia</button>
+        </form>` : ""}
         ${sezioneAlternative()}
         <label class="btn sec" style="cursor:pointer">Carica un piano.json (4 settimane)<input type="file" accept=".json,application/json" data-file="piano" class="sr"></label>
         <div class="due">
@@ -1166,8 +1176,9 @@
   // le prossime tre settimane del piano (iniziano nel giorno della settimana in cui parte la dieta)
   function settimaneScelta() {
     const p = pianoSalvato();
-    const k = Math.max(0, L.diffGiorni(p.inizio, oggi()));
-    const prima = L.piuGiorni(p.inizio, Math.floor(k / 7) * 7);
+    const base = L.inizioSettimane(p);
+    const k = Math.max(0, L.diffGiorni(base, oggi()));
+    const prima = L.piuGiorni(base, Math.floor(k / 7) * 7);
     return [0, 1, 2].map((i) => L.piuGiorni(prima, i * 7));
   }
   function nomeSettimana(d) {
@@ -1186,7 +1197,7 @@
   }
   function generaAlternativa(d) {
     const p = pianoSalvato();
-    const k = L.diffGiorni(p.inizio, d.inizioSett);
+    const k = L.diffGiorni(L.inizioSettimane(p), d.inizioSett);
     const base = p.settimane[Math.floor(Math.max(0, k) / 7) % p.settimane.length];
     d.base = base;
     d.settimana = window.ImportaPdf.creaSettimana(base, p.alternative);
@@ -1194,7 +1205,7 @@
   function foglioAlternativa() {
     const d = S.sheet.d;
     const nomiG = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
-    const primo = L.daIso(pianoSalvato().inizio).getDay();   // il giorno della settimana in cui parte la dieta
+    const primo = L.daIso(L.inizioSettimane(pianoSalvato())).getDay();   // il giorno della settimana in cui parte la dieta
     const etich = (g) => nomiG[(primo + 6 + g) % 7];
     let righe = "";
     let cambi = 0;
@@ -1371,7 +1382,7 @@
   function renderFoglio() {
     const el = $("#sheet");
     if (!S.sheet) { el.classList.remove("on"); el.innerHTML = ""; return; }
-    const fogli = { prodotto: foglioProdotto, rivedi: foglioRivedi, item: foglioItem, nuovoCat: foglioNuovoCat, mancanza: foglioMancanza, pasto: foglioPasto, importa: foglioImporta, alternativa: foglioAlternativa, cambia: foglioCambia, chi: foglioChi, gruppo: foglioGruppo, benvenuto: foglioBenvenuto };
+    const fogli = { prodotto: foglioProdotto, rivedi: foglioRivedi, item: foglioItem, nuovoCat: foglioNuovoCat, mancanza: foglioMancanza, pasto: foglioPasto, importa: foglioImporta, alternativa: foglioAlternativa, cambia: foglioCambia, gruppoTap: foglioGruppoTap, chi: foglioChi, gruppo: foglioGruppo, benvenuto: foglioBenvenuto };
     // il benvenuto non si chiude toccando fuori: servono almeno i nomi
     const fissoP = S.sheet.tipo === "benvenuto" && S.sheet.d.passo < 3;
     el.innerHTML = `<div class="velo" ${fissoP ? "" : 'data-a="chiudi"'}></div><div class="foglio"><span class="maniglia" aria-hidden="true"></span>${fogli[S.sheet.tipo]()}</div>`;
@@ -1579,13 +1590,20 @@
     const doppi = persone().filter((p) => d.letti.filter((x) => x.id === p.id).length > 1);
     const abbinamenti = d.letti.map((x, i) => `<div class="riga"><span class="testo"><span class="nome">${esc(x.intestato || "Dieta")}</span><span class="nota">${esc(x.file)}</span></span>
       <label class="sr" for="pdf-chi-${i}">Di chi è</label><select class="input" id="pdf-chi-${i}" data-pdf-i="${i}" style="width:auto;height:44px;font-size:15px">${sel(x.id, persone().map((p) => [p.id, p.nome]))}</select></div>`).join("");
+    const lun = L.lunediDi(oggi());
+    const scorciatoie = [["Oggi", oggi()], ["Lunedì scorso", lun === oggi() ? L.piuGiorni(lun, -7) : lun], ["Lunedì prossimo", L.piuGiorni(lun, 7)]];
+    const passati = d.inizio < oggi() ? L.diffGiorni(d.inizio, oggi()) : 0;
     return `<h2>Nuova dieta</h2>
+      <div class="campo"><span>Da quando segui questa dieta?</span>
+        <div class="tre">${scorciatoie.map(([n, v]) => `<button type="button" class="btn piccolo ${d.inizio === v ? "" : "sec"}" data-a="imp-data" data-v="${v}">${n}</button>`).join("")}</div>
+        <input type="date" class="input" data-f="inizio" value="${esc(d.inizio)}" aria-label="Data di inizio">
+      </div>
+      ${passati ? `<div class="avviso blu"><span>I pasti dal <b>${esc(L.etichettaData(d.inizio))}</b> a ieri (${passati} ${passati === 1 ? "giorno" : "giorni"}) entrano nello <b>storico</b> come fatti. Frigo e dispensa non vengono toccati.</span></div>` : ""}
       <p class="sotto">Controlla di chi è ogni PDF. È una settimana che si ripete finché non carichi la prossima.</p>
       <div class="card" style="background:var(--bg)">${abbinamenti}</div>
       ${doppi.length ? `<div class="avviso giallo"><span>Due PDF sono assegnati a ${esc(doppi.map((p) => p.nome).join(", "))}: le dosi si sommerebbero.</span></div>` : ""}
       ${d.avvisi.length ? `<div class="avviso giallo"><span>${d.avvisi.map(esc).join("<br>")}</span></div>` : ""}
       <div class="card" style="background:var(--bg)">${righe}</div>
-      <label class="campo">Comincia il<input type="date" data-f="inizio" value="${esc(d.inizio)}"></label>
       <button class="btn largo" data-a="importa-conferma">Usa questa dieta</button>
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
   }
@@ -1598,10 +1616,32 @@
     // fino al giorno di inizio resta valido il piano di adesso
     if (S.piano && d.inizio > oggi()) p.prima = { ...S.piano, prima: undefined };
     await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
+    const n = await storicoArretrato(p, d.inizio);
     chiudiFoglio();
     dopoModifica();
     vai("piano");
-    toast("Nuova dieta in uso dal " + ddmm(d.inizio));
+    toast("Nuova dieta in uso dal " + ddmm(d.inizio) + (n ? ` · ${n} pasti passati nello storico` : ""));
+  }
+
+  /* la dieta è cominciata prima di caricarla: i pasti dal giorno di inizio a ieri si
+     registrano come fatti, per lo storico. Non si scala niente da frigo e dispensa:
+     quello che c'è in casa adesso è già il risultato di quei giorni. */
+  async function storicoArretrato(piano, da) {
+    if (!da || da >= oggi()) return 0;
+    const stati = statiPasti();
+    let n = 0;
+    for (let g = da; g < oggi(); g = L.piuGiorni(g, 1)) {
+      const giorno = L.giornoPiano(piano, g);
+      if (!giorno) continue;
+      for (const p of giorno.pasti) {
+        const k = L.chiavePasto(g, p.pasto);
+        if (stati[k]) continue;
+        const riga = { id: k, data: g, pasto: p.pasto, stato: "auto", chi: "", quando: new Date().toISOString(), scalato: [], contenuto: fotoPasto(p), arretrato: true };
+        if (await A.nuovo("pasti", riga)) { inMemoria("pasti", [riga]); n++; }
+      }
+    }
+    LS.set("ds_auto_da", oggi());
+    return n;
   }
 
   /* ---------------- azioni ---------------- */
@@ -1643,6 +1683,21 @@
     else S.scelta.set(nome, { qty: c.passo || 1, luogo: c.luogo || "frigo" });
     if (navigator.vibrate) navigator.vibrate(15);
     render();
+    if (S.sheet && S.sheet.tipo === "gruppoTap") renderFoglio();
+  }
+
+  // scegliere quale frutta o verdura, senza lasciare la pagina
+  function foglioGruppoTap() {
+    const d = S.sheet.d;
+    const m = (S.calc7 ? S.calc7.mancanze : []).find((x) => x.voce === d.voce);
+    const lista = catalogo().filter((c) => c.gruppo === d.gruppo);
+    return `<h2>${d.gruppo === "Frutta" ? "Quale frutta hai preso?" : "Quali verdure hai preso?"}</h2>
+      ${m ? `<p class="sotto">Serve: <b>${esc(m.voce)}</b> ${esc(L.quantitaSpesa(m))} · ${esc(L.motivo(m, oggi()).toLowerCase())}</p>` : ""}
+      <div class="chips">${lista.map((c) => {
+        const s = S.scelta.get(c.nome);
+        return `<button class="chip ${s ? "scelto" : ""}" data-a="tap" data-nome="${esc(c.nome)}">${esc(c.nome)}${s ? `<span class="conta">${esc(fmtScelta(c, s.qty))}</span>` : ""}</button>`;
+      }).join("")}</div>
+      <button class="btn largo" data-a="chiudi">Fatto</button>`;
   }
 
   async function salvaScelta() {
@@ -1835,19 +1890,12 @@
         break;
       }
       case "mancanza": apriFoglio({ tipo: "mancanza", voce: b.dataset.voce }); break;
-      case "vai-gruppo": {
-        const el = document.getElementById("gruppo-" + b.dataset.gruppo);
-        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-        break;
-      }
+      case "vai-gruppo": apriFoglio({ tipo: "gruppoTap", d: { gruppo: b.dataset.gruppo, voce: b.dataset.voce } }); break;
       case "manca-tap": {
         const gr = GRUPPO_GENERICO[b.dataset.voce];
         if (gr) {
-          S.aggTab = "senza"; LS.set("ds_aggtab", "senza"); S.cercaCat = "";
-          vai("aggiungi");
-          const el = document.getElementById("gruppo-" + gr);
-          if (el) el.scrollIntoView({ block: "start" });
-          toast(`Tocca ${gr === "Frutta" ? "la frutta" : "le verdure"} che hai preso, poi il bottone verde`);
+          if (b.dataset.da === "oggi") { S.aggTab = "senza"; LS.set("ds_aggtab", "senza"); S.cercaCat = ""; vai("aggiungi"); }
+          apriFoglio({ tipo: "gruppoTap", d: { gruppo: gr, voce: b.dataset.voce } });
           break;
         }
         const c = scegliPerMancanza(b.dataset.voce);
@@ -1983,8 +2031,11 @@
         break;
       case "piano-ripristina": await elimina("piano", "attuale"); dopoModifica(); toast("Torna il piano pubblicato con l'app"); break;
       case "importa-conferma": await confermaImport(); break;
+      case "imp-data": d.inizio = b.dataset.v; renderFoglio(); break;
       case "alt-apri": {
-        const dd = { inizioSett: settimaneScelta()[1] };
+        // se oggi comincia una settimana del piano si propone questa, altrimenti la prossima
+        const sett = settimaneScelta();
+        const dd = { inizioSett: sett[0] === oggi() ? sett[0] : sett[1] };
         generaAlternativa(dd);
         apriFoglio({ tipo: "alternativa", d: dd });
         break;
@@ -2027,6 +2078,7 @@
     if (el.dataset.pdfI != null && S.sheet && S.sheet.tipo === "importa") { S.sheet.d.letti[Number(el.dataset.pdfI)].id = el.value; renderFoglio(); return; }
     if (el.dataset.f && S.sheet && S.sheet.d) {
       S.sheet.d[el.dataset.f] = el.value;
+      if (el.dataset.f === "inizio" && S.sheet.tipo === "importa" && /^\d{4}-\d{2}-\d{2}$/.test(el.value)) { renderFoglio(); return; }
       if (el.tagName === "SELECT") {
         // cambiando voce del piano, il posto giusto viene suggerito
         if (el.dataset.f === "voce" && S.piano && S.sheet.tipo === "prodotto") {
@@ -2064,6 +2116,19 @@
       const v = $("#ean").value.replace(/\D/g, "");
       if (v.length < 8) return toast("Il codice ha almeno 8 cifre");
       fermaScanner(); trovatoCodice(v);
+    }
+    if (f === "inizio-piano") {
+      const nuova = $("#inizio-piano").value;
+      const p = JSON.parse(JSON.stringify(pianoSalvato()));
+      if (!nuova || nuova === p.inizio) return;
+      if (Object.keys(p.fissate || {}).length && !confirm("Le settimane alternative già create vanno ricreate dopo il cambio di data. Continuare?")) return;
+      p.inizio = nuova;
+      p.fissate = {};
+      await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
+      const n = await storicoArretrato(p, nuova);
+      dopoModifica();
+      toast("Dieta dal " + ddmm(nuova) + (n ? ` · ${n} pasti passati nello storico` : ""));
+      return;
     }
     if (f === "peso") {
       const kg = Number(String($("#peso-kg").value).replace(",", "."));

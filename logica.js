@@ -61,14 +61,20 @@
     });
     return g;
   }
+  // il lunedì della settimana di una data
+  function lunediDi(data) { return piuGiorni(data, -((daIso(data).getDay() + 6) % 7)); }
+  // da dove si contano le settimane: per i piani dal PDF (lunedì…domenica) il lunedì della
+  // settimana in cui si comincia, così il menu del lunedì cade sempre di lunedì
+  function inizioSettimane(piano) { return piano.lunedi ? lunediDi(piano.inizio) : piano.inizio; }
+
   function giornoBase(piano, data) {
-    const k = diffGiorni(piano.inizio, data);
     // prima che parta la nuova dieta vale ancora quella vecchia
-    if (k < 0) return piano.prima ? giornoBase(piano.prima, data) : null;
+    if (diffGiorni(piano.inizio, data) < 0) return piano.prima ? giornoBase(piano.prima, data) : null;
+    const k = diffGiorni(inizioSettimane(piano), data);
     const nSett = piano.settimane.length;
     const sett = Math.floor(k / 7) % nSett;
     // una settimana alternativa creata nell'app vale per la sua settimana di calendario
-    const inizioSett = piuGiorni(piano.inizio, Math.floor(k / 7) * 7);
+    const inizioSett = piuGiorni(inizioSettimane(piano), Math.floor(k / 7) * 7);
     const fissata = piano.fissate && piano.fissate[inizioSett];
     const pasti = (fissata || piano.settimane[sett])[k % 7].map((p) => ({ ...p }));
     if (piano.extra && piano.extra.length) {
@@ -422,7 +428,7 @@
   return {
     PASTI, ORA, PRESENZA, GENERICHE, REGOLE, regola, fmtLitri,
     iso, daIso, piuGiorni, diffGiorni, nomeGiorno, etichettaData, GIORNI,
-    giornoPiano, chiavePasto, pastiFinestra, quantoServe, dosi,
+    giornoPiano, chiavePasto, lunediDi, inizioSettimane, pastiFinestra, quantoServe, dosi,
     disponibile, scala, calcolaMancanze, consumaPasto,
     fmtQ, fmtScorta, fmtNum, dettaglioPersone, quantitaSpesa, motivo, testoAvviso, testoSemplice,
     allineaSpesa, indovinaVoce, luogoDaCategorie, luogoDaVoce, tutteLeVoci,
