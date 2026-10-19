@@ -15,6 +15,16 @@
   const PRESENZA = new Set(["tazzina", "cucchiaino", "cucchiaini"]);
   const G_VASETTO = 150;   // yogurt greco: un vasetto = 150 g
   const G_UOVO = 60;
+  // un cucchiaino d'olio: la dietista conta 4 g (28 cucchiaini = 112 g), cioè circa 4,4 ml
+  const L_CUCCHIAINO = 0.0044;
+  const CUCCHIAI = new Set(["cucchiaino", "cucchiaini"]);
+  /* come si contano in casa alcune voci del piano, invece dei grammi del piano:
+     i crackers a pacchetti (uno scalato per pasto), l'olio a litri */
+  const REGOLE = {
+    "Crackers non salati": { unita: "pz", etichetta: ["pacchetto", "pacchetti"], g_pz: 30, intero: true, conf: 10 },
+    "Olio extra vergine di oliva": { unita: "l", conf: 1 },
+  };
+  function regola(item) { return REGOLE[(Array.isArray(item.voci) && item.voci[0]) || item.nome] || null; }
   const GIORNI = ["domenica", "lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato"];
   const GIORNI_BREVI = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
 
@@ -40,17 +50,31 @@
   }
 
   /* ---------------- piano ---------------- */
+  /* il giorno del piano, con i pasti cambiati a mano ("Cambia pasto") al posto di quelli
+     del piano: piano.cambi = { "2026-10-20|Pranzo": pasto } */
   function giornoPiano(piano, data) {
+    const g = giornoBase(piano, data);
+    if (!g || !piano.cambi) return g;
+    g.pasti = g.pasti.map((p) => {
+      const c = piano.cambi[chiavePasto(data, p.pasto)];
+      return c ? { ...c, pasto: p.pasto, cambiato: true } : p;
+    });
+    return g;
+  }
+  function giornoBase(piano, data) {
     const k = diffGiorni(piano.inizio, data);
     // prima che parta la nuova dieta vale ancora quella vecchia
-    if (k < 0) return piano.prima ? giornoPiano(piano.prima, data) : null;
+    if (k < 0) return piano.prima ? giornoBase(piano.prima, data) : null;
     const nSett = piano.settimane.length;
     const sett = Math.floor(k / 7) % nSett;
-    const pasti = piano.settimane[sett][k % 7].map((p) => ({ ...p }));
+    // una settimana alternativa creata nell'app vale per la sua settimana di calendario
+    const inizioSett = piuGiorni(piano.inizio, Math.floor(k / 7) * 7);
+    const fissata = piano.fissate && piano.fissate[inizioSett];
+    const pasti = (fissata || piano.settimane[sett])[k % 7].map((p) => ({ ...p }));
     if (piano.extra && piano.extra.length) {
       pasti.push({ pasto: "Fuori pasto", libero: false, piatti: ["Cioccolato e olio del giorno"], voci: piano.extra });
     }
-    return { settimana: sett + 1, oltre: k >= nSett * 7, pasti };
+    return { settimana: sett + 1, alternativa: !!fissata, inizioSett, oltre: nSett > 1 && k >= nSett * 7, pasti, alternative: piano.alternative || null };
   }
 
   function chiavePasto(data, pasto) { return data + "|" + pasto; }
@@ -75,10 +99,20 @@
     return out.sort((a, b) => a.ord - b.ord);
   }
 
+  /* le dosi di una voce, persona per persona: { "p1": 200, "p2": 150 }.
+     Legge anche il formato vecchio del piano a 4 settimane ({max, vale}). */
+  function dosi(voce) {
+    if (voce.q) return voce.q;
+    const o = {};
+    if (voce.max != null) o.max = voce.max;
+    if (voce.vale != null) o.vale = voce.vale;
+    return o;
+  }
+  // chi = id di una persona (solo lei ha mangiato) oppure niente (tutti)
   function quantoServe(voce, chi) {
-    const m = chi === "vale" ? 0 : voce.max || 0;
-    const v = chi === "max" ? 0 : voce.vale || 0;
-    return m + v;
+    const d = dosi(voce);
+    if (chi) return Number(d[chi]) || 0;
+    return Object.values(d).reduce((s, x) => s + (Number(x) || 0), 0);
   }
 
   /* ---------------- quantità in casa ---------------- */
@@ -86,8 +120,13 @@
   function disponibile(item, u) {
     const q = Math.max(0, Number(item.qty) || 0);
     if (q <= 0) return 0;
+    if (item.unita === "l") {
+      if (CUCCHIAI.has(u)) return q / L_CUCCHIAINO;
+      if (u === "g") return q * 920;           // olio: 0,92 kg al litro
+      return Infinity;
+    }
     if (PRESENZA.has(u)) return Infinity;
-    const gpz = Number(item.g_pz) || 0;
+    const gpz = Number(item.g_pz) || (regola(item) || {}).g_pz || 0;
     if (u === "g") {
       if (item.unita === "g") return q;
       return gpz ? q * gpz : Infinity;
@@ -103,14 +142,21 @@
   // toglie `quanto` (nell'unità del piano u) da item.qty; restituisce la nuova qty
   function scala(item, quanto, u) {
     const q = Number(item.qty) || 0;
+    if (item.unita === "l") {
+      const togliL = CUCCHIAI.has(u) ? quanto * L_CUCCHIAINO : u === "g" ? quanto / 920 : 0;
+      return Math.max(0, Math.round((q - togliL) * 10000) / 10000);
+    }
     if (PRESENZA.has(u)) return q;
-    const gpz = Number(item.g_pz) || 0;
+    const r = regola(item);
+    const gpz = Number(item.g_pz) || (r || {}).g_pz || 0;
     let togli;
     if (u === "g") togli = item.unita === "g" ? quanto : gpz ? quanto / gpz : 1;
     else if (u === "n.") togli = item.unita === "pz" ? quanto : quanto * G_UOVO;
     else if (u === "vasetto") togli = item.unita === "g" ? quanto * G_VASETTO : gpz ? (quanto * G_VASETTO) / gpz : quanto;
     else togli = 0;
-    return Math.max(0, Math.round((q - togli) * 100) / 100);
+    // i pacchetti si aprono interi: un pasto ne toglie almeno uno
+    if (r && r.intero && item.unita === "pz" && togli > 0) togli = Math.ceil(togli - 1e-9);
+    return Math.max(0, Math.round((q - togli) * 10000) / 10000);
   }
 
   function vociDi(item) {
@@ -182,7 +228,7 @@
           perVoce.set(v.nome, m);
         }
         m.manca += resta;
-        m.pasti.push({ data: p.data, pasto: p.pasto, serve, manca: resta, max: v.max, vale: v.vale });
+        m.pasti.push({ data: p.data, pasto: p.pasto, serve, manca: resta, q: dosi(v) });
       }
     }
     const domani = piuGiorni(oggi, 1);
@@ -235,22 +281,31 @@
     if (u === "vasetto") { const k = Math.ceil(n); return k + (k === 1 ? " vasetto" : " vasetti"); }
     return fmtNum(n) + " " + u;
   }
+  function fmtLitri(q) { return String(Math.round(q * 100) / 100).replace(".", ",") + " l"; }
   function fmtScorta(item) {
     const q = Number(item.qty) || 0;
     if (item.unita === "g") return q >= 1000 ? fmtNum(q / 1000) + " kg" : Math.round(q) + " g";
+    if (item.unita === "l") return fmtLitri(q);
+    const r = regola(item);
+    if (r && r.etichetta) return fmtNum(q) + " " + r.etichetta[q === 1 ? 0 : 1];
     return fmtNum(q) + (item.etichetta_pz ? " " + item.etichetta_pz : " pz");
   }
-  function dettaglioPersone(p, u) {
+  // "Max 200 g · Vale 150 g" oppure "per Vale"; persone = [{id, nome}]
+  function dettaglioPersone(p, u, persone) {
     if (PRESENZA.has(u)) return "";
-    const f = (x) => fmtQ(x, u);
-    if (p.max && p.vale) return `Max ${f(p.max)} · Vale ${f(p.vale)}`;
-    if (p.max) return `per Max`;
-    if (p.vale) return `per Vale`;
+    const d = p.q || dosi(p);
+    const ids = Object.keys(d).filter((k) => Number(d[k]) > 0);
+    const nome = (id) => { const x = (persone || []).find((y) => y.id === id); return x ? x.nome : id.charAt(0).toUpperCase() + id.slice(1); };
+    if (ids.length > 1) return ids.map((id) => `${nome(id)} ${fmtQ(d[id], u)}`).join(" · ");
+    if (ids.length === 1) return "per " + nome(ids[0]);
     return "";
   }
 
   // il testo della voce in lista spesa
   function quantitaSpesa(m) {
+    const r = REGOLE[m.voce];
+    if (r && r.unita === "l") return "1 bottiglia";
+    if (r && r.g_pz && m.u === "g") { const k = Math.ceil(m.manca / r.g_pz - 1e-9); return k + " " + r.etichetta[k === 1 ? 0 : 1]; }
     if (m.presenza) return "";
     if (m.tipo === "scarso" && m.u === "n.") return "+" + Math.ceil(m.manca);
     return fmtQ(m.manca, m.u);
@@ -365,9 +420,9 @@
   }
 
   return {
-    PASTI, ORA, PRESENZA, GENERICHE,
+    PASTI, ORA, PRESENZA, GENERICHE, REGOLE, regola, fmtLitri,
     iso, daIso, piuGiorni, diffGiorni, nomeGiorno, etichettaData, GIORNI,
-    giornoPiano, chiavePasto, pastiFinestra, quantoServe,
+    giornoPiano, chiavePasto, pastiFinestra, quantoServe, dosi,
     disponibile, scala, calcolaMancanze, consumaPasto,
     fmtQ, fmtScorta, fmtNum, dettaglioPersone, quantitaSpesa, motivo, testoAvviso, testoSemplice,
     allineaSpesa, indovinaVoce, luogoDaCategorie, luogoDaVoce, tutteLeVoci,

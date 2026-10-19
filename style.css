@@ -221,8 +221,8 @@ label.campo, .campo { display: flex; flex-direction: column; gap: 6px; font-size
 .pasto .voce { display: flex; align-items: center; gap: 10px; min-height: 32px; }
 .pasto .voce .n { flex: 1; font-size: 14px; font-weight: 600; }
 .pasto .voce .n.err { color: var(--red); font-weight: 800; }
-.pasto .voce .m { font-size: 13px; font-weight: 800; color: var(--max); min-width: 44px; text-align: right; }
-.pasto .voce .v { font-size: 13px; font-weight: 800; color: var(--vale); min-width: 44px; text-align: right; }
+.pasto .voce .dosi { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 50%; }
+.pasto .voce .dose { font-size: 13px; font-weight: 800; min-width: 44px; text-align: right; }
 .pasto .voce .pill { min-width: 64px; text-align: center; }
 .pasto .azioni { display: flex; gap: 8px; padding-top: 8px; flex-wrap: wrap; }
 .legenda { display: flex; gap: 14px; padding: 0 20px; font-size: 12px; font-weight: 700; color: var(--muted); align-items: center; }
@@ -282,3 +282,47 @@ code { font-size: 13px; background: var(--line-soft); padding: 1px 5px; border-r
 .credits-contatti a { color: var(--green); font-weight: 700; text-decoration: none; min-height: 32px; display: inline-flex; align-items: center; justify-content: center; }
 
 body.con-scelta #toast { bottom: calc(var(--nav-h) + 84px + env(safe-area-inset-bottom)); }
+
+/* ---------- benvenuto ---------- */
+.passi { display: flex; gap: 6px; }
+.passi span { flex: 1; height: 5px; border-radius: 3px; background: var(--line); }
+.passi span.on { background: var(--green); }
+
+/* ---------- scorciatoie, cambia pasto, diario ---------- */
+.scorciatoia { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 12px; min-height: 60px; display: flex; align-items: center; gap: 10px; text-align: left; color: var(--green); }
+.scorciatoia span { display: flex; flex-direction: column; color: var(--ink); }
+.scorciatoia b { font-size: 15px; font-weight: 800; }
+.scorciatoia small { font-size: 12px; color: var(--muted); font-weight: 600; }
+.btn.cambia { background: var(--blue-soft); color: var(--blue-dark); }
+.pill.cambiato { background: var(--blue-soft); color: var(--blue-dark); vertical-align: 1px; text-transform: none; letter-spacing: 0; }
+.casella { display: flex; flex-direction: column; gap: 8px; }
+.casella h3 { font-size: 13px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.opzione { border: 1.5px solid var(--line); background: #fff; border-radius: 14px; padding: 10px 12px; text-align: left; display: flex; flex-direction: column; gap: 2px; min-height: 48px; }
+.opzione[aria-pressed="true"] { border: 2px solid var(--green); background: var(--green-soft); }
+.opzione > b { font-size: 15px; font-weight: 800; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.opzione .dosi-op { font-size: 13px; color: var(--muted); font-weight: 600; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.opzione .tag-piano { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); border: 1px solid #C9D1C8; border-radius: 6px; padding: 1px 5px; }
+.grafico { background: #fff; border-radius: 16px; padding: 12px 8px 6px; }
+.grafico svg { width: 100%; height: auto; display: block; }
+.numeri-peso { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.numeri-peso div { background: #fff; border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 2px; }
+.numeri-peso small { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.numeri-peso b { font-family: var(--display); font-size: 20px; font-variant-numeric: tabular-nums; }
+.giorno-storico { background: #fff; border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.giorno-storico h3 { font-size: 15px; font-weight: 800; }
+.pasto-storico { border-top: 1px solid var(--line-soft); padding-top: 8px; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.pasto-storico .t { display: flex; justify-content: space-between; gap: 8px; font-weight: 800; font-size: 13px; }
+.pasto-storico .cibi { color: var(--muted); line-height: 1.5; }
+
+/* il report si stampa da solo: il resto dell'app sparisce */
+#stampa { display: none; }
+@media print {
+  body > *:not(#stampa) { display: none !important; }
+  #stampa { display: block !important; color: #000; font-family: var(--body); font-size: 11pt; }
+  #stampa h1 { font-family: var(--display); font-size: 20pt; margin: 0 0 4pt; }
+  #stampa h2 { font-size: 13pt; margin: 14pt 0 6pt; border-bottom: 1px solid #999; padding-bottom: 3pt; }
+  #stampa table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+  #stampa td, #stampa th { border-bottom: 1px solid #ddd; padding: 3pt 4pt; text-align: left; vertical-align: top; }
+  #stampa .giorno { break-inside: avoid; }
+  @page { margin: 14mm; }
+}

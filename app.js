@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano"];
+  const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
   const MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto",
@@ -36,6 +36,9 @@
     cerca: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
     piu: '<path d="M12 5v14"/><path d="M5 12h14"/>',
     x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    bilancia: '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 9a5 5 0 0 1 8 0"/><path d="M12 9l1.5-2"/>',
+    libro: '<path d="M4 4h10a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z"/><path d="M8 8h6"/><path d="M8 12h6"/>',
+    cambia: '<path d="M4 7h13l-3-3"/><path d="M20 17H7l3 3"/>',
   };
   const ico = (n, size = 22, extra = "") =>
     `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${ICONE[n]}</svg>`;
@@ -57,6 +60,10 @@
     sheet: null,
     chi: LS.get("ds_chi", null),
     scan: { attivo: false, stop: null, errore: "" },
+    diarioTab: "peso",
+    pesoPersona: null,
+    storicoGiorni: 7,
+    storicoPersona: "tutti",
     online: false,
   };
   const OGGI_FORZATO = new URLSearchParams(location.search).get("oggi");
@@ -185,9 +192,27 @@
 
   // il piano caricato dall'app (PDF o JSON) sta nel database, così vale per tutti e due i telefoni;
   // la riga c'è ma vuota = piano svuotato. Senza riga si usa piano.json pubblicato con l'app.
+  const COLORI_PERSONE = ["#1D5A8A", "#B4472A", "#6B3FA0", "#0F766E", "#9A3412", "#4D7C0F"];
+  function persone() {
+    const r = S.db.piano.find((x) => x.id === "persone");
+    return r && Array.isArray(r.dati) ? r.dati : [];
+  }
+  function nomeDi(id) {
+    const p = persone().find((x) => x.id === id);
+    return p ? p.nome : id ? id.charAt(0).toUpperCase() + id.slice(1) : "";
+  }
+  function coloreDi(id) {
+    const i = persone().findIndex((x) => x.id === id);
+    return COLORI_PERSONE[(i < 0 ? 0 : i) % COLORI_PERSONE.length];
+  }
+  async function salvaPersone(lista) {
+    await salva("piano", [{ id: "persone", dati: lista, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
+  }
+
   function scegliPiano() {
     const r = S.db.piano.find((x) => x.id === "attuale");
-    S.piano = r ? r.dati || null : S.pianoFile;
+    // piano.json pubblicato vale solo per chi lo usava già (Max e Vale): le famiglie nuove caricano il loro PDF
+    S.piano = r ? r.dati || null : LS.get("ds_usa_pianofile", false) ? S.pianoFile : null;
     if (S.piano && S.pianoFile && !Object.keys(S.piano.categorie || {}).length) S.piano.categorie = S.pianoFile.categorie;
   }
 
@@ -334,7 +359,7 @@
           if (stati[k]) continue;
           const mosse = p.libero ? [] : L.consumaPasto(S.db.inventario, p, null);
           const prima = mosse.map((m) => ({ ...S.db.inventario.find((i) => i.id === m.id) }));
-          const riga = { id: k, data: d, pasto: p.pasto, stato: "auto", chi: "", quando: new Date().toISOString(), scalato: prima };
+          const riga = { id: k, data: d, pasto: p.pasto, stato: "auto", chi: "", quando: new Date().toISOString(), scalato: prima, contenuto: fotoPasto(p) };
           if (!(await A.nuovo("pasti", riga))) continue;
           inMemoria("pasti", [riga]);
           for (const m of mosse) {
@@ -373,21 +398,29 @@
   function schermoOggi() {
     const d = L.daIso(oggi());
     const sopra = cap(L.GIORNI[d.getDay()]) + " " + d.getDate() + " " + MESI[d.getMonth()];
-    if (!S.piano) return testa(sopra, "Ciao") + `<div class="corpo"><p class="vuoto">Manca il piano: carica <code>piano.json</code> da Impostazioni.</p></div>`;
+    if (!S.piano) return testa(sopra, "Ciao " + nomeDi(S.chi)) + `<div class="corpo">
+      <div class="avviso blu"><span><b>Manca la dieta.</b> Carica il PDF «Dieta a menu giornaliero» che ti ha dato la dietista: l'app legge da sola ogni giorno e ogni pasto.</span></div>
+      <label class="btn largo" style="cursor:pointer">${ico("piu", 18)} Carica la dieta (PDF)<input type="file" accept="application/pdf,.pdf" multiple data-file="pdf" class="sr"></label>
+    </div>`;
     const c = S.calc;
     const manca = c.mancanze.filter((m) => m.tipo === "manca").length;
     const scarso = c.mancanze.length - manca;
     const g0 = L.giornoPiano(S.piano, oggi());
     const fine = L.etichettaData(L.piuGiorni(oggi(), 2));
-    let h = testa(sopra, "Ciao " + (S.chi === "vale" ? "Vale" : S.chi === "max" ? "Max" : ""));
+    let h = testa(sopra, "Ciao " + nomeDi(S.chi));
     h += `<div class="corpo">`;
     if (g0 && g0.oltre) h += `<div class="avviso giallo">Il piano del mese è finito e sta ricominciando dalla settimana 1. Carica il nuovo da Impostazioni.</div>`;
     h += `<section class="riepilogo" aria-label="Prossimi 3 giorni">
-      <div class="r1"><span>Prossimi 3 giorni · fino a ${esc(fine)}</span><span>Settimana ${g0 ? g0.settimana : "–"}</span></div>
+      <div class="r1"><span>Prossimi 3 giorni · fino a ${esc(fine)}</span><span>${g0 ? (g0.alternativa ? "Sett. alternativa" : "Settimana " + g0.settimana) : "–"}</span></div>
       <div style="display:flex;align-items:baseline;gap:8px"><span class="num">${c.pronte}<small>/${c.totaleVoci}</small></span><span style="font-size:15px;font-weight:600">ingredienti in casa</span></div>
       <div class="barra" aria-hidden="true"><span style="flex:${c.pronte}"></span><span style="flex:${scarso}"></span><span style="flex:${manca}"></span></div>
       <div class="conti"><span>${manca} mancano</span><span>${scarso} scarseggiano</span><span>${c.pronte} pronti</span></div>
     </section>`;
+
+    h += `<div class="due">
+      <button class="scorciatoia" data-a="vai-diario" data-v="peso">${ico("bilancia", 22)}<span><b>Peso</b><small>${esc(ultimoPesoTesto())}</small></span></button>
+      <button class="scorciatoia" data-a="vai-diario" data-v="storico">${ico("libro", 22)}<span><b>Storico</b><small>pasti e report</small></span></button>
+    </div>`;
 
     const conf = daConfermare();
     if (conf.length) {
@@ -532,7 +565,9 @@
       for (const [voce, un] of u) {
         if (coperte.has(voce) || nomi.has(voce.toLowerCase())) continue;
         const base = { gruppo: "Dal piano", luogo: L.luogoDaVoce(S.piano, voce) || "dispensa", nome: voce, voci: [voce], virtuale: true };
-        if (un === "g") cat.push({ ...base, unita: "g", passo: 100, g_pz: null });
+        const r = L.REGOLE[voce];
+        if (r) cat.push({ ...base, unita: r.unita, passo: 1, g_pz: r.g_pz || null });
+        else if (un === "g") cat.push({ ...base, unita: "g", passo: 100, g_pz: null });
         else if (un === "n.") cat.push({ ...base, unita: "pz", passo: 1, g_pz: 60 });
         else if (un === "vasetto") cat.push({ ...base, unita: "pz", passo: 1, g_pz: 150 });
         else cat.push({ ...base, unita: "pz", passo: 1, g_pz: null });
@@ -572,7 +607,14 @@
 
   function fmtScelta(c, qty) {
     if (c.unita === "g") return qty >= 1000 ? L.fmtNum(qty / 1000) + " kg" : qty + " g";
+    if (c.unita === "l") return L.fmtLitri(qty);
     return "×" + qty;
+  }
+  // la quantità nel riepilogo: "2 pz", "3 pacchetti", "1 l", "400 g"
+  function fmtRiepilogo(c, qty) {
+    if (c.unita !== "pz") return fmtScelta(c, qty);
+    const r = L.REGOLE[(c.voci || [])[0]];
+    return qty + " " + (r && r.etichetta ? r.etichetta[qty === 1 ? 0 : 1] : "pz");
   }
 
   function schermoAggiungi() {
@@ -689,12 +731,12 @@
       const tag = s.data_serve && s.origine === "piano"
         ? `<span class="pill liv-${livello(s.data_serve)}">Serve ${esc(L.nomeGiorno(s.data_serve, oggi()))}</span>`
         : `<span class="pill dopo">Quando capita</span>`;
-      const chi = s.prende ? `<span class="pill grigio">Lo prende ${s.prende === "vale" ? "Vale" : "Max"}</span>`
+      const chi = s.prende ? `<span class="pill grigio">Lo prende ${esc(nomeDi(s.prende))}</span>`
         : `<button class="mini-link" data-a="prendo" data-id="${esc(s.id)}">Lo prendo io</button>`;
       h += `<div class="voce-spesa ${s.fatto ? "fatto" : ""}">
         <button class="spunta" role="checkbox" aria-checked="${!!s.fatto}" aria-label="Preso: ${esc(s.nome)}" data-a="spunta" data-id="${esc(s.id)}"><span>${s.fatto ? ico("spunta", 16, 'stroke="#fff" stroke-width="3"') : ""}</span></button>
         <div class="testo"><span class="nome">${esc(s.nome)}</span>
-          <span class="perche">${esc(s.origine === "piano" ? s.motivo : "Aggiunto a mano" + (s.creato_da ? " da " + (s.creato_da === "vale" ? "Vale" : "Max") : ""))}</span>
+          <span class="perche">${esc(s.origine === "piano" ? s.motivo : "Aggiunto a mano" + (s.creato_da ? " da " + nomeDi(s.creato_da) : ""))}</span>
           <span class="tags">${tag}${s.fatto ? "" : chi}${s.origine !== "piano" ? `<button class="mini-link" data-a="togli-spesa" data-id="${esc(s.id)}" style="color:var(--muted)">Togli</button>` : ""}</span></div>
         <span class="q">${esc(s.qty_txt || "")}</span></div>`;
     }
@@ -721,7 +763,7 @@
       h += `<button data-a="giorno" data-d="${d}" aria-pressed="${d === sel}"><small>${nome}</small><b>${esc(L.etichettaData(d))}</b>${n && i >= 0 ? `<span class="badge liv-${Math.min(3, i)}">${n}</span>` : ""}</button>`;
     }
     h += `</div>`;
-    h += `<div class="legenda" style="margin:10px 0"><span><i style="background:var(--max)"></i>Max</span><span><i style="background:var(--vale)"></i>Vale</span><span style="margin-left:auto">${g ? "Settimana " + g.settimana : ""}</span></div>`;
+    h += `<div class="legenda" style="margin:10px 0">${persone().map((p) => `<span><i style="background:${coloreDi(p.id)}"></i>${esc(p.nome)}</span>`).join("")}<span style="margin-left:auto">${g ? (g.alternativa ? "Settimana alternativa" : "Settimana " + g.settimana) : ""}</span></div>`;
     h += `<div class="corpo">`;
     if (!g) return h + `<p class="vuoto">Il piano comincia il ${esc(ddmm(S.piano.inizio))}.</p></div>`;
     const dove = (voce) => {
@@ -732,8 +774,8 @@
       const k = L.chiavePasto(sel, p.pasto);
       const st = stati[k];
       const buchi = new Map(mancanze.flatMap((m) => m.pasti.filter((x) => x.data === sel && x.pasto === p.pasto).map(() => [m.voce, m.tipo])));
-      h += `<section class="pasto"><div class="testa"><h2>${esc(p.pasto)}</h2>`;
-      if (st) h += `<span class="pill ${st.stato === "saltato" ? "grigio" : "ok"}">${esc(st.stato === "saltato" ? "Saltato" : st.stato === "fatto" || st.stato === "auto" ? "Fatto" : "Solo " + (st.stato === "vale" ? "Vale" : "Max"))}</span>`;
+      h += `<section class="pasto"><div class="testa"><h2>${esc(p.pasto)}${p.cambiato ? ' <span class="pill cambiato">Cambiato</span>' : ""}</h2>`;
+      if (st) h += `<span class="pill ${st.stato === "saltato" ? "grigio" : "ok"}">${esc(st.stato === "saltato" ? "Saltato" : st.stato === "fatto" || st.stato === "auto" ? "Fatto" : "Solo " + nomeDi(st.stato.replace(/^solo:/, "")))}</span>`;
       else if (buchi.size) h += `<span style="font-size:12px;font-weight:800;color:var(--red)">${buchi.size === 1 ? "1 ingrediente manca" : buchi.size + " mancano"}</span>`;
       h += `</div>`;
       if (p.libero) { h += `<div class="piatto">Pasto libero</div></section>`; continue; }
@@ -745,16 +787,298 @@
         if (st) pill = "";
         else if (b) pill = `<span class="pill ${b === "scarso" ? "scarso" : "manca"}">${b === "scarso" ? "Poco" : "Manca"}</span>`;
         else { const lu = dove(v.nome); pill = lu ? `<span class="pill ${lu}">${lu === "frigo" ? "Frigo" : "Dispensa"}</span>` : `<span class="pill grigio">—</span>`; }
-        h += `<div class="voce"><span class="n ${b && !st ? "err" : ""}">${esc(v.nome)}</span><span class="m">${esc(f(v.max))}</span><span class="v">${esc(f(v.vale))}</span>${pill}</div>`;
+        const d = L.dosi(v);
+        const dosiHtml = persone().map((p) => `<span class="dose" style="color:${coloreDi(p.id)}" title="${esc(p.nome)}">${esc(f(d[p.id]))}</span>`).join("");
+        h += `<div class="voce"><span class="n ${b && !st ? "err" : ""}">${esc(v.nome)}</span><span class="dosi">${dosiHtml}</span>${pill}</div>`;
       }
+      const azioni = [];
       if (sel <= oggi()) {
-        h += `<div class="azioni">` + (st
+        azioni.push(st
           ? `<button class="btn piccolo sec" data-a="pasto-annulla" data-k="${esc(k)}">Annulla «${esc(st.stato === "saltato" ? "saltato" : "fatto")}»</button>`
-          : `<button class="btn piccolo" data-a="pasto" data-k="${esc(k)}" data-stato="fatto">Fatto</button><button class="btn piccolo sec" data-a="pasto-altro" data-k="${esc(k)}">Altro</button>`) + `</div>`;
+          : `<button class="btn piccolo" data-a="pasto" data-k="${esc(k)}" data-stato="fatto">Fatto</button><button class="btn piccolo sec" data-a="pasto-altro" data-k="${esc(k)}">Altro</button>`);
       }
+      // si può cambiare un pasto non ancora mangiato, di oggi o dei giorni dopo
+      if (!st && sel >= oggi() && p.pasto !== "Fuori pasto" && window.ImportaPdf.caselle(p, g.alternative).length) {
+        azioni.push(`<button class="btn piccolo cambia" data-a="cambia-apri" data-k="${esc(k)}">${ico("cambia", 16)} Cambia pasto</button>`);
+      }
+      if (!st && p.cambiato && sel >= oggi()) azioni.push(`<button class="btn piccolo sec" data-a="cambia-ripristina" data-k="${esc(k)}">Ripristina</button>`);
+      if (azioni.length) h += `<div class="azioni">${azioni.join("")}</div>`;
       h += `</section>`;
     }
     return h + `</div>`;
+  }
+
+  /* ---------------- cambia pasto ---------------- */
+  const dose = (q, u) => (u === "g" ? L.fmtNum(q) + " g" : u === "n." ? L.fmtNum(q) + " pz" : L.fmtNum(q) + " " + u);
+
+  function foglioCambia() {
+    const d = S.sheet.d;
+    const g = L.giornoPiano(S.piano, d.data);
+    const p = g && g.pasti.find((x) => x.pasto === d.pasto);
+    if (!p) return `<h2>Pasto non trovato</h2><button class="btn" data-a="chiudi">Chiudi</button>`;
+    const cs = window.ImportaPdf.caselle(p, g.alternative);
+    let h = `<h2>Cambia ${esc(p.pasto.toLowerCase())}</h2>
+      <p class="sotto">${esc(cap(L.nomeGiorno(d.data, oggi())))}. Scegli tra i cibi consentiti dalle tabelle della dietista: le grammature sono già quelle giuste per ognuno.</p>`;
+    for (const c of cs) {
+      const scelta = d.scelte[c.chiave] || c.titolo;
+      h += `<section class="casella"><h3>Al posto di ${esc(c.titolo)}</h3>`;
+      for (const o of window.ImportaPdf.opzioniCasella(c)) {
+        const righe = c.ids.map((id) => {
+          const cibi = o.perPersona[id];
+          const nome = `<b style="color:${coloreDi(id)}">${esc(nomeDi(id))}</b>`;
+          if (!cibi) return `<span>${nome} resta ${esc(c.titolo)}</span>`;
+          return `<span>${nome} ${esc(cibi.map((w) => (cibi.length > 1 ? w.nome + " " : "") + dose(w.q, w.u)).join(", "))}</span>`;
+        }).join("");
+        const scelto = o.nome.toLowerCase() === scelta.toLowerCase();
+        h += `<button class="opzione" data-a="cambia-scegli" data-c="${esc(c.chiave)}" data-v="${esc(o.nome)}" aria-pressed="${scelto}">
+          <b>${esc(o.nome)}${o.originale ? '<span class="tag-piano">adesso</span>' : ""}</b><span class="dosi-op">${righe}</span></button>`;
+      }
+      h += `</section>`;
+    }
+    return h + `<button class="btn largo" data-a="cambia-salva">Imposta questo pasto</button>
+      <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
+  }
+
+  async function salvaCambio() {
+    const d = S.sheet.d;
+    const g = L.giornoPiano(S.piano, d.data);
+    const p = g && g.pasti.find((x) => x.pasto === d.pasto);
+    const nuovo = window.ImportaPdf.applicaScelte(p, g.alternative, d.scelte);
+    if (!nuovo.cambiato) { chiudiFoglio(); return; }
+    const pp = JSON.parse(JSON.stringify(pianoSalvato()));
+    pp.cambi = { ...(pp.cambi || {}), [d.k]: { pasto: d.pasto, libero: false, piatti: nuovo.piatti, voci: nuovo.voci } };
+    await salva("piano", [{ id: "attuale", dati: pp, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
+    chiudiFoglio();
+    dopoModifica();
+    toast(`${d.pasto} di ${L.nomeGiorno(d.data, oggi())} cambiato`);
+  }
+
+  /* ---------------- diario: peso e storico ---------------- */
+  // cosa c'era nel pasto, persona per persona: resta anche se poi la dieta cambia
+  function fotoPasto(p) {
+    if (!p) return null;
+    return { piatti: p.piatti || [], libero: !!p.libero, voci: (p.voci || []).map((v) => ({ nome: v.nome, q: L.dosi(v), u: v.u })) };
+  }
+  function pesateDi(id) { return S.db.pesi.filter((x) => x.persona === id).sort((a, b) => a.data.localeCompare(b.data)); }
+  function ultimoPesoTesto() {
+    const l = pesateDi(S.chi);
+    const u = l[l.length - 1];
+    return u ? `${L.fmtNum(u.kg)} kg · ${ddmm(u.data)}` : "segna la pesata";
+  }
+  const segno = (x) => (x > 0 ? "+" : x < 0 ? "−" : "±") + L.fmtNum(Math.abs(x));
+  function dataLunga(d) { const x = L.daIso(d); return cap(L.GIORNI[x.getDay()]) + " " + x.getDate() + " " + MESI[x.getMonth()]; }
+
+  function schermoDiario() {
+    let h = testa("", "Diario", "oggi");
+    h += `<div class="corpo">
+      <div class="segmenti">
+        <button aria-pressed="${S.diarioTab === "peso"}" data-a="diario-tab" data-v="peso">Peso</button>
+        <button aria-pressed="${S.diarioTab === "storico"}" data-a="diario-tab" data-v="storico">Storico</button>
+      </div>`;
+    h += S.diarioTab === "storico" ? pannelloStorico() : pannelloPeso();
+    return h + `</div>`;
+  }
+
+  function pannelloPeso() {
+    if (!S.pesoPersona || !persone().some((p) => p.id === S.pesoPersona)) S.pesoPersona = S.chi || (persone()[0] || {}).id;
+    const chi = S.pesoPersona;
+    const lista = pesateDi(chi);
+    const ultimo = lista[lista.length - 1];
+    let h = persone().length > 1
+      ? `<div class="segmenti">${persone().map((p) => `<button aria-pressed="${p.id === chi}" data-a="peso-persona" data-v="${esc(p.id)}">${esc(p.nome)}</button>`).join("")}</div>`
+      : "";
+    h += `<form data-form="peso" class="card pad" style="display:flex;flex-direction:column;gap:10px">
+      <div class="due">
+        <label class="campo">Peso (kg)<input id="peso-kg" inputmode="decimal" autocomplete="off" placeholder="${ultimo ? esc(L.fmtNum(ultimo.kg)) : "82,4"}"></label>
+        <label class="campo">Giorno<input id="peso-data" type="date" value="${oggi()}" max="${oggi()}"></label>
+      </div>
+      <button class="btn">Salva la pesata di ${esc(nomeDi(chi))}</button>
+    </form>`;
+    if (!lista.length) return h + `<p class="vuoto">Nessuna pesata ancora. Pesati sempre alla stessa ora, meglio al mattino: la curva sarà più fedele.</p>`;
+    const primo = lista[0];
+    const prec = lista.length > 1 ? lista[lista.length - 2] : null;
+    h += `<div class="numeri-peso">
+      <div><small>Inizio · ${esc(ddmm(primo.data))}</small><b>${esc(L.fmtNum(primo.kg))} kg</b></div>
+      <div><small>Ultima · ${esc(ddmm(ultimo.data))}</small><b>${esc(L.fmtNum(ultimo.kg))} kg</b></div>
+      <div><small>Dall'inizio</small><b>${esc(segno(ultimo.kg - primo.kg))} kg</b></div>
+    </div>`;
+    if (lista.length > 1) h += `<div class="grafico">${graficoPeso(lista, coloreDi(chi))}</div>`;
+    if (prec) h += `<p style="font-size:14px;color:var(--muted);padding:0 4px">Dalla pesata del ${esc(ddmm(prec.data))}: <b style="color:var(--ink)">${esc(segno(ultimo.kg - prec.kg))} kg</b> in ${L.diffGiorni(prec.data, ultimo.data)} giorni.</p>`;
+    h += `<div class="card">`;
+    [...lista].reverse().forEach((x, i, arr) => {
+      const prima = arr[i + 1];
+      h += `<div class="riga"><span class="testo"><span class="nome">${esc(L.fmtNum(x.kg))} kg</span><span class="nota">${esc(dataLunga(x.data))}${prima ? " · " + esc(segno(x.kg - prima.kg)) + " kg" : ""}</span></span>
+        <button class="icona-btn" data-a="peso-togli" data-id="${esc(x.id)}" aria-label="Togli la pesata del ${esc(ddmm(x.data))}">${ico("x", 18)}</button></div>`;
+    });
+    return h + `</div>`;
+  }
+
+  // la curva del peso: una scala sola per punti, griglia ed etichette
+  function graficoPeso(lista, colore) {
+    const W = 340, H = 190, sx = 40, dx = 16, su = 18, giu = 26;
+    const tempi = lista.map((x) => L.daIso(x.data).getTime());
+    const t0 = Math.min(...tempi), t1 = Math.max(...tempi);
+    const kg = lista.map((x) => Number(x.kg));
+    const margine = Math.max(0.5, (Math.max(...kg) - Math.min(...kg)) * 0.15);
+    const lo = Math.min(...kg) - margine, hi = Math.max(...kg) + margine;
+    const X = (tm) => (t1 === t0 ? sx + (W - sx - dx) / 2 : sx + ((tm - t0) / (t1 - t0)) * (W - sx - dx));
+    const Y = (k) => su + ((hi - k) / (hi - lo)) * (H - su - giu);
+    const grezzo = (hi - lo) / 3;
+    const p10 = Math.pow(10, Math.floor(Math.log10(grezzo)));
+    const passo = [1, 2, 5, 10].map((m) => m * p10).find((x) => x >= grezzo);
+    let g = "";
+    for (let v = Math.ceil(lo / passo) * passo; v <= hi + 1e-9; v += passo) {
+      g += `<line x1="${sx}" x2="${W - dx}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="#E3E8E2" stroke-width="1"/>`;
+      g += `<text x="${sx - 6}" y="${(Y(v) + 3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="#55605A">${L.fmtNum(v)}</text>`;
+    }
+    const pts = lista.map((x, i) => [X(tempi[i]), Y(kg[i])]);
+    const linea = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    const area = `${linea} L${pts[pts.length - 1][0].toFixed(1)} ${H - giu} L${pts[0][0].toFixed(1)} ${H - giu} Z`;
+    const ult = pts[pts.length - 1];
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Andamento del peso: da ${L.fmtNum(kg[0])} a ${L.fmtNum(kg[kg.length - 1])} kg">
+      ${g}
+      <path d="${area}" fill="${colore}" fill-opacity="0.12"/>
+      <path d="${linea}" fill="none" stroke="${colore}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      ${pts.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${i === pts.length - 1 ? 5 : 3.5}" fill="${colore}" stroke="#fff" stroke-width="1.5"/>`).join("")}
+      <text x="${Math.min(ult[0], W - dx - 4).toFixed(1)}" y="${(ult[1] - 10).toFixed(1)}" text-anchor="end" font-size="12" font-weight="800" fill="#16201A">${L.fmtNum(kg[kg.length - 1])} kg</text>
+      <text x="${pts[0][0].toFixed(1)}" y="${H - 8}" text-anchor="start" font-size="10" fill="#55605A">${ddmm(lista[0].data)}</text>
+      <text x="${(W - dx).toFixed(1)}" y="${H - 8}" text-anchor="end" font-size="10" fill="#55605A">${ddmm(lista[lista.length - 1].data)}</text>
+    </svg>`;
+  }
+
+  // chi ha mangiato il pasto registrato
+  function chiHaMangiato(r, contenuto) {
+    if (r.stato === "saltato") return [];
+    const solo = r.stato.startsWith("solo:") ? r.stato.slice(5) : r.stato === "max" || r.stato === "vale" ? r.stato : null;
+    if (solo) return [solo];
+    return [...new Set((contenuto ? contenuto.voci : []).flatMap((v) => Object.keys(v.q || {}).filter((id) => Number(v.q[id]) > 0)))];
+  }
+  function statoTesto(st) {
+    if (st === "saltato") return "saltato";
+    if (st === "fatto" || st === "auto") return "fatto";
+    return "solo " + nomeDi(st.replace(/^solo:/, ""));
+  }
+
+  // tutto quello che serve allo storico e al report, nell'intervallo scelto
+  function datiReport(da, a, persona) {
+    const ordine = (p) => L.ORA[p] || 0;
+    const righe = S.db.pasti.filter((r) => r.data >= da && r.data <= a)
+      .sort((x, y) => x.data.localeCompare(y.data) || ordine(x.pasto) - ordine(y.pasto));
+    const giorni = [];
+    let fatti = 0, saltati = 0;
+    for (const r of righe) {
+      let contenuto = r.contenuto;
+      if (!contenuto && S.piano) { const g = L.giornoPiano(S.piano, r.data); contenuto = fotoPasto(g && g.pasti.find((p) => p.pasto === r.pasto)); }
+      if (contenuto && contenuto.libero) contenuto = { ...contenuto, voci: [] };
+      let ids = chiHaMangiato(r, contenuto);
+      if (persona !== "tutti") {
+        if (r.stato !== "saltato" && !ids.includes(persona)) continue;
+        ids = ids.filter((id) => id === persona);
+      }
+      const molti = ids.length > 1;
+      const cibi = (contenuto ? contenuto.voci : []).map((v) => {
+        const parti = ids.filter((id) => Number(v.q[id]) > 0).map((id) => (molti ? nomeDi(id) + " " : "") + dose(v.q[id], v.u));
+        if (!parti.length) return null;
+        return molti ? `${v.nome} (${parti.join(", ")})` : `${v.nome} ${parti[0]}`;
+      }).filter(Boolean);
+      if (r.stato === "saltato") saltati++; else fatti++;
+      let giorno = giorni.find((x) => x.data === r.data);
+      if (!giorno) { giorno = { data: r.data, pasti: [] }; giorni.push(giorno); }
+      giorno.pasti.push({
+        pasto: r.pasto, stato: statoTesto(r.stato),
+        piatti: contenuto ? contenuto.piatti : [], libero: !!(contenuto && contenuto.libero), cibi,
+      });
+    }
+    const chi = persona === "tutti" ? persone().map((p) => p.id) : [persona];
+    const pesi = chi.map((id) => {
+      const tutte = pesateDi(id);
+      const dentro = tutte.filter((x) => x.data >= da && x.data <= a);
+      const prima = tutte.filter((x) => x.data < da).pop();
+      return { id, nome: nomeDi(id), pesate: dentro, prima, tutte };
+    }).filter((x) => x.tutte.length);
+    return { da, a, persona, giorni, pesi, fatti, saltati };
+  }
+
+  function pannelloStorico() {
+    const da = L.piuGiorni(oggi(), -(S.storicoGiorni - 1));
+    const rep = datiReport(da, oggi(), S.storicoPersona);
+    let h = `<div class="segmenti">${[7, 14, 30].map((n) => `<button aria-pressed="${S.storicoGiorni === n}" data-a="storico-giorni" data-v="${n}">${n} giorni</button>`).join("")}</div>`;
+    if (persone().length > 1) {
+      h += `<label class="campo">Di chi<select id="storico-persona" class="input">${sel(S.storicoPersona, [["tutti", "Tutti"], ...persone().map((p) => [p.id, p.nome])])}</select></label>`;
+    }
+    h += `<div class="due"><button class="btn" data-a="report-stampa">Stampa o PDF</button><button class="btn sec" data-a="report-testo">File di testo</button></div>
+      <p style="font-size:13px;color:var(--muted);padding:0 4px">Il report per la dietista: pasti di questi giorni${rep.pesi.length ? " e pesate" : ""}. Con «Stampa o PDF» scegli «Salva come PDF» nella finestra di stampa.</p>`;
+    if (!rep.giorni.length) return h + `<p class="vuoto">Nessun pasto registrato in questi giorni. I pasti entrano nello storico con «Fatto», oppure da soli il giorno dopo.</p>`;
+    h += `<p style="font-size:14px;padding:0 4px"><b>${rep.fatti}</b> pasti fatti · <b>${rep.saltati}</b> saltati · dal ${esc(ddmm(rep.da))} al ${esc(ddmm(rep.a))}</p>`;
+    for (const g of [...rep.giorni].reverse()) {
+      h += `<section class="giorno-storico"><h3>${esc(dataLunga(g.data))}</h3>`;
+      for (const p of g.pasti) {
+        h += `<div class="pasto-storico"><span class="t"><span>${esc(p.pasto)}${p.piatti.length ? " · " + esc(p.piatti.join(", ")) : ""}</span><span class="pill ${p.stato === "saltato" ? "grigio" : "ok"}">${esc(p.stato)}</span></span>
+          <span class="cibi">${p.libero ? "Pasto libero" : esc(p.cibi.join(" · ")) || "—"}</span></div>`;
+      }
+      h += `</section>`;
+    }
+    return h;
+  }
+
+  function intestazioneReport(rep) {
+    const chi = rep.persona === "tutti" ? persone().map((p) => p.nome).join(", ") : nomeDi(rep.persona);
+    return { titolo: "Diario alimentare · " + chi, periodo: `dal ${dataLunga(rep.da).toLowerCase()} al ${dataLunga(rep.a).toLowerCase()} ${rep.a.slice(0, 4)}` };
+  }
+  function righePeso(p) {
+    const base = p.prima || p.pesate[0];
+    return p.pesate.map((x) => `${ddmm(x.data)}: ${L.fmtNum(x.kg)} kg` + (base && base !== x ? ` (${segno(x.kg - base.kg)} kg)` : ""));
+  }
+
+  function testoReport(rep) {
+    const t = intestazioneReport(rep);
+    const out = ["CheManca? · " + t.titolo, t.periodo, ""];
+    if (rep.pesi.length) {
+      out.push("PESO");
+      for (const p of rep.pesi) out.push(`${p.nome}: ${righePeso(p).join(" · ") || "nessuna pesata nel periodo"}`);
+      out.push("");
+    }
+    out.push(`PASTI (${rep.fatti} fatti, ${rep.saltati} saltati)`);
+    for (const g of rep.giorni) {
+      out.push("", dataLunga(g.data));
+      for (const p of g.pasti) out.push(`  ${p.pasto} (${p.stato})${p.piatti.length ? " – " + p.piatti.join(", ") : ""}: ${p.libero ? "pasto libero" : p.cibi.join("; ") || "—"}`);
+    }
+    out.push("", "Generato da CheManca? il " + new Date().toLocaleDateString("it-IT"));
+    return out.join("\n");
+  }
+
+  function stampaReport() {
+    const rep = datiReport(L.piuGiorni(oggi(), -(S.storicoGiorni - 1)), oggi(), S.storicoPersona);
+    const t = intestazioneReport(rep);
+    let h = `<h1>${esc(t.titolo)}</h1><p>${esc(t.periodo)} · ${rep.fatti} pasti fatti, ${rep.saltati} saltati</p>`;
+    if (rep.pesi.length) {
+      h += `<h2>Peso</h2><table><tbody>${rep.pesi.map((p) => `<tr><th>${esc(p.nome)}</th><td>${esc(righePeso(p).join(" · ") || "nessuna pesata nel periodo")}</td></tr>`).join("")}</tbody></table>`;
+    }
+    h += `<h2>Pasti</h2>`;
+    for (const g of rep.giorni) {
+      h += `<div class="giorno"><h3>${esc(dataLunga(g.data))}</h3><table><tbody>${g.pasti.map((p) =>
+        `<tr><th style="width:22%">${esc(p.pasto)}<br><small>${esc(p.stato)}</small></th><td>${p.piatti.length ? "<b>" + esc(p.piatti.join(", ")) + "</b><br>" : ""}${p.libero ? "Pasto libero" : esc(p.cibi.join(" · ")) || "—"}</td></tr>`).join("")}</tbody></table></div>`;
+    }
+    h += `<p style="margin-top:12pt;font-size:9pt">Generato da CheManca? il ${esc(new Date().toLocaleDateString("it-IT"))}</p>`;
+    let el = document.getElementById("stampa");
+    if (!el) { el = document.createElement("div"); el.id = "stampa"; document.body.appendChild(el); }
+    el.innerHTML = h;
+    window.print();
+  }
+
+  async function esportaTesto() {
+    const rep = datiReport(L.piuGiorni(oggi(), -(S.storicoGiorni - 1)), oggi(), S.storicoPersona);
+    const nome = `CheManca-diario-${rep.da}-${rep.a}.txt`;
+    const file = new File([testoReport(rep)], nome, { type: "text/plain" });
+    // sul telefono si apre "Condividi" (WhatsApp, mail…); dove non c'è, si scarica il file
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: "Diario CheManca?" }); return; }
+      catch (e) { if (e && e.name === "AbortError") return; }
+    }
+    const url = URL.createObjectURL(file);
+    const a = document.createElement("a");
+    a.href = url; a.download = nome; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
 
   /* ---------------- IMPOSTAZIONI ---------------- */
@@ -763,20 +1087,29 @@
     let h = testa("", "Impostazioni", "oggi");
     h += `<div class="corpo">
       <section class="sezione-imp"><h2>Chi usa questo telefono</h2>
-        <div class="segmenti"><button aria-pressed="${S.chi === "max"}" data-a="chi" data-v="max">Max</button><button aria-pressed="${S.chi === "vale"}" data-a="chi" data-v="vale">Vale</button></div>
+        <div class="segmenti">${persone().map((p) => `<button aria-pressed="${S.chi === p.id}" data-a="chi" data-v="${esc(p.id)}">${esc(p.nome)}</button>`).join("")}</div>
+      </section>
+
+      <section class="sezione-imp"><h2>Persone in casa</h2>
+        <p>Chi segue una dieta. Ognuno ha il suo colore nel piano.</p>
+        ${persone().map((p) => `<div style="display:flex;gap:8px;align-items:center">
+          <span style="width:14px;height:14px;border-radius:50%;background:${coloreDi(p.id)};flex:none" aria-hidden="true"></span>
+          <label class="sr" for="pers-${esc(p.id)}">Nome</label><input class="input" id="pers-${esc(p.id)}" data-persona="${esc(p.id)}" value="${esc(p.nome)}" style="flex:1">
+          ${persone().length > 1 ? `<button class="icona-btn" data-a="persona-togli" data-id="${esc(p.id)}" aria-label="Togli ${esc(p.nome)}">${ico("x", 18)}</button>` : ""}</div>`).join("")}
+        <div class="due"><button class="btn sec" data-a="persona-aggiungi" ${persone().length >= 6 ? "disabled" : ""}>${ico("piu", 18)} Aggiungi</button><button class="btn" data-a="persone-salva">Salva i nomi</button></div>
       </section>
 
       ${condiviso || CFG.CONDIVISIONE ? `<section class="sezione-imp"><h2>Dati condivisi</h2>
-        <p>${condiviso ? "I dati stanno su Supabase: Max e Vale vedono le stesse cose in tempo reale." : "Adesso i dati restano <b>solo su questo telefono</b>. Per condividerli con l'altro telefono incolla i due valori di Supabase (README, passo 2)."}</p>
+        <p>${condiviso ? "I dati stanno su Supabase: tutti i telefoni di casa vedono le stesse cose in tempo reale." : "Adesso i dati restano <b>solo su questo telefono</b>. Per condividerli con l'altro telefono incolla i due valori di Supabase (README, passo 2)."}</p>
         <label class="campo">Project URL<input id="sb-url" value="${esc(LS.get("ds_sb_url", "") || CFG.SUPABASE_URL || "")}" placeholder="https://xxxx.supabase.co" autocomplete="off"></label>
         <label class="campo">Anon key<input id="sb-anon" value="${esc(LS.get("ds_sb_anon", "") || CFG.SUPABASE_ANON || "")}" placeholder="eyJ…" autocomplete="off"></label>
         <button class="btn sec" data-a="salva-sb">Salva e ricarica</button>
       </section>` : ""}
       ${esterni ? `
       <section class="sezione-imp"><h2>Avvisi su Telegram</h2>
-        <p>Il bot scrive nel gruppo dove ci siete tu e Vale. Il token resta solo su questo telefono, non va nel codice.</p>
+        <p>Il bot scrive nel gruppo della famiglia. Il token resta solo su questo telefono, non va nel codice.</p>
         <ol><li>Su Telegram apri <b>@BotFather</b>, scrivi <code>/newbot</code> e copia il token.</li>
-          <li>Crea un gruppo con Vale e aggiungi il bot. Scrivi un messaggio qualsiasi nel gruppo.</li>
+          <li>Crea un gruppo con chi vive con te e aggiungi il bot. Scrivi un messaggio qualsiasi nel gruppo.</li>
           <li>Incolla il token qui sotto e premi «Trova il gruppo».</li></ol>
         <label class="campo">Token del bot<input id="tg-token" type="password" value="${esc(t.token)}" placeholder="123456:ABC…" autocomplete="off"></label>
         <label class="campo">Chat del gruppo<input id="tg-chat" value="${esc(t.chat)}" placeholder="-100…" autocomplete="off"></label>
@@ -797,7 +1130,8 @@
       <section class="sezione-imp"><h2>Piano dieta</h2>
         <p>${S.piano ? `In uso il piano dal <b>${esc(ddmm(S.piano.inizio))}/${esc(S.piano.inizio.slice(0, 4))}</b>: ${S.piano.settimane.length === 1 ? "1 settimana che si ripete" : S.piano.settimane.length + " settimane a rotazione"} · da <code>${esc(S.piano.fonte || "piano.json")}</code>` : "<b>Nessun piano in uso.</b> Finché non ne carichi uno l'app non segnala cosa manca."}</p>
         <label class="btn" style="cursor:pointer">${ico("piu", 18)} Nuova dieta dai PDF della dietista<input type="file" accept="application/pdf,.pdf" multiple data-file="pdf" class="sr"></label>
-        <p style="font-size:13px">Scegli insieme i due PDF «Dieta a menu giornaliero» (Max e Vale): l'app legge ogni giorno e unisce le dosi. Va bene anche uno solo.</p>
+        <p style="font-size:13px">Scegli insieme i PDF «Dieta a menu giornaliero» di tutte le persone di casa: l'app legge ogni giorno e unisce le dosi. Va bene anche uno solo.</p>
+        ${sezioneAlternative()}
         <label class="btn sec" style="cursor:pointer">Carica un piano.json (4 settimane)<input type="file" accept=".json,application/json" data-file="piano" class="sr"></label>
         <div class="due">
           <button class="btn rosso" data-a="piano-svuota" ${S.piano ? "" : "disabled"}>Svuota piano</button>
@@ -826,12 +1160,72 @@
     return h;
   }
 
+  /* ---------------- settimane alternative ---------------- */
+  const pianoSalvato = () => { const r = S.db.piano.find((x) => x.id === "attuale"); return r && r.dati ? r.dati : null; };
+  const haAlternative = () => { const p = pianoSalvato(); return !!(p && p.alternative && Object.keys(p.alternative).length); };
+  // le prossime tre settimane del piano (iniziano nel giorno della settimana in cui parte la dieta)
+  function settimaneScelta() {
+    const p = pianoSalvato();
+    const k = Math.max(0, L.diffGiorni(p.inizio, oggi()));
+    const prima = L.piuGiorni(p.inizio, Math.floor(k / 7) * 7);
+    return [0, 1, 2].map((i) => L.piuGiorni(prima, i * 7));
+  }
+  function nomeSettimana(d) {
+    const fine = L.piuGiorni(d, 6);
+    return `dal ${L.etichettaData(d)} al ${L.etichettaData(fine)}`;
+  }
+  function sezioneAlternative() {
+    if (!haAlternative()) {
+      return `<p style="font-size:13px">La <b>settimana alternativa</b> si crea dalle tabelle «Alternative alimentari» del PDF: è disponibile quando la dieta è caricata dal PDF.</p>`;
+    }
+    const fissate = Object.keys(pianoSalvato().fissate || {}).filter((d) => L.piuGiorni(d, 6) >= oggi()).sort();
+    return `<button class="btn sec" data-a="alt-apri">Crea settimana alternativa</button>
+      <p style="font-size:13px">Cambia gli alimenti con quelli consentiti dalle tabelle delle alternative, con le grammature della dietista.</p>
+      ${fissate.map((d) => `<div class="riga"><span class="testo"><span class="nome">Settimana alternativa</span><span class="nota">${esc(nomeSettimana(d))}</span></span>
+        <button class="btn piccolo sec" data-a="alt-togli" data-d="${d}">Torna alla tipo</button></div>`).join("")}`;
+  }
+  function generaAlternativa(d) {
+    const p = pianoSalvato();
+    const k = L.diffGiorni(p.inizio, d.inizioSett);
+    const base = p.settimane[Math.floor(Math.max(0, k) / 7) % p.settimane.length];
+    d.base = base;
+    d.settimana = window.ImportaPdf.creaSettimana(base, p.alternative);
+  }
+  function foglioAlternativa() {
+    const d = S.sheet.d;
+    const nomiG = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
+    const primo = L.daIso(pianoSalvato().inizio).getDay();   // il giorno della settimana in cui parte la dieta
+    const etich = (g) => nomiG[(primo + 6 + g) % 7];
+    let righe = "";
+    let cambi = 0;
+    d.settimana.forEach((pasti, g) => {
+      const linee = [];
+      for (const p of pasti) {
+        if (p.libero || p.pasto === "Fuori pasto") continue;
+        const b = d.base[g].find((x) => x.pasto === p.pasto);
+        const prima = new Set((b ? b.voci : []).map((v) => v.nome));
+        const nuovi = [...new Set([...p.piatti.filter((t) => !(b && b.piatti.includes(t))), ...p.voci.filter((v) => !prima.has(v.nome) && !v.piatto).map((v) => v.nome)])];
+        if (!nuovi.length) continue;
+        cambi += nuovi.length;
+        linee.push(`<span class="nota"><b style="color:var(--ink)">${esc(p.pasto)}:</b> ${nuovi.map((n) => `<span style="color:var(--green);font-weight:800">${esc(n)}</span>`).join(", ")}</span>`);
+      }
+      righe += `<div class="riga" style="align-items:flex-start"><span class="nome" style="min-width:44px">${etich(g)}</span><span class="testo">${linee.join("") || '<span class="nota">come la settimana tipo</span>'}</span></div>`;
+    });
+    return `<h2>Settimana alternativa</h2>
+      <p class="sotto">Ogni cambio viene dalle tabelle «Alternative alimentari» del PDF, con le grammature indicate dalla dietista. In verde i cibi nuovi; tutto il resto resta com'è.</p>
+      <div class="segmenti">${settimaneScelta().map((s, i) => `<button aria-pressed="${s === d.inizioSett}" data-a="alt-sett" data-d="${s}">${["Questa", "Prossima", "Fra 2 sett."][i]}</button>`).join("")}</div>
+      <p style="font-size:13px;color:var(--muted);text-align:center;margin-top:-6px">${esc(nomeSettimana(d.inizioSett))} · ${cambi} cambi</p>
+      <div class="card" style="background:var(--bg)">${righe}</div>
+      <div class="due"><button class="btn sec" data-a="alt-rigenera">Rigenera</button><button class="btn" data-a="alt-usa">Usa questa settimana</button></div>
+      <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
+  }
+
   /* ---------------- disegno ---------------- */
   function render() {
     const app = $("#app");
     const att = document.activeElement;
     const fuoco = att && att.id && app.contains(att) ? { id: att.id, pos: att.selectionStart } : null;
-    const schermi = { oggi: schermoOggi, casa: schermoCasa, aggiungi: schermoAggiungi, spesa: schermoSpesa, piano: schermoPiano, imp: schermoImpostazioni };
+    const schermi = { oggi: schermoOggi, casa: schermoCasa, aggiungi: schermoAggiungi, spesa: schermoSpesa, piano: schermoPiano, imp: schermoImpostazioni, diario: schermoDiario };
     app.innerHTML = (schermi[S.tab] || schermoOggi)();
     renderNav();
     posizionaCamera();
@@ -846,7 +1240,7 @@
   function vai(tab) {
     if (tab !== "aggiungi" || S.aggTab !== "codice") fermaScanner();
     S.tab = tab;
-    if (tab !== "imp") LS.set("ds_tab", tab);
+    if (tab !== "imp" && tab !== "diario") LS.set("ds_tab", tab);
     if (tab === "piano") S.giornoSel = S.giornoSel || oggi();
     render();
     window.scrollTo(0, 0);
@@ -944,14 +1338,24 @@
     const voci = L.tutteLeVoci(S.piano || { settimane: [] });
     const nome = off ? (off.product_name_it || off.product_name || off.generic_name_it || "").trim() : "";
     const voce = nome ? L.indovinaVoce(nome, voci) : null;
-    const unitaOff = (off && off.product_quantity_unit) || "g";
-    const peso = off && off.product_quantity && /^(g|ml)$/i.test(unitaOff) ? Math.round(Number(off.product_quantity)) : null;
+    const unitaOff = ((off && off.product_quantity_unit) || "g").toLowerCase();
+    const peso = off && off.product_quantity && /^(g|ml)$/.test(unitaOff) ? Math.round(Number(off.product_quantity)) : null;
+    const litri = off && off.product_quantity ? (unitaOff === "ml" ? off.product_quantity / 1000 : unitaOff === "cl" ? off.product_quantity / 100 : unitaOff === "l" ? Number(off.product_quantity) : null) : null;
     const luogo = (voce && S.piano && L.luogoDaVoce(S.piano, voce)) || (off ? L.luogoDaCategorie(off.categories_tags) : "dispensa");
-    apriProdotto({
-      ean, nome: nome ? nome + (off.brands ? "" : "") : "", marca: off ? (off.brands || "").split(",")[0] : "",
+    const d = {
+      ean, nome, marca: off ? (off.brands || "").split(",")[0] : "",
       voce: voce || "", luogo, conf: 1, conf_qty: voce === "Uovo di gallina" ? 6 : peso || "", conf_unita: voce === "Uovo di gallina" ? "pz" : "g",
       scadenza: "", trovato: !!off,
-    });
+    };
+    preimpostaConfezione(d, litri);
+    apriProdotto(d);
+  }
+  // crackers: la scatola si conta in pacchetti; olio: la bottiglia in litri
+  function preimpostaConfezione(d, litri) {
+    const r = L.REGOLE[d.voce];
+    if (!r) return;
+    d.conf_unita = r.unita;
+    d.conf_qty = r.unita === "l" ? (litri || 1) : r.conf;
   }
   function daProdottoNoto(p) {
     return { nome: p.nome, marca: p.marca || "", voce: (p.voci || [])[0] || "", luogo: p.luogo, conf: 1, conf_qty: p.conf_qty || "", conf_unita: p.conf_unita || "g", scadenza: "", trovato: true };
@@ -967,8 +1371,10 @@
   function renderFoglio() {
     const el = $("#sheet");
     if (!S.sheet) { el.classList.remove("on"); el.innerHTML = ""; return; }
-    const fogli = { prodotto: foglioProdotto, rivedi: foglioRivedi, item: foglioItem, nuovoCat: foglioNuovoCat, mancanza: foglioMancanza, pasto: foglioPasto, importa: foglioImporta, chi: foglioChi, gruppo: foglioGruppo };
-    el.innerHTML = `<div class="velo" data-a="chiudi"></div><div class="foglio"><span class="maniglia" aria-hidden="true"></span>${fogli[S.sheet.tipo]()}</div>`;
+    const fogli = { prodotto: foglioProdotto, rivedi: foglioRivedi, item: foglioItem, nuovoCat: foglioNuovoCat, mancanza: foglioMancanza, pasto: foglioPasto, importa: foglioImporta, alternativa: foglioAlternativa, cambia: foglioCambia, chi: foglioChi, gruppo: foglioGruppo, benvenuto: foglioBenvenuto };
+    // il benvenuto non si chiude toccando fuori: servono almeno i nomi
+    const fissoP = S.sheet.tipo === "benvenuto" && S.sheet.d.passo < 3;
+    el.innerHTML = `<div class="velo" ${fissoP ? "" : 'data-a="chiudi"'}></div><div class="foglio"><span class="maniglia" aria-hidden="true"></span>${fogli[S.sheet.tipo]()}</div>`;
     el.classList.add("on");
   }
   const sel = (v, opzioni) => opzioni.map(([val, txt]) => `<option value="${esc(val)}" ${val === v ? "selected" : ""}>${esc(txt)}</option>`).join("");
@@ -994,8 +1400,8 @@
         <label class="campo">Scadenza<input type="date" data-f="scadenza" value="${esc(d.scadenza)}"></label>
       </div>
       <div class="due">
-        <label class="campo">Ogni confezione<input data-f="conf_qty" inputmode="decimal" value="${esc(d.conf_qty)}" placeholder="250"></label>
-        <label class="campo">Unità<select data-f="conf_unita">${sel(d.conf_unita, [["g", "grammi"], ["pz", "pezzi"]])}</select></label>
+        <label class="campo">${d.conf_unita === "pz" && L.REGOLE[d.voce] ? "Pacchetti nella scatola" : d.conf_unita === "l" ? "Litri nella bottiglia" : "Ogni confezione"}<input data-f="conf_qty" inputmode="decimal" value="${esc(d.conf_qty)}" placeholder="250"></label>
+        <label class="campo">Unità<select data-f="conf_unita">${sel(d.conf_unita, [["g", "grammi"], ["pz", L.REGOLE[d.voce] && L.REGOLE[d.voce].etichetta ? "pacchetti" : "pezzi"], ["l", "litri"]])}</select></label>
       </div>
       <button class="btn largo" data-a="salva-prodotto">Aggiungi ${d.luogo === "frigo" ? "al frigo" : "alla dispensa"}</button>
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
@@ -1011,7 +1417,7 @@
         <div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:15px">${esc(nome)}</b>
           <button class="icona-btn" data-a="scelta-togli" data-nome="${esc(nome)}" aria-label="Togli ${esc(nome)}">${ico("x", 18)}</button></div>
         <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px">
-          <div class="stepper mini"><button type="button" data-a="scelta-qty" data-nome="${esc(nome)}" data-v="-1" aria-label="Meno">−</button><span class="val">${esc(fmtScelta(c, s.qty).replace("×", ""))}${c.unita === "pz" ? " pz" : ""}</span><button type="button" data-a="scelta-qty" data-nome="${esc(nome)}" data-v="1" aria-label="Più">+</button></div>
+          <div class="stepper mini"><button type="button" data-a="scelta-qty" data-nome="${esc(nome)}" data-v="-1" aria-label="Meno">−</button><span class="val">${esc(fmtRiepilogo(c, s.qty))}</span><button type="button" data-a="scelta-qty" data-nome="${esc(nome)}" data-v="1" aria-label="Più">+</button></div>
           ${bottoniLuogo(s.luogo, "scelta-luogo\" data-nome=\"" + esc(nome), true)}
         </div></div>`;
     }
@@ -1026,7 +1432,7 @@
       <label class="campo">Nome<input data-f="nome" value="${esc(d.nome)}"></label>
       <div class="due">
         <label class="campo">Quantità<input data-f="qty" inputmode="decimal" value="${esc(d.qty)}"></label>
-        <label class="campo">Unità<select data-f="unita">${sel(d.unita, [["g", "grammi"], ["pz", "pezzi"]])}</select></label>
+        <label class="campo">Unità<select data-f="unita">${sel(d.unita, [["g", "grammi"], ["pz", L.REGOLE[d.voce] && L.REGOLE[d.voce].etichetta ? "pacchetti" : "pezzi"], ["l", "litri"]])}</select></label>
       </div>
       <div class="campo"><span>Dove sta</span>${bottoniLuogo(d.luogo, "f-luogo")}</div>
       <label class="campo">Conta come (voce del piano)<select data-f="voce">${sel(d.voce, opzioniVoci())}</select></label>
@@ -1059,7 +1465,7 @@
     const m = (S.calc7 ? S.calc7.mancanze : []).find((x) => x.voce === S.sheet.voce);
     const inLista = S.db.spesa.some((s) => s.voce === m?.voce && !s.fatto);
     if (!m) return `<h2>${esc(S.sheet.voce)}</h2><p class="sotto">Ora c'è: niente da comprare.</p><button class="btn" data-a="chiudi">Chiudi</button>`;
-    const righe = m.pasti.map((p) => `<div class="riga"><span class="testo"><span class="nome">${esc(cap(p.pasto))} di ${esc(L.nomeGiorno(p.data, oggi()))}</span><span class="nota">${esc(L.dettaglioPersone(p, m.u) || "")}</span></span><span class="q">${esc(L.fmtQ(p.manca, m.u))}</span></div>`).join("");
+    const righe = m.pasti.map((p) => `<div class="riga"><span class="testo"><span class="nome">${esc(cap(p.pasto))} di ${esc(L.nomeGiorno(p.data, oggi()))}</span><span class="nota">${esc(L.dettaglioPersone(p, m.u, persone()) || "")}</span></span><span class="q">${esc(L.fmtQ(p.manca, m.u))}</span></div>`).join("");
     return `<h2>${esc(m.voce)}</h2>
       <p class="sotto">${m.tipo === "scarso" ? "In casa ce n'è, ma non basta." : "In casa non risulta."} ${inLista ? "È già nella lista della spesa." : "Entra nella lista della spesa quando mancano 3 giorni."}</p>
       <div class="card" style="background:var(--bg)">${righe}</div>
@@ -1072,15 +1478,40 @@
     const { k } = S.sheet;
     return `<h2>${esc(k.split("|")[1])} di ${esc(L.nomeGiorno(k.split("|")[0], oggi()))}</h2>
       <p class="sotto">Chi l'ha mangiato? Le dosi escono dalla dispensa solo per chi l'ha fatto.</p>
-      <div class="due"><button class="btn sec" data-a="pasto" data-k="${esc(k)}" data-stato="max">Solo Max</button><button class="btn sec" data-a="pasto" data-k="${esc(k)}" data-stato="vale">Solo Vale</button></div>
-      <button class="btn rosso largo" data-a="pasto" data-k="${esc(k)}" data-stato="saltato">Saltato da tutti e due</button>
+      ${persone().length > 1 ? `<div class="due">${persone().map((p) => `<button class="btn sec" data-a="pasto" data-k="${esc(k)}" data-stato="solo:${esc(p.id)}">Solo ${esc(p.nome)}</button>`).join("")}</div>` : ""}
+      <button class="btn rosso largo" data-a="pasto" data-k="${esc(k)}" data-stato="saltato">${persone().length > 1 ? "Saltato da tutti" : "Saltato"}</button>
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
   }
 
   function foglioChi() {
-    return `<h2>Benvenuto in CheManca?</h2>
-      <p class="sotto">Chi usa questo telefono? Serve per «Lo prendo io» e per sapere chi ha aggiunto cosa.</p>
-      <div class="due"><button class="btn" data-a="chi" data-v="max">Max</button><button class="btn" data-a="chi" data-v="vale">Vale</button></div>`;
+    return `<h2>Chi usa questo telefono?</h2>
+      <p class="sotto">Serve per «Lo prendo io» e per sapere chi ha aggiunto cosa.</p>
+      <div class="due">${persone().map((p) => `<button class="btn" data-a="chi" data-v="${esc(p.id)}">${esc(p.nome)}</button>`).join("")}</div>`;
+  }
+
+  // primo avvio in tre passi: i nomi, chi usa il telefono, la dieta
+  function foglioBenvenuto() {
+    const d = S.sheet.d;
+    const passi = `<div class="passi" aria-label="Passo ${d.passo} di 3">${[1, 2, 3].map((n) => `<span class="${n <= d.passo ? "on" : ""}"></span>`).join("")}</div>`;
+    if (d.passo === 1) {
+      return `${passi}<h2>Benvenuto in CheManca?</h2>
+        <p class="sotto">Chi seguirà una dieta in casa? Scrivi i nomi: ognuno avrà le sue dosi e il suo colore.</p>
+        ${d.nomi.map((n, i) => `<div style="display:flex;gap:8px;align-items:center">
+          <span style="width:14px;height:14px;border-radius:50%;background:${COLORI_PERSONE[i % COLORI_PERSONE.length]};flex:none" aria-hidden="true"></span>
+          <label class="sr" for="benv-${i}">Nome ${i + 1}</label><input class="input" id="benv-${i}" data-nome-i="${i}" value="${esc(n)}" placeholder="${i === 0 ? "Il tuo nome" : "Nome"}" autocomplete="off" style="flex:1">
+          ${d.nomi.length > 1 ? `<button class="icona-btn" data-a="benv-togli" data-i="${i}" aria-label="Togli">${ico("x", 18)}</button>` : ""}</div>`).join("")}
+        ${d.nomi.length < 6 ? `<button class="btn sec" data-a="benv-aggiungi">${ico("piu", 18)} Aggiungi una persona</button>` : ""}
+        <button class="btn largo" data-a="benv-avanti">Avanti</button>`;
+    }
+    if (d.passo === 2) {
+      return `${passi}<h2>Chi usa questo telefono?</h2>
+        <p class="sotto">Ognuno può installare CheManca? sul suo telefono.</p>
+        <div class="due">${persone().map((p) => `<button class="btn" data-a="benv-chi" data-v="${esc(p.id)}">${esc(p.nome)}</button>`).join("")}</div>`;
+    }
+    return `${passi}<h2>Carica la dieta</h2>
+      <p class="sotto">Scegli il PDF «Dieta a menu giornaliero» che ti ha dato la dietista${persone().length > 1 ? " (puoi sceglierne uno per ogni persona, tutti insieme)" : ""}. L'app legge da sola giorni, pasti e quantità. Il file non lascia il telefono.</p>
+      <label class="btn largo" style="cursor:pointer">${ico("piu", 18)} Scegli il PDF<input type="file" accept="application/pdf,.pdf" multiple data-file="pdf" class="sr"></label>
+      <button class="link" data-a="chiudi" style="align-self:center">Lo faccio dopo</button>`;
   }
 
   function foglioGruppo() {
@@ -1097,7 +1528,7 @@
     try {
       const pdfjs = await import(PDFJS + "pdf.min.mjs");
       pdfjs.GlobalWorkerOptions.workerSrc = PDFJS + "pdf.worker.min.mjs";
-      const persone = {};
+      const letti = [];
       const avvisi = [];
       for (const f of files) {
         const doc = await pdfjs.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
@@ -1108,17 +1539,21 @@
         }
         const p = window.ImportaPdf.leggiPersona(pagine);
         if (!p.giorni.some(Boolean)) { avvisi.push(f.name + ": nessuna pagina «Piano alimentare - giorno» trovata"); continue; }
-        let chi = window.ImportaPdf.chiDalNome(p.persona + " " + f.name);
-        if (!chi || persone[chi]) chi = persone.max ? "vale" : "max";
-        persone[chi] = p;
-        avvisi.push(...p.avvisi.map((a) => (chi === "max" ? "Max" : "Vale") + ", " + a));
+        avvisi.push(...p.avvisi.map((a) => (p.persona || f.name) + ", " + a));
+        letti.push({ file: f.name, intestato: p.persona, piano: p, id: window.ImportaPdf.abbina(p.persona + " " + f.name, persone()) });
       }
       nascondiToast();
-      if (!persone.max && !persone.vale) return toast("Non ho trovato una dieta nel PDF");
+      if (!letti.length) return toast("Non ho trovato una dieta nel PDF");
+      // chi non è stato riconosciuto dal nome va alla prima persona ancora libera
+      for (const x of letti) {
+        if (x.id && letti.filter((y) => y.id === x.id).length === 1) continue;
+        const libera = persone().find((p) => !letti.some((y) => y !== x && y.id === p.id));
+        x.id = libera ? libera.id : (persone()[0] || {}).id;
+      }
       // di solito si parte dal lunedì: il prossimo, o oggi se è lunedì
       const d = L.daIso(oggi());
       const inizio = L.piuGiorni(oggi(), (8 - d.getDay()) % 7);
-      apriFoglio({ tipo: "importa", d: { persone, avvisi, inizio, nomi: files.map((f) => f.name).join(", ") } });
+      apriFoglio({ tipo: "importa", d: { letti, avvisi, inizio } });
     } catch (e) {
       console.error(e);
       toast("Non riesco a leggere il PDF: " + (e.message || e));
@@ -1127,7 +1562,7 @@
 
   function foglioImporta() {
     const d = S.sheet.d;
-    const anteprima = window.ImportaPdf.unisci(d.persone.max, d.persone.vale, d.inizio, "PDF");
+    const anteprima = window.ImportaPdf.unisci(d.letti.map((x) => ({ id: x.id, piano: x.piano })), d.inizio, "PDF");
     const nomiG = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"];
     const descr = (p) => {
       if (!p) return "–";
@@ -1141,9 +1576,13 @@
       const n = pasti.reduce((s, p) => s + p.voci.length, 0);
       righe += `<div class="riga"><span class="testo"><span class="nome">${nomiG[g]}</span><span class="nota">Pranzo: ${esc(descr(pasti.find((p) => p.pasto === "Pranzo")))} · Cena: ${esc(descr(pasti.find((p) => p.pasto === "Cena")))}</span></span><span class="q" style="font-size:13px;color:var(--muted)">${n} alimenti</span></div>`;
     });
-    const chi = [d.persone.max && "Max", d.persone.vale && "Vale"].filter(Boolean).join(" e ");
+    const doppi = persone().filter((p) => d.letti.filter((x) => x.id === p.id).length > 1);
+    const abbinamenti = d.letti.map((x, i) => `<div class="riga"><span class="testo"><span class="nome">${esc(x.intestato || "Dieta")}</span><span class="nota">${esc(x.file)}</span></span>
+      <label class="sr" for="pdf-chi-${i}">Di chi è</label><select class="input" id="pdf-chi-${i}" data-pdf-i="${i}" style="width:auto;height:44px;font-size:15px">${sel(x.id, persone().map((p) => [p.id, p.nome]))}</select></div>`).join("");
     return `<h2>Nuova dieta</h2>
-      <p class="sotto">Letta da: ${esc(d.nomi)}<br>Dosi di <b>${esc(chi)}</b>${d.persone.max && d.persone.vale ? ", unite pasto per pasto" : ""}. È una settimana che si ripete finché non carichi la prossima.</p>
+      <p class="sotto">Controlla di chi è ogni PDF. È una settimana che si ripete finché non carichi la prossima.</p>
+      <div class="card" style="background:var(--bg)">${abbinamenti}</div>
+      ${doppi.length ? `<div class="avviso giallo"><span>Due PDF sono assegnati a ${esc(doppi.map((p) => p.nome).join(", "))}: le dosi si sommerebbero.</span></div>` : ""}
       ${d.avvisi.length ? `<div class="avviso giallo"><span>${d.avvisi.map(esc).join("<br>")}</span></div>` : ""}
       <div class="card" style="background:var(--bg)">${righe}</div>
       <label class="campo">Comincia il<input type="date" data-f="inizio" value="${esc(d.inizio)}"></label>
@@ -1154,7 +1593,7 @@
   async function confermaImport() {
     const d = S.sheet.d;
     if (!d.inizio) return toast("Scegli la data di inizio");
-    const p = window.ImportaPdf.unisci(d.persone.max, d.persone.vale, d.inizio, "PDF del " + new Date().toLocaleDateString("it-IT"));
+    const p = window.ImportaPdf.unisci(d.letti.map((x) => ({ id: x.id, piano: x.piano })), d.inizio, "PDF del " + new Date().toLocaleDateString("it-IT"));
     if (S.pianoFile) p.categorie = S.pianoFile.categorie;
     // fino al giorno di inizio resta valido il piano di adesso
     if (S.piano && d.inizio > oggi()) p.prima = { ...S.piano, prima: undefined };
@@ -1172,7 +1611,7 @@
     const pasto = g && g.pasti.find((p) => p.pasto === nomePasto);
     const prima = [];
     if (stato !== "saltato" && pasto && !pasto.libero) {
-      const chi = stato === "max" ? "max" : stato === "vale" ? "vale" : null;
+      const chi = stato.startsWith("solo:") ? stato.slice(5) : stato === "max" || stato === "vale" ? stato : null;
       const mosse = L.consumaPasto(S.db.inventario, pasto, chi);
       for (const m of mosse) {
         const it = S.db.inventario.find((i) => i.id === m.id);
@@ -1181,7 +1620,7 @@
         else await modifica("inventario", m.id, { qty: m.qty });
       }
     }
-    await salva("pasti", [{ id: k, data, pasto: nomePasto, stato, chi: S.chi || "", quando: new Date().toISOString(), scalato: prima }]);
+    await salva("pasti", [{ id: k, data, pasto: nomePasto, stato, chi: S.chi || "", quando: new Date().toISOString(), scalato: prima, contenuto: fotoPasto(pasto) }]);
     chiudiFoglio();
     dopoModifica();
     toast(stato === "saltato" ? "Segnato come saltato" : "Fatto: dosi tolte da casa", "Annulla", () => annullaPasto(k));
@@ -1231,6 +1670,7 @@
     const voci = d.voce ? [d.voce] : [];
     let riga;
     if (d.conf_unita === "pz") riga = { qty: d.conf * (confQty || 1), unita: "pz", g_pz: null };
+    else if (d.conf_unita === "l") riga = { qty: Math.round(d.conf * (confQty || 1) * 1000) / 1000, unita: "l", g_pz: null };
     else if (confQty) riga = { qty: d.conf * confQty, unita: "g", g_pz: null };
     else riga = { qty: d.conf, unita: "pz", g_pz: null };
     await salva("inventario", [{ nome: d.nome.trim(), voci, luogo: d.luogo, ...riga, ean: d.ean, manuale: false, scadenza: d.scadenza || null, creato_da: S.chi || "", aggiornato: new Date().toISOString() }]);
@@ -1325,7 +1765,7 @@
       it("Riso basmati integrale", ["Riso Basmati integrale"], "dispensa", 1000, "g"),
       it("Pasta integrale", ["Pasta integrale"], "dispensa", 500, "g"),
       it("Pane di segale", ["Pane integrale di segale"], "dispensa", 750, "g", { manuale: true }),
-      it("Crackers non salati", ["Crackers non salati"], "dispensa", 500, "g"),
+      it("Crackers non salati", ["Crackers non salati"], "dispensa", 10, "pz"),
       it("Mandorle", ["Mandorle"], "dispensa", 200, "g"),
       it("Noci", ["Noci secche"], "dispensa", 150, "g"),
       it("Arachidi tostate", ["Arachidi tostate"], "dispensa", 100, "g"),
@@ -1333,7 +1773,7 @@
       it("Miele millefiori", ["Miele millefiori"], "dispensa", 1, "pz"),
       it("Caffè", ["Caffè"], "dispensa", 1, "pz"),
       it("Cioccolato fondente", ["Cioccolato fondente"], "dispensa", 100, "g"),
-      it("Olio extravergine", ["Olio extra vergine di oliva"], "dispensa", 1, "pz"),
+      it("Olio extravergine", ["Olio extra vergine di oliva"], "dispensa", 0.75, "l"),
       it("Farina di cocco", ["Farina di cocco"], "dispensa", 250, "g"),
       it("Patate", ["Patate"], "dispensa", 1000, "g", { manuale: true }),
     ];
@@ -1461,7 +1901,62 @@
       case "pasto-altro": apriFoglio({ tipo: "pasto", k: b.dataset.k }); break;
       case "pasto-annulla": await annullaPasto(b.dataset.k); break;
       case "giorno": S.giornoSel = b.dataset.d; render(); break;
+      case "cambia-apri": {
+        const [data, pasto] = b.dataset.k.split("|");
+        apriFoglio({ tipo: "cambia", d: { k: b.dataset.k, data, pasto, scelte: {} } });
+        break;
+      }
+      case "cambia-scegli": d.scelte[b.dataset.c] = b.dataset.v; renderFoglio(); break;
+      case "cambia-salva": await salvaCambio(); break;
+      case "cambia-ripristina": {
+        const p = JSON.parse(JSON.stringify(pianoSalvato()));
+        if (p.cambi) delete p.cambi[b.dataset.k];
+        await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
+        dopoModifica(); toast("Torna il pasto del piano");
+        break;
+      }
+      case "vai-diario": S.diarioTab = b.dataset.v; chiudiFoglio(); vai("diario"); break;
+      case "diario-tab": S.diarioTab = b.dataset.v; render(); break;
+      case "peso-persona": S.pesoPersona = b.dataset.v; render(); break;
+      case "peso-togli": {
+        const r = S.db.pesi.find((x) => x.id === b.dataset.id);
+        await elimina("pesi", b.dataset.id); render();
+        toast("Pesata tolta", "Annulla", async () => { await salva("pesi", [r]); render(); });
+        break;
+      }
+      case "storico-giorni": S.storicoGiorni = Number(b.dataset.v); render(); break;
+      case "report-stampa": stampaReport(); break;
+      case "report-testo": await esportaTesto(); break;
       case "chi": S.chi = b.dataset.v; LS.set("ds_chi", S.chi); chiudiFoglio(); render(); break;
+      case "benv-aggiungi": d.nomi.push(""); renderFoglio(); { const ult = document.getElementById("benv-" + (d.nomi.length - 1)); if (ult) ult.focus(); } break;
+      case "benv-togli": d.nomi.splice(Number(b.dataset.i), 1); renderFoglio(); break;
+      case "benv-avanti": {
+        const nomi = d.nomi.map((n) => n.trim()).filter(Boolean);
+        if (!nomi.length) { toast("Scrivi almeno un nome"); break; }
+        await salvaPersone(nomi.map((n, i) => ({ id: "p" + (i + 1), nome: n })));
+        if (nomi.length === 1) { S.chi = "p1"; LS.set("ds_chi", "p1"); d.passo = 3; } else d.passo = 2;
+        renderFoglio(); render();
+        break;
+      }
+      case "benv-chi": S.chi = b.dataset.v; LS.set("ds_chi", S.chi); d.passo = 3; renderFoglio(); render(); break;
+      case "persona-aggiungi": {
+        const lista = persone();
+        let n = lista.length + 1;
+        while (lista.some((p) => p.id === "p" + n)) n++;
+        await salvaPersone([...lista, { id: "p" + n, nome: "Persona " + n }]);
+        render(); break;
+      }
+      case "persona-togli": {
+        const p = persone().find((x) => x.id === b.dataset.id);
+        if (!confirm(`Togliere ${p.nome}? Le sue dosi del piano non verranno più contate.`)) break;
+        await salvaPersone(persone().filter((x) => x.id !== b.dataset.id));
+        if (S.chi === b.dataset.id) { S.chi = persone()[0].id; LS.set("ds_chi", S.chi); }
+        dopoModifica(); break;
+      }
+      case "persone-salva": {
+        const lista = persone().map((p) => { const el = document.querySelector(`[data-persona="${p.id}"]`); return { ...p, nome: (el && el.value.trim()) || p.nome }; });
+        await salvaPersone(lista); render(); toast("Nomi salvati"); break;
+      }
       case "salva-sb":
         LS.set("ds_sb_url", $("#sb-url").value.trim()); LS.set("ds_sb_anon", $("#sb-anon").value.trim());
         location.reload(); break;
@@ -1488,6 +1983,30 @@
         break;
       case "piano-ripristina": await elimina("piano", "attuale"); dopoModifica(); toast("Torna il piano pubblicato con l'app"); break;
       case "importa-conferma": await confermaImport(); break;
+      case "alt-apri": {
+        const dd = { inizioSett: settimaneScelta()[1] };
+        generaAlternativa(dd);
+        apriFoglio({ tipo: "alternativa", d: dd });
+        break;
+      }
+      case "alt-sett": d.inizioSett = b.dataset.d; generaAlternativa(d); renderFoglio(); break;
+      case "alt-rigenera": generaAlternativa(d); renderFoglio(); break;
+      case "alt-usa": {
+        const p = JSON.parse(JSON.stringify(pianoSalvato()));
+        p.fissate = { ...(p.fissate || {}), [d.inizioSett]: d.settimana };
+        await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
+        const quando = nomeSettimana(d.inizioSett);
+        chiudiFoglio(); dopoModifica();
+        toast("Settimana alternativa " + quando);
+        break;
+      }
+      case "alt-togli": {
+        const p = JSON.parse(JSON.stringify(pianoSalvato()));
+        if (p.fissate) delete p.fissate[b.dataset.d];
+        await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
+        dopoModifica(); toast("Torna la settimana tipo");
+        break;
+      }
       case "demo":
         if (!confirm("Sostituire frigo e dispensa con i dati di esempio?")) break;
         await elimina("inventario", S.db.inventario.map((i) => i.id));
@@ -1504,6 +2023,8 @@
   // campi dei fogli e ricerche: aggiornano lo stato mentre si scrive
   document.addEventListener("input", (ev) => {
     const el = ev.target;
+    if (el.dataset.nomeI != null && S.sheet && S.sheet.tipo === "benvenuto") { S.sheet.d.nomi[Number(el.dataset.nomeI)] = el.value; return; }
+    if (el.dataset.pdfI != null && S.sheet && S.sheet.tipo === "importa") { S.sheet.d.letti[Number(el.dataset.pdfI)].id = el.value; renderFoglio(); return; }
     if (el.dataset.f && S.sheet && S.sheet.d) {
       S.sheet.d[el.dataset.f] = el.value;
       if (el.tagName === "SELECT") {
@@ -1511,11 +2032,13 @@
         if (el.dataset.f === "voce" && S.piano && S.sheet.tipo === "prodotto") {
           const lu = L.luogoDaVoce(S.piano, el.value);
           if (lu) S.sheet.d.luogo = lu;
+          preimpostaConfezione(S.sheet.d, null);
         }
         renderFoglio();
       }
     }
     if (el.dataset.in) { S[el.dataset.in] = el.value; render(); }
+    if (el.id === "storico-persona") { S.storicoPersona = el.value; render(); }
   });
   document.addEventListener("change", async (ev) => {
     const el = ev.target;
@@ -1542,6 +2065,16 @@
       if (v.length < 8) return toast("Il codice ha almeno 8 cifre");
       fermaScanner(); trovatoCodice(v);
     }
+    if (f === "peso") {
+      const kg = Number(String($("#peso-kg").value).replace(",", "."));
+      const data = $("#peso-data").value || oggi();
+      if (!(kg > 20 && kg < 400)) return toast("Scrivi il peso in kg, per esempio 82,4");
+      const chi = S.pesoPersona || S.chi;
+      const stesso = S.db.pesi.find((x) => x.persona === chi && x.data === data);
+      await salva("pesi", [{ id: stesso ? stesso.id : uid(), persona: chi, data, kg: Math.round(kg * 10) / 10, creato: new Date().toISOString() }]);
+      render(); toast(`${nomeDi(chi)}: ${L.fmtNum(kg)} kg il ${ddmm(data)}`);
+      return;
+    }
     if (f === "spesa-nuova") {
       const nome = $("#nuova-voce").value.trim();
       if (!nome) return;
@@ -1550,7 +2083,7 @@
       $("#nuova-voce") && $("#nuova-voce").focus();
     }
   });
-  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && S.sheet) chiudiFoglio(); });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && S.sheet && !(S.sheet.tipo === "benvenuto" && S.sheet.d.passo < 3)) chiudiFoglio(); });
 
   function apriProdotto(d) { fermaScanner(); apriFoglio({ tipo: "prodotto", d }); }
 
@@ -1576,7 +2109,14 @@
     await chiudiGiorniPassati();
     A.ascolta(ricaricaPresto);
     dopoModifica();
-    if (!S.chi) apriFoglio({ tipo: "chi" });
+    if (!persone().length) {
+      if (S.chi === "max" || S.chi === "vale") {
+        // chi usava già la versione per Max e Vale: stesse persone, stesso piano pubblicato
+        await salvaPersone([{ id: "max", nome: "Max" }, { id: "vale", nome: "Vale" }]);
+        LS.set("ds_usa_pianofile", true);
+        dopoModifica();
+      } else apriFoglio({ tipo: "benvenuto", d: { passo: 1, nomi: [""] } });
+    } else if (!S.chi || !persone().some((p) => p.id === S.chi)) apriFoglio({ tipo: "chi" });
     if (S.tab === "aggiungi" && S.aggTab === "codice") avviaScanner();
     // al ritorno sull'app (dal frigo al telefono) si riallinea: il giorno può essere cambiato
     document.addEventListener("visibilitychange", async () => {
@@ -1587,6 +2127,27 @@
       dopoModifica();
     });
     if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+    await apriCondivisi();
+  }
+
+  // un PDF condiviso da WhatsApp o dalla mail (Android): il service worker l'ha parcheggiato
+  async function apriCondivisi() {
+    const q = new URLSearchParams(location.search);
+    if (!q.has("condiviso") || !("caches" in window)) return;
+    history.replaceState(null, "", location.pathname);
+    try {
+      const cache = await caches.open("chemanca-condivisi");
+      const files = [];
+      for (const req of await cache.keys()) {
+        const r = await cache.match(req);
+        files.push(new File([await r.blob()], decodeURIComponent(r.headers.get("X-Nome") || "dieta.pdf"), { type: "application/pdf" }));
+        await cache.delete(req);
+      }
+      if (!files.length) return;
+      if (!persone().length) { toast("Prima scrivi i nomi, poi ricondividi il PDF"); return; }
+      chiudiFoglio();
+      await leggiPdfDieta(files);
+    } catch (e) { console.error(e); toast("Non riesco ad aprire il PDF condiviso"); }
   }
   avvio();
 })();
