@@ -326,3 +326,31 @@ body.con-scelta #toast { bottom: calc(var(--nav-h) + 84px + env(safe-area-inset-
   #stampa .giorno { break-inside: avoid; }
   @page { margin: 14mm; }
 }
+
+/* ---------- matita e inverti ---------- */
+.pasto .testa .matita { width: 40px; height: 40px; margin: -8px -8px -8px 0; color: var(--muted); }
+.nota-pasto { display: flex; gap: 8px; align-items: flex-start; text-align: left; background: var(--amber-soft); color: #5C3200; border: 0; border-radius: 12px; padding: 8px 12px; margin-top: 8px; font-size: 14px; line-height: 1.4; width: 100%; }
+.nota-pasto svg { flex: none; margin-top: 2px; }
+.nota-pasto.vuota { background: transparent; border: 1.5px dashed #C9D1C8; color: var(--muted); font-weight: 700; }
+.nota-st { color: #5C3200 !important; font-style: italic; }
+textarea.input.area { height: auto; min-height: 120px; padding: 12px 14px; line-height: 1.45; resize: vertical; font-weight: 600; }
+.chip[disabled] { opacity: .4; }
+.giorni.mini { padding: 0; }
+.giorni.mini button { min-width: 64px; min-height: 52px; }
+.giorni.mini button small { font-size: 11px; }
+.scambio-pasti { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; color: var(--green); }
+.scheda-pasto { background: var(--bg); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; color: var(--ink); min-height: 72px; }
+.scheda-pasto small { font-size: 12px; font-weight: 800; color: var(--muted); }
+.scheda-pasto b { font-size: 14px; line-height: 1.35; }
+
+/* ---------- fitness ---------- */
+.btn.fitness { background: #5B3FA6; }
+.btn.fitness:active { background: #45307F; }
+.scheda-fitness { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: #EEE9FA; border: 1.5px solid #CFC3EF; border-radius: 16px; padding: 10px 14px; color: #2E1F5C; }
+.scheda-fitness .icona-fit { width: 36px; height: 36px; border-radius: 50%; background: #5B3FA6; color: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
+.scheda-fitness .testo { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.scheda-fitness b { font-size: 15px; font-weight: 800; }
+.scheda-fitness .testo span { font-size: 13px; font-weight: 600; }
+.scheda-fitness small { font-size: 11px; font-weight: 800; color: #5B3FA6; text-transform: uppercase; letter-spacing: .03em; text-align: right; max-width: 30%; }
+.pasto-storico.fit .t span:first-child { display: flex; align-items: center; gap: 6px; color: #5B3FA6; }
+.pill.fit { background: #EEE9FA; color: #45307F; }

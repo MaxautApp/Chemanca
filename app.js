@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note"];
+  const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
   const MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto",
@@ -41,6 +41,7 @@
     cambia: '<path d="M4 7h13l-3-3"/><path d="M20 17H7l3 3"/>',
     matita: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
     inverti: '<path d="M7 4v16"/><path d="m3 8 4-4 4 4"/><path d="M17 20V4"/><path d="m21 16-4 4-4-4"/>',
+    fitness: '<path d="M6 6v12"/><path d="M3 9v6"/><path d="M18 6v12"/><path d="M21 9v6"/><path d="M6 12h12"/>',
   };
   const ico = (n, size = 22, extra = "") =>
     `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${ICONE[n]}</svg>`;
@@ -772,6 +773,7 @@
       const it = S.db.inventario.find((i) => Number(i.qty) > 0 && (i.voci || []).includes(voce));
       return it ? it.luogo : null;
     };
+    h += schedeFitness(sel, "inizio");
     for (const p of g.pasti) {
       const k = L.chiavePasto(sel, p.pasto);
       const st = stati[k];
@@ -785,6 +787,7 @@
       const notaHtml = nota ? `<button class="nota-pasto" data-a="nota-apri" data-k="${esc(k)}">${ico("matita", 14)}<span>${esc(nota.testo)}</span></button>` : "";
       if (p.libero) {
         h += `<div class="piatto">Pasto libero</div>${notaHtml || `<button class="nota-pasto vuota" data-a="nota-apri" data-k="${esc(k)}">${ico("matita", 14)}<span>Scrivi cosa hai mangiato</span></button>`}</section>`;
+        h += schedeFitness(sel, p.pasto);
         continue;
       }
       if (p.piatti && p.piatti.length) h += `<div class="piatto">${esc(p.piatti.join(" · "))}</div>`;
@@ -813,9 +816,75 @@
       h += notaHtml;
       if (azioni.length) h += `<div class="azioni">${azioni.join("")}</div>`;
       h += `</section>`;
+      h += schedeFitness(sel, p.pasto);
     }
-    if (sel >= oggi()) h += `<button class="btn sec largo" data-a="inverti-apri" data-d="${sel}">${ico("inverti", 18)} Inverti pasti</button>`;
+    h += `<div class="${sel >= oggi() ? "due" : ""}">
+      ${sel >= oggi() ? `<button class="btn sec" data-a="inverti-apri" data-d="${sel}">${ico("inverti", 18)} Inverti pasti</button>` : ""}
+      <button class="btn fitness" data-a="fitness-apri" data-d="${sel}">${ico("fitness", 18)} Fitness</button>
+    </div>`;
     return h + `</div>`;
+  }
+
+  /* ---------------- fitness: l'attività fisica fra un pasto e l'altro ---------------- */
+  const SPORT = ["Palestra", "Nuoto", "Jogging", "Pilates", "Tai-chi", "Calcio", "Tennis", "Salsa & bachata", "Camminata", "Bici"];
+  const POSTI_FITNESS = [["inizio", "Prima della colazione"], ["Colazione", "Dopo la colazione"], ["Metà mattina", "Dopo metà mattina"], ["Pranzo", "Dopo il pranzo"], ["Merenda", "Dopo la merenda"], ["Cena", "Dopo la cena"]];
+  const oreDi = (hhmm) => { const [h, m] = String(hhmm || "0:0").split(":").map(Number); return h + (m || 0) / 60; };
+  // dopo quale pasto cade un orario: l'ultimo pasto già passato a quell'ora
+  function dopoDa(hhmm) {
+    const h = oreDi(hhmm);
+    let dopo = "inizio";
+    for (const [k] of POSTI_FITNESS.slice(1)) if (L.ORA[k] <= h) dopo = k;
+    return dopo;
+  }
+  function minutiFitness(f) { return Math.max(0, Math.round((oreDi(f.alle) - oreDi(f.dalle)) * 60)); }
+  function durata(min) { const h = Math.floor(min / 60), m = min % 60; return h ? `${h} h${m ? " " + m + " min" : ""}` : `${m} min`; }
+  function fitnessDel(data) { return S.db.fitness.filter((f) => f.data === data).sort((a, b) => (a.dalle || "").localeCompare(b.dalle || "")); }
+  function prossimoPasto(dopo) {
+    const i = POSTI_FITNESS.findIndex(([k]) => k === dopo);
+    const n = POSTI_FITNESS[i + 1];
+    return n ? n[0].toLowerCase() : null;
+  }
+  function schedeFitness(data, dopo) {
+    return fitnessDel(data).filter((f) => (f.dopo || "inizio") === dopo).map((f) => {
+      const chi = (f.persone || []).map(nomeDi).join(", ");
+      const prima = prossimoPasto(f.dopo || "inizio");
+      return `<button class="scheda-fitness" data-a="fitness-apri" data-id="${esc(f.id)}">
+        <span class="icona-fit">${ico("fitness", 20)}</span>
+        <span class="testo"><b>${esc(f.tipo)}</b><span>${esc(f.dalle)}–${esc(f.alle)} · ${esc(durata(minutiFitness(f)))}${chi ? " · " + esc(chi) : ""}</span></span>
+        <small>${prima ? "prima " + (prima === "metà mattina" ? "di metà mattina" : "della " + prima) : "dopo la cena"}</small></button>`;
+    }).join("");
+  }
+  function foglioFitness() {
+    const d = S.sheet.d;
+    const preset = SPORT.includes(d.tipo);
+    return `<h2>Fitness · ${esc(L.nomeGiorno(d.data, oggi()))}</h2>
+      <p class="sotto">Che attività hai fatto, e quando. Si mette fra i pasti della giornata e resta nello storico.</p>
+      <div class="campo"><span>Attività</span><div class="chips">
+        ${SPORT.map((t) => `<button type="button" class="chip ${d.tipo === t ? "scelto" : ""}" data-a="fit-tipo" data-v="${esc(t)}">${esc(t)}</button>`).join("")}
+        <button type="button" class="chip ${!preset ? "scelto" : ""}" data-a="fit-tipo" data-v="">Altro</button>
+      </div></div>
+      ${!preset ? `<label class="campo">Scrivi l'attività<input class="input" id="fit-altro" data-f="tipo" value="${esc(d.tipo)}" placeholder="Es. yoga, padel, zumba" autocomplete="off"></label>` : ""}
+      <div class="due">
+        <label class="campo">Dalle ore<input type="time" class="input" data-f="dalle" value="${esc(d.dalle)}"></label>
+        <label class="campo">Alle ore<input type="time" class="input" data-f="alle" value="${esc(d.alle)}"></label>
+      </div>
+      <label class="campo">Nella giornata<select class="input" data-f="dopo">${sel(d.dopo, POSTI_FITNESS)}</select>
+        <span class="aiuto">${d.dopoManuale ? "Scelto a mano." : "Scelto in base all'orario."}${prossimoPasto(d.dopo) ? " Va prima " + (prossimoPasto(d.dopo) === "metà mattina" ? "di metà mattina" : "della " + prossimoPasto(d.dopo)) + "." : ""}</span></label>
+      ${persone().length > 1 ? `<div class="campo"><span>Chi l'ha fatta</span><div class="chips">${persone().map((p) => `<button type="button" class="chip ${d.persone.includes(p.id) ? "scelto" : ""}" data-a="fit-chi" data-v="${esc(p.id)}">${esc(p.nome)}</button>`).join("")}</div></div>` : ""}
+      <button class="btn largo" data-a="fit-salva">${d.id ? "Salva" : "Aggiungi l'attività"}</button>
+      ${d.id ? `<button class="btn rosso largo" data-a="fit-togli">Togli l'attività</button>` : ""}
+      <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
+  }
+  async function salvaFitness() {
+    const d = S.sheet.d;
+    const tipo = String(d.tipo || "").trim();
+    if (!tipo) return toast("Scrivi che attività hai fatto");
+    if (!d.dalle || !d.alle || oreDi(d.alle) <= oreDi(d.dalle)) return toast("Controlla gli orari: la fine deve venire dopo l'inizio");
+    if (!d.persone.length) return toast("Scegli chi l'ha fatta");
+    await salva("fitness", [{ id: d.id || uid(), data: d.data, dalle: d.dalle, alle: d.alle, tipo, dopo: d.dopo, persone: d.persone, chi: S.chi || "", quando: new Date().toISOString() }]);
+    chiudiFoglio();
+    render();
+    toast(`${tipo} ${d.dalle}–${d.alle} aggiunto`);
   }
 
   /* ---------------- la matita: cosa ho mangiato davvero ---------------- */
@@ -1071,6 +1140,22 @@
         piatti: contenuto ? contenuto.piatti : [], libero: !!(contenuto && contenuto.libero), cibi,
       });
     }
+    // le attività fisiche entrano nella giornata dopo il loro pasto
+    let attivita = 0, minuti = 0;
+    for (const f of S.db.fitness.filter((x) => x.data >= da && x.data <= a)) {
+      const ids = (f.persone || []).filter((id) => persona === "tutti" || id === persona);
+      if (!ids.length) continue;
+      let giorno = giorni.find((x) => x.data === f.data);
+      if (!giorno) { giorno = { data: f.data, pasti: [] }; giorni.push(giorno); }
+      attivita++; minuti += minutiFitness(f);
+      giorno.pasti.push({
+        fitness: true, pasto: "Fitness", stato: durata(minutiFitness(f)), piatti: [], libero: false, nota: "",
+        cibi: [`${f.tipo} · ${f.dalle}–${f.alle}${persone().length > 1 ? " · " + ids.map(nomeDi).join(", ") : ""}`],
+        ordine: (f.dopo && f.dopo !== "inizio" ? L.ORA[f.dopo] : 0) + 0.1 + oreDi(f.dalle) / 100,
+      });
+    }
+    giorni.sort((x, y) => x.data.localeCompare(y.data));
+    for (const g of giorni) g.pasti.sort((x, y) => (x.ordine != null ? x.ordine : L.ORA[x.pasto] || 0) - (y.ordine != null ? y.ordine : L.ORA[y.pasto] || 0));
     const chi = persona === "tutti" ? persone().map((p) => p.id) : [persona];
     const pesi = chi.map((id) => {
       const tutte = pesateDi(id);
@@ -1078,13 +1163,13 @@
       const prima = tutte.filter((x) => x.data < da).pop();
       return { id, nome: nomeDi(id), pesate: dentro, prima, tutte };
     }).filter((x) => x.tutte.length);
-    return { da, a, persona, giorni, pesi, fatti, saltati };
+    return { da, a, persona, giorni, pesi, fatti, saltati, attivita, minuti };
   }
 
   // "Tutto" = dal primo pasto o dalla prima pesata registrati: l'intero percorso
   function daStorico() {
     if (S.storicoGiorni) return L.piuGiorni(oggi(), -(S.storicoGiorni - 1));
-    const date = [...S.db.pasti.map((r) => r.data), ...S.db.pesi.map((r) => r.data)].filter(Boolean).sort();
+    const date = [...S.db.pasti.map((r) => r.data), ...S.db.pesi.map((r) => r.data), ...S.db.fitness.map((r) => r.data)].filter(Boolean).sort();
     return date[0] || oggi();
   }
 
@@ -1097,10 +1182,11 @@
     h += `<div class="due"><button class="btn" data-a="report-stampa">Stampa o PDF</button><button class="btn sec" data-a="report-testo">File di testo</button></div>
       <p style="font-size:13px;color:var(--muted);padding:0 4px">Il report per la dietista: pasti di questi giorni${rep.pesi.length ? " e pesate" : ""}. Con «Stampa o PDF» scegli «Salva come PDF» nella finestra di stampa.</p>`;
     if (!rep.giorni.length) return h + `<p class="vuoto">Nessun pasto registrato in questi giorni. I pasti entrano nello storico con «Fatto», oppure da soli il giorno dopo.</p>`;
-    h += `<p style="font-size:14px;padding:0 4px"><b>${rep.fatti}</b> pasti fatti · <b>${rep.saltati}</b> saltati · dal ${esc(ddmm(rep.da))} al ${esc(ddmm(rep.a))}</p>`;
+    h += `<p style="font-size:14px;padding:0 4px"><b>${rep.fatti}</b> pasti fatti · <b>${rep.saltati}</b> saltati${rep.attivita ? ` · <b>${rep.attivita}</b> attività fisiche (${esc(durata(rep.minuti))})` : ""} · dal ${esc(ddmm(rep.da))} al ${esc(ddmm(rep.a))}</p>`;
     for (const g of [...rep.giorni].reverse()) {
       h += `<section class="giorno-storico"><h3>${esc(dataLunga(g.data))}</h3>`;
       for (const p of g.pasti) {
+        if (p.fitness) { h += `<div class="pasto-storico fit"><span class="t"><span>${ico("fitness", 15)} Fitness</span><span class="pill fit">${esc(p.stato)}</span></span><span class="cibi">${esc(p.cibi[0])}</span></div>`; continue; }
         h += `<div class="pasto-storico"><span class="t"><span>${esc(p.pasto)}${p.piatti.length ? " · " + esc(p.piatti.join(", ")) : ""}</span><span class="pill ${p.stato === "saltato" ? "grigio" : "ok"}">${esc(p.stato)}</span></span>
           <span class="cibi">${p.libero ? "Pasto libero" : esc(p.cibi.join(" · ")) || "—"}</span>${p.nota ? `<span class="cibi nota-st">${ico("matita", 13)} ${esc(p.nota)}</span>` : ""}</div>`;
       }
@@ -1126,10 +1212,11 @@
       for (const p of rep.pesi) out.push(`${p.nome}: ${righePeso(p).join(" · ") || "nessuna pesata nel periodo"}`);
       out.push("");
     }
-    out.push(`PASTI (${rep.fatti} fatti, ${rep.saltati} saltati)`);
+    out.push(`PASTI (${rep.fatti} fatti, ${rep.saltati} saltati)` + (rep.attivita ? ` · FITNESS: ${rep.attivita} attività, ${durata(rep.minuti)}` : ""));
     for (const g of rep.giorni) {
       out.push("", dataLunga(g.data));
       for (const p of g.pasti) {
+        if (p.fitness) { out.push(`  Fitness (${p.stato}): ${p.cibi[0]}`); continue; }
         out.push(`  ${p.pasto} (${p.stato})${p.piatti.length ? " – " + p.piatti.join(", ") : ""}: ${p.libero ? "pasto libero" : p.cibi.join("; ") || "—"}`);
         if (p.nota) out.push(`    Nota: ${p.nota}`);
       }
@@ -1141,13 +1228,14 @@
   function stampaReport() {
     const rep = datiReport(daStorico(), oggi(), S.storicoPersona);
     const t = intestazioneReport(rep);
-    let h = `<h1>${esc(t.titolo)}</h1><p>${esc(t.periodo)} · ${rep.fatti} pasti fatti, ${rep.saltati} saltati</p>`;
+    let h = `<h1>${esc(t.titolo)}</h1><p>${esc(t.periodo)} · ${rep.fatti} pasti fatti, ${rep.saltati} saltati${rep.attivita ? ` · fitness: ${rep.attivita} attività, ${esc(durata(rep.minuti))}` : ""}</p>`;
     if (rep.pesi.length) {
       h += `<h2>Peso</h2><table><tbody>${rep.pesi.map((p) => `<tr><th>${esc(p.nome)}</th><td>${esc(righePeso(p).join(" · ") || "nessuna pesata nel periodo")}</td></tr>`).join("")}</tbody></table>`;
     }
     h += `<h2>Pasti</h2>`;
     for (const g of rep.giorni) {
       h += `<div class="giorno"><h3>${esc(dataLunga(g.data))}</h3><table><tbody>${g.pasti.map((p) =>
+        p.fitness ? `<tr class="fit"><th style="width:22%">Fitness<br><small>${esc(p.stato)}</small></th><td>${esc(p.cibi[0])}</td></tr>` :
         `<tr><th style="width:22%">${esc(p.pasto)}<br><small>${esc(p.stato)}</small></th><td>${p.piatti.length ? "<b>" + esc(p.piatti.join(", ")) + "</b><br>" : ""}${p.libero ? "Pasto libero" : esc(p.cibi.join(" · ")) || "—"}${p.nota ? `<br><i>Nota: ${esc(p.nota)}</i>` : ""}</td></tr>`).join("")}</tbody></table></div>`;
     }
     h += `<p style="margin-top:12pt;font-size:9pt">Generato da CheManca? il ${esc(new Date().toLocaleDateString("it-IT"))}</p>`;
@@ -1466,7 +1554,7 @@
   function renderFoglio() {
     const el = $("#sheet");
     if (!S.sheet) { el.classList.remove("on"); el.innerHTML = ""; return; }
-    const fogli = { prodotto: foglioProdotto, rivedi: foglioRivedi, item: foglioItem, nuovoCat: foglioNuovoCat, mancanza: foglioMancanza, pasto: foglioPasto, importa: foglioImporta, importa4: foglioImporta4, alternativa: foglioAlternativa, cambia: foglioCambia, gruppoTap: foglioGruppoTap, nota: foglioNota, inverti: foglioInverti, chi: foglioChi, gruppo: foglioGruppo, benvenuto: foglioBenvenuto };
+    const fogli = { prodotto: foglioProdotto, rivedi: foglioRivedi, item: foglioItem, nuovoCat: foglioNuovoCat, mancanza: foglioMancanza, pasto: foglioPasto, importa: foglioImporta, importa4: foglioImporta4, alternativa: foglioAlternativa, cambia: foglioCambia, gruppoTap: foglioGruppoTap, nota: foglioNota, inverti: foglioInverti, fitness: foglioFitness, chi: foglioChi, gruppo: foglioGruppo, benvenuto: foglioBenvenuto };
     // il benvenuto non si chiude toccando fuori: servono almeno i nomi
     const fissoP = S.sheet.tipo === "benvenuto" && S.sheet.d.passo < 3;
     el.innerHTML = `<div class="velo" ${fissoP ? "" : 'data-a="chiudi"'}></div><div class="foglio"><span class="maniglia" aria-hidden="true"></span>${fogli[S.sheet.tipo]()}</div>`;
@@ -2141,6 +2229,19 @@
         renderFoglio(); break;
       }
       case "inv-conferma": await confermaInverti(); break;
+      case "fitness-apri": {
+        const f = b.dataset.id && S.db.fitness.find((x) => x.id === b.dataset.id);
+        if (f) { apriFoglio({ tipo: "fitness", d: { ...f, persone: [...(f.persone || [])], dopoManuale: true } }); break; }
+        const ora = new Date().getHours();
+        const dalle = `${String(Math.min(22, Math.max(6, ora))).padStart(2, "0")}:00`;
+        const alle = `${String(Math.min(23, Math.max(7, ora + 1))).padStart(2, "0")}:00`;
+        apriFoglio({ tipo: "fitness", d: { data: b.dataset.d, tipo: "Palestra", dalle, alle, dopo: dopoDa(dalle), dopoManuale: false, persone: S.chi ? [S.chi] : persone().slice(0, 1).map((p) => p.id) } });
+        break;
+      }
+      case "fit-tipo": d.tipo = b.dataset.v; renderFoglio(); if (!b.dataset.v) { const t = $("#fit-altro"); if (t) t.focus(); } break;
+      case "fit-chi": d.persone = d.persone.includes(b.dataset.v) ? d.persone.filter((x) => x !== b.dataset.v) : [...d.persone, b.dataset.v]; renderFoglio(); break;
+      case "fit-salva": await salvaFitness(); break;
+      case "fit-togli": await elimina("fitness", d.id); chiudiFoglio(); render(); toast("Attività tolta"); break;
       case "cambia-salva": await salvaCambio(); break;
       case "cambia-ripristina": {
         const p = JSON.parse(JSON.stringify(pianoSalvato()));
@@ -2264,6 +2365,14 @@
   document.addEventListener("input", (ev) => {
     const el = ev.target;
     if (el.dataset.nomeI != null && S.sheet && S.sheet.tipo === "benvenuto") { S.sheet.d.nomi[Number(el.dataset.nomeI)] = el.value; return; }
+    if (S.sheet && S.sheet.tipo === "fitness" && el.dataset.f) {
+      const d = S.sheet.d;
+      d[el.dataset.f] = el.value;
+      if (el.dataset.f === "dopo") d.dopoManuale = true;
+      if (el.dataset.f === "dalle" && !d.dopoManuale) d.dopo = dopoDa(el.value);
+      if (el.dataset.f !== "tipo") renderFoglio();
+      return;
+    }
     if (el.dataset.q4 && S.sheet && S.sheet.tipo === "importa4") { S.sheet.d.mappa[el.dataset.q4] = el.value; renderFoglio(); return; }
     if (el.dataset.pdfI != null && S.sheet && S.sheet.tipo === "importa") { S.sheet.d.letti[Number(el.dataset.pdfI)].id = el.value; renderFoglio(); return; }
     if (el.dataset.f && S.sheet && S.sheet.d) {
