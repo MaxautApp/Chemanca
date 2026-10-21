@@ -766,7 +766,8 @@
       h += `<button data-a="giorno" data-d="${d}" aria-pressed="${d === sel}"><small>${nome}</small><b>${esc(L.etichettaData(d))}</b>${n && i >= 0 ? `<span class="badge liv-${Math.min(3, i)}">${n}</span>` : ""}</button>`;
     }
     h += `</div>`;
-    h += `<div class="legenda" style="margin:10px 0">${persone().map((p) => `<span><i style="background:${coloreDi(p.id)}"></i>${esc(p.nome)}</span>`).join("")}<span style="margin-left:auto">${g ? (g.alternativa ? "Settimana alternativa" : "Settimana " + g.settimana) : ""}</span></div>`;
+    // una sola intestazione per la giornata: i nomi di casa sopra le colonne delle grammature
+    h += `<div class="intest-giorno"><div class="voce"><span class="n">${g ? (g.alternativa ? "Settimana alternativa" : "Settimana " + g.settimana) : ""}</span><span class="dosi">${persone().map((p) => `<span class="dose" style="color:${coloreDi(p.id)}" title="${esc(p.nome)}">${esc(p.nome)}</span>`).join("")}</span><span class="pill vuota"></span></div></div>`;
     h += `<div class="corpo">`;
     if (!g) return h + `<p class="vuoto">Il piano comincia il ${esc(ddmm(S.piano.inizio))}.</p></div>`;
     const dove = (voce) => {
@@ -1269,6 +1270,15 @@
         <div class="segmenti">${persone().map((p) => `<button aria-pressed="${S.chi === p.id}" data-a="chi" data-v="${esc(p.id)}">${esc(p.nome)}</button>`).join("")}</div>
       </section>
 
+      <section class="sezione-imp"><h2>Persone in casa</h2>
+        <p>Chi segue una dieta. Ognuno ha il suo colore nel piano.</p>
+        ${persone().map((p) => `<div style="display:flex;gap:8px;align-items:center">
+          <span style="width:14px;height:14px;border-radius:50%;background:${coloreDi(p.id)};flex:none" aria-hidden="true"></span>
+          <label class="sr" for="pers-${esc(p.id)}">Nome</label><input class="input" id="pers-${esc(p.id)}" data-persona="${esc(p.id)}" value="${esc(p.nome)}" style="flex:1">
+          ${persone().length > 1 ? `<button class="icona-btn" data-a="persona-togli" data-id="${esc(p.id)}" aria-label="Togli ${esc(p.nome)}">${ico("x", 18)}</button>` : ""}</div>`).join("")}
+        <div class="due"><button class="btn sec" data-a="persona-aggiungi" ${persone().length >= 6 ? "disabled" : ""}>${ico("piu", 18)} Aggiungi</button><button class="btn" data-a="persone-salva">Salva i nomi</button></div>
+      </section>
+
       <section class="sezione-imp"><h2>Piano dieta</h2>
         <p>${S.piano ? `In uso il piano dal <b>${esc(ddmm(S.piano.inizio))}/${esc(S.piano.inizio.slice(0, 4))}</b>: ${S.piano.settimane.length === 1 ? "1 settimana che si ripete" : S.piano.settimane.length + " settimane a rotazione"} · da <code>${esc(S.piano.fonte || "piano.json")}</code>` : "<b>Nessun piano in uso.</b> Finché non ne carichi uno l'app non segnala cosa manca."}</p>
         <label class="btn carica-pdf">${ico("piu", 22)}<span>Carica la dieta dal PDF<small>«Dieta a menu giornaliero» della dietista</small></span><input type="file" accept="application/pdf,.pdf" multiple data-file="pdf" class="sr"></label>
@@ -1281,14 +1291,6 @@
         <button class="btn rosso" data-a="piano-svuota" ${S.piano ? "" : "disabled"}>Svuota piano</button>
       </section>
 
-      <section class="sezione-imp"><h2>Persone in casa</h2>
-        <p>Chi segue una dieta. Ognuno ha il suo colore nel piano.</p>
-        ${persone().map((p) => `<div style="display:flex;gap:8px;align-items:center">
-          <span style="width:14px;height:14px;border-radius:50%;background:${coloreDi(p.id)};flex:none" aria-hidden="true"></span>
-          <label class="sr" for="pers-${esc(p.id)}">Nome</label><input class="input" id="pers-${esc(p.id)}" data-persona="${esc(p.id)}" value="${esc(p.nome)}" style="flex:1">
-          ${persone().length > 1 ? `<button class="icona-btn" data-a="persona-togli" data-id="${esc(p.id)}" aria-label="Togli ${esc(p.nome)}">${ico("x", 18)}</button>` : ""}</div>`).join("")}
-        <div class="due"><button class="btn sec" data-a="persona-aggiungi" ${persone().length >= 6 ? "disabled" : ""}>${ico("piu", 18)} Aggiungi</button><button class="btn" data-a="persone-salva">Salva i nomi</button></div>
-      </section>
 
       ${condiviso || CFG.CONDIVISIONE ? `<section class="sezione-imp"><h2>Dati condivisi</h2>
         <p>${condiviso ? "I dati stanno su Supabase: tutti i telefoni di casa vedono le stesse cose in tempo reale." : "Adesso i dati restano <b>solo su questo telefono</b>. Per condividerli con l'altro telefono incolla i due valori di Supabase (README, passo 2)."}</p>
