@@ -21,7 +21,7 @@
     p("Frutta", "frigo", "Fragole", FRUTTA, "g", 250),
     p("Frutta", "dispensa", "Melograno", FRUTTA, "pz", 1, 250),
     p("Frutta", "frigo", "Mirtilli", ["Mirtilli", ...FRUTTA], "g", 125),
-    p("Frutta", "dispensa", "Avocado", ["Avocado"], "pz", 1, 200),
+    p("Frutta", "dispensa", "Avocado", ["Avocado"], "pz", 1, 100),
 
     // ---- verdura
     p("Verdura", "frigo", "Zucchine", ["Zucchine", ...VERDURA], "pz", 1, 200),

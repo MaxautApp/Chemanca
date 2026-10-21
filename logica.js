@@ -23,6 +23,8 @@
   const REGOLE = {
     "Crackers non salati": { unita: "pz", etichetta: ["pacchetto", "pacchetti"], g_pz: 30, intero: true, conf: 10 },
     "Olio extra vergine di oliva": { unita: "l", conf: 1 },
+    // un avocado si divide a metà fra due persone: 50 g a testa = mezzo avocado
+    "Avocado": { unita: "pz", etichetta: ["avocado", "avocado"], g_pz: 100 },
   };
   function regola(item) { return REGOLE[(Array.isArray(item.voci) && item.voci[0]) || item.nome] || null; }
   const GIORNI = ["domenica", "lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato"];
@@ -132,7 +134,7 @@
       return Infinity;
     }
     if (PRESENZA.has(u)) return Infinity;
-    const gpz = Number(item.g_pz) || (regola(item) || {}).g_pz || 0;
+    const gpz = (regola(item) || {}).g_pz || Number(item.g_pz) || 0;
     if (u === "g") {
       if (item.unita === "g") return q;
       return gpz ? q * gpz : Infinity;
@@ -154,7 +156,7 @@
     }
     if (PRESENZA.has(u)) return q;
     const r = regola(item);
-    const gpz = Number(item.g_pz) || (r || {}).g_pz || 0;
+    const gpz = (r || {}).g_pz || Number(item.g_pz) || 0;
     let togli;
     if (u === "g") togli = item.unita === "g" ? quanto : gpz ? quanto / gpz : 1;
     else if (u === "n.") togli = item.unita === "pz" ? quanto : quanto * G_UOVO;

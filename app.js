@@ -232,7 +232,7 @@
     if (allineando || !S.calc) return;
     allineando = true;
     try {
-      const ops = L.allineaSpesa(S.db.spesa, S.calc.mancanze, oggi());
+      const ops = L.allineaSpesa(S.db.spesa, (S.calc7 || S.calc).mancanze, oggi());
       // id fisso per le voci dal piano: due telefoni che allineano insieme non creano doppioni
       const nuove = ops.inserisci.map((r) => ({ ...r, id: "piano:" + r.voce, creato: new Date().toISOString() }));
       if (nuove.length) await salva("spesa", nuove);
@@ -714,7 +714,7 @@
     const presi = lista.filter((s) => s.fatto).length;
     let h = testa("", "Spesa");
     h += `<div class="corpo">
-      <p style="font-size:14px;color:var(--muted);padding:0 4px;margin-top:-6px">${daPrendere} da prendere · si aggiorna da sola con quello che manca nei prossimi 3 giorni</p>`;
+      <p style="font-size:14px;color:var(--muted);padding:0 4px;margin-top:-6px">${daPrendere} da prendere · si aggiorna da sola con quello che manca nei prossimi 7 giorni, coi colori del giorno in cui serve</p>`;
     if (!esterni) {
       // avvisi solo dentro l'app per ora
     } else if (avvisiAttivi() || whatsappAttivo()) {
@@ -1646,7 +1646,7 @@
     if (!m) return `<h2>${esc(S.sheet.voce)}</h2><p class="sotto">Ora c'è: niente da comprare.</p><button class="btn" data-a="chiudi">Chiudi</button>`;
     const righe = m.pasti.map((p) => `<div class="riga"><span class="testo"><span class="nome">${esc(cap(p.pasto))} di ${esc(L.nomeGiorno(p.data, oggi()))}</span><span class="nota">${esc(L.dettaglioPersone(p, m.u, persone()) || "")}</span></span><span class="q">${esc(L.fmtQ(p.manca, m.u))}</span></div>`).join("");
     return `<h2>${esc(m.voce)}</h2>
-      <p class="sotto">${m.tipo === "scarso" ? "In casa ce n'è, ma non basta." : "In casa non risulta."} ${inLista ? "È già nella lista della spesa." : "Entra nella lista della spesa quando mancano 3 giorni."}</p>
+      <p class="sotto">${m.tipo === "scarso" ? "In casa ce n'è, ma non basta." : "In casa non risulta."} ${inLista ? "È già nella lista della spesa." : "Entra nella lista della spesa."}</p>
       <div class="card" style="background:var(--bg)">${righe}</div>
       <button class="btn largo" data-a="ce-l-ho" data-voce="${esc(m.voce)}">Ce l'ho già: mettilo in casa</button>
       <button class="btn sec largo" data-a="prendo-voce" data-voce="${esc(m.voce)}">Lo prendo io</button>
