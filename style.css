@@ -354,3 +354,8 @@ textarea.input.area { height: auto; min-height: 120px; padding: 12px 14px; line-
 .scheda-fitness small { font-size: 11px; font-weight: 800; color: #5B3FA6; text-transform: uppercase; letter-spacing: .03em; text-align: right; max-width: 30%; }
 .pasto-storico.fit .t span:first-child { display: flex; align-items: center; gap: 6px; color: #5B3FA6; }
 .pill.fit { background: #EEE9FA; color: #45307F; }
+
+/* il caricamento della dieta: il bottone più in vista delle impostazioni */
+.btn.carica-pdf { cursor: pointer; min-height: 72px; justify-content: flex-start; gap: 14px; padding: 12px 18px; text-align: left; box-shadow: 0 8px 18px rgba(30,106,71,.28); }
+.btn.carica-pdf > span { display: flex; flex-direction: column; font-size: 17px; line-height: 1.25; }
+.btn.carica-pdf small { font-size: 13px; font-weight: 600; opacity: .9; }

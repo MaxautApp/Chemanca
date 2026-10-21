@@ -1269,6 +1269,18 @@
         <div class="segmenti">${persone().map((p) => `<button aria-pressed="${S.chi === p.id}" data-a="chi" data-v="${esc(p.id)}">${esc(p.nome)}</button>`).join("")}</div>
       </section>
 
+      <section class="sezione-imp"><h2>Piano dieta</h2>
+        <p>${S.piano ? `In uso il piano dal <b>${esc(ddmm(S.piano.inizio))}/${esc(S.piano.inizio.slice(0, 4))}</b>: ${S.piano.settimane.length === 1 ? "1 settimana che si ripete" : S.piano.settimane.length + " settimane a rotazione"} · da <code>${esc(S.piano.fonte || "piano.json")}</code>` : "<b>Nessun piano in uso.</b> Finché non ne carichi uno l'app non segnala cosa manca."}</p>
+        <label class="btn carica-pdf">${ico("piu", 22)}<span>Carica la dieta dal PDF<small>«Dieta a menu giornaliero» della dietista</small></span><input type="file" accept="application/pdf,.pdf" multiple data-file="pdf" class="sr"></label>
+        <p style="font-size:13px">Scegli insieme i PDF di tutte le persone di casa: l'app legge ogni giorno, unisce le dosi e prende le tabelle delle alternative. Va bene anche uno solo.</p>
+        ${pianoSalvato() ? `<form data-form="inizio-piano" style="display:flex;gap:8px;align-items:flex-end">
+          <label class="campo" style="flex:1">Data di inizio della dieta<input type="date" id="inizio-piano" value="${esc(pianoSalvato().inizio)}"></label>
+          <button class="btn piccolo sec" style="min-height:52px">Cambia</button>
+        </form>` : ""}
+        ${sezioneAlternative()}
+        <button class="btn rosso" data-a="piano-svuota" ${S.piano ? "" : "disabled"}>Svuota piano</button>
+      </section>
+
       <section class="sezione-imp"><h2>Persone in casa</h2>
         <p>Chi segue una dieta. Ognuno ha il suo colore nel piano.</p>
         ${persone().map((p) => `<div style="display:flex;gap:8px;align-items:center">
@@ -1305,25 +1317,9 @@
         <p>I dati restano <b>su questo telefono</b>. Per vederli su due telefoni servirà la condivisione (Supabase).</p>
       </section>`}
 
-      <section class="sezione-imp"><h2>Piano dieta</h2>
-        <p>${S.piano ? `In uso il piano dal <b>${esc(ddmm(S.piano.inizio))}/${esc(S.piano.inizio.slice(0, 4))}</b>: ${S.piano.settimane.length === 1 ? "1 settimana che si ripete" : S.piano.settimane.length + " settimane a rotazione"} · da <code>${esc(S.piano.fonte || "piano.json")}</code>` : "<b>Nessun piano in uso.</b> Finché non ne carichi uno l'app non segnala cosa manca."}</p>
-        <label class="btn" style="cursor:pointer">${ico("piu", 18)} Nuova dieta dai PDF della dietista<input type="file" accept="application/pdf,.pdf" multiple data-file="pdf" class="sr"></label>
-        <p style="font-size:13px">Scegli insieme i PDF «Dieta a menu giornaliero» di tutte le persone di casa: l'app legge ogni giorno e unisce le dosi. Va bene anche uno solo.</p>
-        ${pianoSalvato() ? `<form data-form="inizio-piano" style="display:flex;gap:8px;align-items:flex-end">
-          <label class="campo" style="flex:1">Data di inizio della dieta<input type="date" id="inizio-piano" value="${esc(pianoSalvato().inizio)}"></label>
-          <button class="btn piccolo sec" style="min-height:52px">Cambia</button>
-        </form>` : ""}
-        ${sezioneAlternative()}
-        <label class="btn sec" style="cursor:pointer">${ico("piu", 18)} Carica un piano a 4 settimane (PDF)<input type="file" accept="application/pdf,.pdf" multiple data-file="pdf" class="sr"></label>
-        <p style="font-size:13px">Il PDF con una tabella per settimana (giorni in colonna, pasti in riga), preparato dalla dietista o con un'AI. Se scegli insieme anche i PDF della dietista, «Cambia pasto» userà le sue tabelle delle alternative.</p>
-        <div class="due">
-          <button class="btn rosso" data-a="piano-svuota" ${S.piano ? "" : "disabled"}>Svuota piano</button>
-          <button class="btn sec" data-a="piano-ripristina" ${S.db.piano.length && S.pianoFile ? "" : "disabled"}>Piano pubblicato</button>
-        </div>
-      </section>
 
       <section class="sezione-imp"><h2>Dati</h2>
-
+        <p>Cancella frigo, dispensa, spesa, pasti segnati, pesate e note di questo telefono.</p>
         <button class="btn rosso" data-a="svuota">Cancella tutto</button>
       </section>
 
