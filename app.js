@@ -70,6 +70,10 @@
     online: false,
   };
   const OGGI_FORZATO = new URLSearchParams(location.search).get("oggi");
+  // ?modo=light o ?modo=pro nel link imposta la versione (utile per far provare la Light)
+  { const m = new URLSearchParams(location.search).get("modo"); if (m === "light" || m === "pro") LS.set("ds_modo", m); }
+  const light = () => LS.get("ds_modo", "pro") === "light";
+  const SCHERMI_LIGHT = ["piano", "spesa", "imp", "diario"];
   const oggi = () => OGGI_FORZATO || L.iso(new Date());
   const oraAdesso = () => { const d = new Date(); return OGGI_FORZATO ? Number(new URLSearchParams(location.search).get("ora") || 7) : d.getHours() + d.getMinutes() / 60; };
 
@@ -333,6 +337,8 @@
     const extra = (tab) => tab === "spesa" && daPrendere ? `<span class="badge">${daPrendere}</span>`
       : tab === "oggi" && mancano.length ? `<span class="badge liv-${liv}" aria-label="${mancano.length} cibi mancano">${mancano.length}</span>` : "";
     const b = (tab, nome, icona) => `<button data-a="vai" data-tab="${tab}" ${S.tab === tab ? 'aria-current="page"' : ""}>${ico(icona)}${nome}${extra(tab)}</button>`;
+    $("#nav").classList.toggle("light", light());
+    if (light()) { $("#nav").innerHTML = b("piano", "Piano", "calendario") + b("spesa", "Spesa", "carrello") + b("diario", "Peso e storico", "bilancia"); return; }
     $("#nav").innerHTML = b("oggi", "Oggi", "casa") + b("casa", "Casa", "frigo") +
       `<button class="centro" data-a="vai" data-tab="aggiungi" aria-label="Aggiungi prodotti" ${S.tab === "aggiungi" ? 'aria-current="page"' : ""}>${ico("scan", 28)}</button>` +
       b("spesa", "Spesa", "carrello") + b("piano", "Piano", "calendario");
@@ -745,7 +751,7 @@
     }
     h += `<div class="due" style="margin-top:4px">
         <button class="btn sec" data-a="whatsapp-lista">Manda su WhatsApp</button>
-        <button class="btn" data-a="metti-in-casa" ${presi ? "" : "disabled"}>Metti in casa (${presi})</button>
+        ${light() ? "" : `<button class="btn" data-a="metti-in-casa" ${presi ? "" : "disabled"}>Metti in casa (${presi})</button>`}
       </div>`;
     return h + `</div>`;
   }
@@ -763,11 +769,11 @@
       const d = L.piuGiorni(oggi(), i);
       const n = new Set(mancanze.flatMap((m) => m.pasti.filter((p) => p.data === d).map(() => m.voce))).size;
       const nome = i === -1 ? "Ieri" : i === 0 ? "Oggi" : i === 1 ? "Domani" : cap(L.GIORNI[L.daIso(d).getDay()]).slice(0, 3);
-      h += `<button data-a="giorno" data-d="${d}" aria-pressed="${d === sel}"><small>${nome}</small><b>${esc(L.etichettaData(d))}</b>${n && i >= 0 ? `<span class="badge liv-${Math.min(3, i)}">${n}</span>` : ""}</button>`;
+      h += `<button data-a="giorno" data-d="${d}" aria-pressed="${d === sel}"><small>${nome}</small><b>${esc(L.etichettaData(d))}</b>${n && i >= 0 && !light() ? `<span class="badge liv-${Math.min(3, i)}">${n}</span>` : ""}</button>`;
     }
     h += `</div>`;
     // una sola intestazione per la giornata: i nomi di casa sopra le colonne delle grammature
-    h += `<div class="intest-giorno"><div class="voce"><span class="n">${g ? (g.alternativa ? "Settimana alternativa" : "Settimana " + g.settimana) : ""}</span><span class="dosi">${persone().map((p) => `<span class="dose" style="color:${coloreDi(p.id)}" title="${esc(p.nome)}">${esc(p.nome)}</span>`).join("")}</span><span class="pill vuota"></span></div></div>`;
+    h += `<div class="intest-giorno"><div class="voce"><span class="n">${g ? (g.alternativa ? "Settimana alternativa" : "Settimana " + g.settimana) : ""}</span><span class="dosi">${persone().map((p) => `<span class="dose" style="color:${coloreDi(p.id)}" title="${esc(p.nome)}">${esc(p.nome)}</span>`).join("")}</span>${light() ? "" : '<span class="pill vuota"></span>'}</div></div>`;
     h += `<div class="corpo">`;
     if (!g) return h + `<p class="vuoto">Il piano comincia il ${esc(ddmm(S.piano.inizio))}.</p></div>`;
     const dove = (voce) => {
@@ -782,7 +788,7 @@
       const etich = p.spostato ? `Spostato da ${esc(L.etichettaData(p.spostato.split("|")[0]))} · ${esc(p.spostato.split("|")[1].toLowerCase())}` : "Cambiato";
       h += `<section class="pasto"><div class="testa"><h2>${esc(p.pasto)}${p.cambiato ? ` <span class="pill cambiato">${etich}</span>` : ""}</h2>`;
       if (st) h += `<span class="pill ${st.stato === "saltato" ? "grigio" : "ok"}">${esc(st.stato === "saltato" ? "Saltato" : st.stato === "fatto" || st.stato === "auto" ? "Fatto" : "Solo " + nomeDi(st.stato.replace(/^solo:/, "")))}</span>`;
-      else if (buchi.size) h += `<span style="font-size:12px;font-weight:800;color:var(--red)">${buchi.size === 1 ? "1 ingrediente manca" : buchi.size + " mancano"}</span>`;
+      else if (buchi.size && !light()) h += `<span style="font-size:12px;font-weight:800;color:var(--red)">${buchi.size === 1 ? "1 ingrediente manca" : buchi.size + " mancano"}</span>`;
       h += `<button class="icona-btn matita" data-a="nota-apri" data-k="${esc(k)}" aria-label="Scrivi cosa hai mangiato a ${esc(p.pasto.toLowerCase())}">${ico("matita", 18)}</button></div>`;
       const nota = notaDi(k);
       const notaHtml = nota ? `<button class="nota-pasto" data-a="nota-apri" data-k="${esc(k)}">${ico("matita", 14)}<span>${esc(nota.testo)}</span></button>` : "";
@@ -796,12 +802,12 @@
         const b = buchi.get(v.nome);
         const f = (x) => (x == null ? "–" : L.PRESENZA.has(v.u) ? x + " " + v.u.replace("cucchiaini", "cucch.").replace("cucchiaino", "cucch.").replace("tazzina", "tazz.") : L.fmtQ(x, v.u));
         let pill;
-        if (st) pill = "";
+        if (st || light()) pill = "";
         else if (b) pill = `<span class="pill ${b === "scarso" ? "scarso" : "manca"}">${b === "scarso" ? "Poco" : "Manca"}</span>`;
         else { const lu = dove(v.nome); pill = lu ? `<span class="pill ${lu}">${lu === "frigo" ? "Frigo" : "Dispensa"}</span>` : `<span class="pill grigio">—</span>`; }
         const d = L.dosi(v);
         const dosiHtml = persone().map((p) => `<span class="dose" style="color:${coloreDi(p.id)}" title="${esc(p.nome)}">${esc(f(d[p.id]))}</span>`).join("");
-        h += `<div class="voce"><span class="n ${b && !st ? "err" : ""}">${esc(v.nome)}</span><span class="dosi">${dosiHtml}</span>${pill}</div>`;
+        h += `<div class="voce"><span class="n ${b && !st && !light() ? "err" : ""}">${esc(v.nome)}</span><span class="dosi">${dosiHtml}</span>${pill}</div>`;
       }
       const azioni = [];
       if (sel <= oggi()) {
@@ -1266,6 +1272,11 @@
     const t = tg(); const w = wa();
     let h = testa("", "Impostazioni", "oggi");
     h += `<div class="corpo">
+      <section class="sezione-imp"><h2>Versione dell'app</h2>
+        <div class="segmenti"><button aria-pressed="${!light()}" data-a="modo" data-v="pro">PRO</button><button aria-pressed="${light()}" data-a="modo" data-v="light">Light</button></div>
+        <p>${light() ? "<b>Light</b>: Piano, Spesa, Peso e storico, con Cambia pasto, Inverti pasti e Fitness. Spuntare un alimento in spesa vale come «comprato»." : "<b>PRO</b>: tutto, anche frigo e dispensa, codice a barre e cosa manca giorno per giorno."}</p>
+      </section>
+
       <section class="sezione-imp"><h2>Chi usa questo telefono</h2>
         <div class="segmenti">${persone().map((p) => `<button aria-pressed="${S.chi === p.id}" data-a="chi" data-v="${esc(p.id)}">${esc(p.nome)}</button>`).join("")}</div>
       </section>
@@ -1401,11 +1412,40 @@
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
   }
 
+  /* ---------------- Light: la spesa senza frigo e dispensa ----------------
+     Nella Light non si gestisce la casa: quando si spunta un alimento lo si considera
+     comprato nella quantità che serve, e sparisce dalla lista. Dietro le quinte entra
+     in casa, così i pasti fatti lo consumano e torna in lista quando servirà di nuovo. */
+  async function compratoLight(s) {
+    const m = (S.calc7 ? S.calc7.mancanze : []).find((x) => x.voce === s.voce);
+    let riga = null;
+    if (m) {
+      const r = L.REGOLE[m.voce];
+      const base = { nome: m.voce, voci: [m.voce], luogo: (S.piano && L.luogoDaVoce(S.piano, m.voce)) || "dispensa", manuale: true, scadenza: null, creato_da: S.chi || "", aggiornato: new Date().toISOString() };
+      if (r && r.unita === "l") riga = { ...base, qty: 1, unita: "l", g_pz: null };
+      else if (r && r.g_pz && m.u === "g") riga = { ...base, qty: Math.ceil(m.manca / r.g_pz - 1e-9), unita: "pz", g_pz: null };
+      else if (m.u === "g") riga = { ...base, qty: Math.ceil(m.manca), unita: "g", g_pz: null };
+      else if (m.u === "n.") riga = { ...base, qty: Math.ceil(m.manca), unita: "pz", g_pz: null };
+      else if (m.u === "vasetto") riga = { ...base, qty: Math.ceil(m.manca) * 150, unita: "g", g_pz: null };
+      else riga = { ...base, qty: 1, unita: "pz", g_pz: null };
+      riga = (await salva("inventario", [riga]))[0];
+    }
+    const copia = { ...s };
+    await elimina("spesa", s.id);
+    dopoModifica();
+    toast(`${s.nome}: comprato`, "Annulla", async () => {
+      if (riga) await elimina("inventario", riga.id);
+      await salva("spesa", [copia]);
+      dopoModifica();
+    });
+  }
+
   /* ---------------- disegno ---------------- */
   function render() {
     const app = $("#app");
     const att = document.activeElement;
     const fuoco = att && att.id && app.contains(att) ? { id: att.id, pos: att.selectionStart } : null;
+    if (light() && !SCHERMI_LIGHT.includes(S.tab)) { S.tab = "piano"; S.giornoSel = S.giornoSel || oggi(); }
     const schermi = { oggi: schermoOggi, casa: schermoCasa, aggiungi: schermoAggiungi, spesa: schermoSpesa, piano: schermoPiano, imp: schermoImpostazioni, diario: schermoDiario };
     app.innerHTML = (schermi[S.tab] || schermoOggi)();
     renderNav();
@@ -1419,6 +1459,8 @@
   }
 
   function vai(tab) {
+    // nella Light non ci sono Oggi, Casa e Aggiungi: si va al Piano
+    if (light() && !SCHERMI_LIGHT.includes(tab)) tab = "piano";
     if (tab !== "aggiungi" || S.aggTab !== "codice") fermaScanner();
     S.tab = tab;
     if (tab !== "imp" && tab !== "diario") LS.set("ds_tab", tab);
@@ -2176,6 +2218,7 @@
       case "prendo": await modifica("spesa", b.dataset.id, { prende: S.chi || "max" }); render(); break;
       case "spunta": {
         const s = S.db.spesa.find((x) => x.id === b.dataset.id);
+        if (light() && !s.fatto) { await compratoLight(s); break; }
         await modifica("spesa", s.id, { fatto: !s.fatto, prende: s.prende || S.chi || null });
         render(); renderNav(); break;
       }
@@ -2262,6 +2305,12 @@
       case "storico-giorni": S.storicoGiorni = Number(b.dataset.v); render(); break;
       case "report-stampa": stampaReport(); break;
       case "report-testo": await esportaTesto(); break;
+      case "modo":
+        LS.set("ds_modo", b.dataset.v);
+        fermaScanner();
+        renderNav(); render();
+        toast(b.dataset.v === "light" ? "Versione Light: Piano e Spesa" : "Versione PRO: tutte le funzioni");
+        break;
       case "chi": S.chi = b.dataset.v; LS.set("ds_chi", S.chi); chiudiFoglio(); render(); break;
       case "benv-aggiungi": d.nomi.push(""); renderFoglio(); { const ult = document.getElementById("benv-" + (d.nomi.length - 1)); if (ult) ult.focus(); } break;
       case "benv-togli": d.nomi.splice(Number(b.dataset.i), 1); renderFoglio(); break;
@@ -2463,6 +2512,8 @@
 
   /* ---------------- avvio ---------------- */
   async function avvio() {
+    // la Light si apre sempre sul Piano
+    if (light()) S.tab = "piano";
     try { S.pianoFile = await (await fetch("piano.json", { cache: "no-cache" })).json(); }
     catch { S.pianoFile = null; }
     try { S.db = await A.carica(); }
