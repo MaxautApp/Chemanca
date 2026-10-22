@@ -224,13 +224,9 @@ label.campo, .campo { display: flex; flex-direction: column; gap: 6px; font-size
 .pasto .voce .dosi { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 50%; }
 .pasto .voce .dose { font-size: 13px; font-weight: 800; width: 58px; text-align: right; white-space: nowrap; }
 .pasto .voce .pill.vuota, .intest-giorno .pill.vuota { visibility: hidden; padding-top: 0; padding-bottom: 0; }
-/* l'intestazione della giornata: stesse colonne dei pasti sotto */
-.intest-giorno { margin: 10px 16px 8px; padding: 0 14px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 4; background: var(--bg); }
-.intest-giorno .voce { display: flex; align-items: center; gap: 10px; min-height: 34px; border-bottom: 2px solid var(--line); }
-.intest-giorno .n { flex: 1; font-size: 12px; font-weight: 700; color: var(--muted); }
-.intest-giorno .dosi { display: flex; gap: 6px; justify-content: flex-end; max-width: 50%; }
-.intest-giorno .dose { width: 58px; text-align: right; font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.intest-giorno .pill { min-width: 64px; font-size: 11px; padding: 3px 8px; }
+.pasto .voce.intest { min-height: 20px; border-bottom: 1px solid var(--line-soft); padding-bottom: 2px; margin-bottom: 2px; }
+.pasto .voce.intest .dose { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; overflow: hidden; text-overflow: ellipsis; }
+.settimana-piano { margin: 10px 20px 6px; font-size: 12px; font-weight: 700; color: var(--muted); text-align: right; }
 .pasto .voce .pill { min-width: 64px; text-align: center; }
 .pasto .azioni { display: flex; gap: 8px; padding-top: 8px; flex-wrap: wrap; }
 .legenda { display: flex; gap: 14px; padding: 0 20px; font-size: 12px; font-weight: 700; color: var(--muted); align-items: center; }
