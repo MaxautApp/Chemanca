@@ -1,6 +1,6 @@
 /* Service worker: l'app si apre anche senza rete (i dati arrivano quando torna).
    Rete prima, copia salvata come riserva: così un aggiornamento su GitHub arriva subito. */
-const CACHE = "chemanca-v3";
+const CACHE = "chemanca-v4";
 const FILE = ["./", "index.html", "style.css", "app.js", "logica.js", "catalogo.js", "importa_pdf.js", "config.js", "piano.json", "manifest.webmanifest", "icon.svg"];
 
 self.addEventListener("install", (e) => {
@@ -29,7 +29,7 @@ self.addEventListener("fetch", (e) => {
   }
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request.url, { cache: "no-cache" })
       .then((r) => { const copia = r.clone(); caches.open(CACHE).then((c) => c.put(e.request, copia)); return r; })
       .catch(() => caches.match(e.request))
   );

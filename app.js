@@ -3,6 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
+  const VERSIONE = "22.10.2026 · 3";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -772,8 +773,7 @@
       h += `<button data-a="giorno" data-d="${d}" aria-pressed="${d === sel}"><small>${nome}</small><b>${esc(L.etichettaData(d))}</b>${n && i >= 0 && !light() ? `<span class="badge liv-${Math.min(3, i)}">${n}</span>` : ""}</button>`;
     }
     h += `</div>`;
-    // una sola intestazione per la giornata: i nomi di casa sopra le colonne delle grammature
-    h += `<div class="intest-giorno"><div class="voce"><span class="n">${g ? (g.alternativa ? "Settimana alternativa" : "Settimana " + g.settimana) : ""}</span><span class="dosi">${persone().map((p) => `<span class="dose" style="color:${coloreDi(p.id)}" title="${esc(p.nome)}">${esc(p.nome)}</span>`).join("")}</span>${light() ? "" : '<span class="pill vuota"></span>'}</div></div>`;
+    h += `<p class="settimana-piano">${g ? (g.alternativa ? "Settimana alternativa" : "Settimana " + g.settimana) : ""}</p>`;
     h += `<div class="corpo">`;
     if (!g) return h + `<p class="vuoto">Il piano comincia il ${esc(ddmm(S.piano.inizio))}.</p></div>`;
     const dove = (voce) => {
@@ -798,6 +798,8 @@
         continue;
       }
       if (p.piatti && p.piatti.length) h += `<div class="piatto">${esc(p.piatti.join(" · "))}</div>`;
+      const conPill = !st && !light();
+      h += `<div class="voce intest" aria-hidden="true"><span class="n"></span><span class="dosi">${persone().map((x) => `<span class="dose" style="color:${coloreDi(x.id)}">${esc(x.nome)}</span>`).join("")}</span>${conPill ? '<span class="pill vuota"></span>' : ""}</div>`;
       for (const v of p.voci) {
         const b = buchi.get(v.nome);
         const f = (x) => (x == null ? "–" : L.PRESENZA.has(v.u) ? x + " " + v.u.replace("cucchiaini", "cucch.").replace("cucchiaino", "cucch.").replace("tazzina", "tazz.") : L.fmtQ(x, v.u));
@@ -1340,6 +1342,7 @@
         <img src="icon.svg" alt="" width="48" height="48">
         <p class="credits-app">CheManca?</p>
         <p>Sviluppata da <b>Massimo Autiero</b><br>© 2026 · Tutti i diritti riservati</p>
+        <p class="credits-ruolo">Versione ${VERSIONE}</p>
         <hr>
         <p>In collaborazione con lo studio medico della<br><b>Dott.ssa Ginevra Mochi</b><br><span class="credits-ruolo">Dietista - Nutrizionista</span></p>
         <p class="credits-contatti">
