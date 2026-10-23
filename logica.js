@@ -283,6 +283,26 @@
     return [...ultime.entries()].map(([id, qty]) => ({ id, qty }));
   }
 
+
+  function movimentiConsumo(inventario, pasto, chi) {
+    return consumaPasto(inventario,pasto,chi).map((m)=>{
+      const prima=inventario.find((x)=>x.id===m.id);
+      return { versione:2,id:m.id,delta:Math.max(0,Number(prima.qty)-m.qty),unita:prima.unita,prodotto:{...prima,qty:0} };
+    }).filter((m)=>m.delta>0);
+  }
+  function applicaMovimenti(inventario, movimenti, restituzione=false) {
+    const out=inventario.map((x)=>({...x}));
+    for(const m of movimenti) {
+      let r=out.find((x)=>x.id===m.id);
+      if(r && r.unita!==m.unita) throw new Error("L'unità di " + r.nome + " è cambiata: correggi la scorta prima di annullare il pasto");
+      if(!r) { if(!restituzione) throw new Error("Prodotto non disponibile: "+m.prodotto.nome); r={...m.prodotto,qty:0};out.push(r); }
+      const qty=Number(r.qty)+(restituzione?m.delta:-m.delta);
+      if(qty < -1e-6) throw new Error("Scorta modificata durante il consumo: riprova");
+      r.qty=Math.max(0,Math.round(qty*10000)/10000);
+    }
+    return out;
+  }
+
   /* ---------------- testi ---------------- */
   function fmtNum(n) {
     const r = Math.round(n * 10) / 10;
@@ -479,7 +499,7 @@
     PASTI, ORA, PRESENZA, GENERICHE, REGOLE, regola, fmtLitri,
     iso, daIso, piuGiorni, diffGiorni, nomeGiorno, etichettaData, GIORNI,
     giornoPiano, chiavePasto, lunediDi, inizioSettimane, pastiFinestra, quantoServe, dosi,
-    disponibile, scala, calcolaMancanze, consumaPasto,
+    disponibile, scala, calcolaMancanze, consumaPasto, movimentiConsumo, applicaMovimenti,
     fmtQ, fmtScorta, fmtNum, dettaglioPersone, quantitaSpesa, motivo, testoAvviso, testoSemplice,
     allineaSpesa, indovinaVoce, luogoDaCategorie, luogoDaVoce, tutteLeVoci,
   };

@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 7";
+  const VERSIONE = "23.10.2026 · 8";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -107,6 +107,7 @@
     }
     return {
       tipo: "locale",
+      transazione(fn) { verifica(); const nuovo=JSON.parse(JSON.stringify(db)); const risultato=fn(nuovo); conferma(nuovo); return { db:JSON.parse(JSON.stringify(nuovo)), risultato }; },
       async carica() { verifica(); return JSON.parse(JSON.stringify(db)); },
       async scrivi(t, righe) {
         verifica();
@@ -392,19 +393,28 @@
   }
 
   /* ---------------- i giorni passati si chiudono da soli ----------------
-     I pasti passati vengono conservati come previsti dal piano, non confermati.
-     Nessun consumo automatico delle scorte; le registrazioni già presenti restano intatte. */
+     I pasti passati non registrati vengono chiusi come fatti automaticamente.
+     Le scorte PRO si aggiornano solo dal giorno in cui è attivata questa gestione. */
   let chiudendo = false;
   async function chiudiGiorniPassati() {
-    if (chiudendo || !S.piano) return;
-    chiudendo = true;
+    if(chiudendo || !S.piano) return;
+    chiudendo=true;
     try {
-      // Recupera tutto il periodo, anche se la dieta è iniziata prima del caricamento.
-      // I pasti presunti alimentano lo storico, senza consumare le scorte attuali.
-      await storicoArretrato(S.piano, S.piano.inizio);
-    } catch (e) {
-      console.error(e);
-    } finally { chiudendo = false; }
+      await operazionePasti((db)=>{
+        const cursore=db.piano.find((x)=>x.id==="chiusura_giorni");
+        const dalScorte=cursore && cursore.dati && cursore.dati.dal || oggi();
+        for(let data=S.piano.inizio;data<oggi();data=L.piuGiorni(data,1)) {
+          const giorno=L.giornoPiano(S.piano,data);if(!giorno)continue;
+          for(const p of giorno.pasti) {
+            const k=L.chiavePasto(data,p.pasto),r=db.pasti.find((x)=>x.id===k);
+            if(r && !["auto","parziale","solo:max","solo:vale","max","vale"].includes(r.stato) && !r.stato.startsWith("solo:"))continue;
+            registraPastoDb(db,k,"automatico",{pasto:p,consuma:!light() && data>=dalScorte,automatico:true});
+          }
+        }
+        scriviRigaDb(db,"piano",{id:"chiusura_giorni",dati:{dal:oggi()},aggiornato:new Date().toISOString()});
+      });
+    } catch(e) { erroreArchivio(e); }
+    finally { chiudendo=false; }
   }
 
   /* ---------------- OGGI ---------------- */
@@ -430,7 +440,7 @@
   function pastoPerPersona(p, id) { return p.libero || p.voci.some((v) => Number(L.dosi(v)[id]) > 0); }
   function registratoPerPersona(r, id) {
     if (!r || r.stato === "auto") return false;
-    if (r.stato === "fatto" || r.stato === "saltato") return true;
+    if (r.stato === "fatto" || r.stato === "automatico" || r.stato === "saltato") return true;
     if (r.stato === "parziale") return (r.contenuto && r.contenuto.confermati || []).includes(id);
     return r.stato === "solo:" + id || r.stato === id;
   }
@@ -481,7 +491,7 @@
       const dosi=(prossimo.voci||[]).filter((v)=>Number(L.dosi(v)[S.chi])>0).map((v)=>`<li><span>${esc(v.nome)}</span><b>${esc(fmtLight(L.dosi(v)[S.chi],v.u))}</b></li>`).join("");
       h+=`<section class="home-card home-principale"><span class="home-etichetta">Prossimo pasto · ${esc(L.nomeGiorno(prossimo.data,oggi()))}</span><h2>${esc(prossimo.pasto)} <small>${esc(oreLight(L.ORA[prossimo.pasto]??12))}</small></h2><p class="home-caption">Orario indicativo · dosi per ${esc(nomeDi(S.chi))}</p>${prossimo.libero?'<p>Pasto libero: puoi scrivere cosa hai mangiato anche in seguito.</p>':`<ul class="home-dosi">${dosi}</ul>`}<div class="home-azioni-pasto"><button class="btn sec" data-a="piano-apri" data-d="${esc(prossimo.data)}" data-pasto="${esc(prossimo.pasto)}">Apri il pasto</button><button class="btn" data-a="home-pasto-fatto" data-k="${esc(L.chiavePasto(prossimo.data,prossimo.pasto))}" ${prossimo.data > oggi() ? 'disabled title="Puoi confermare il pasto dal giorno previsto"' : ""} aria-label="Fatto! Conferma il pasto di ${esc(nomeDi(S.chi))}">Fatto!</button></div></section>`;
     } else h+='<section class="home-card home-principale"><h2>Nessun pasto in programma</h2><p>Puoi consultare il piano completo o aggiornare la dieta dalle Impostazioni.</p><button class="btn" data-a="piano-apri">Apri il piano</button></section>';
-    h+=`<section class="home-card"><span class="home-etichetta">La giornata di oggi</span><h2>${registrati} <small>di ${pasti.length} pasti registrati</small></h2><p>Lo storico conserva i pasti previsti dal piano anche senza confermarli tutti.</p><button class="btn sec largo" data-a="piano-apri" data-d="${oggi()}">Piano di oggi e settimana</button></section>
+    h+=`<section class="home-card"><span class="home-etichetta">La giornata di oggi</span><h2>${registrati} <small>di ${pasti.length} pasti registrati</small></h2><p>A fine giornata i pasti rimasti vengono registrati automaticamente. Puoi correggerli nello storico.</p><button class="btn sec largo" data-a="piano-apri" data-d="${oggi()}">Piano di oggi e settimana</button></section>
       <section class="home-card"><span class="home-etichetta">La spesa della famiglia</span><h2>${daComprare} <small>voci da prendere</small></h2><p>${esc(nomePeriodoLight(lista))}</p><button class="btn sec largo" data-a="vai" data-tab="spesa">Apri la lista</button></section>
       <section class="home-card"><span class="home-etichetta">Il tuo diario</span>${LS.get("ds_home_peso",true)?`<h2>${esc(ultimoPesoTesto())}</h2>`:"<h2>Il tuo percorso</h2>"}<p>Pasti, pesate e attività fisica, con il report per la dietista.</p><div class="due"><button class="btn piccolo sec" data-a="vai-diario" data-v="peso">Peso</button><button class="btn piccolo sec" data-a="vai-diario" data-v="storico">Storico</button></div></section></div></div>`;
     return h;
@@ -526,7 +536,7 @@
             <button class="btn piccolo sec" data-a="pasto-altro" data-k="${esc(p.chiave)}">Altro</button>
           </div></div>`;
       }
-      h += `</div><p style="font-size:12px;color:var(--muted);padding:0 4px">Con «Fatto» le dosi escono da frigo e dispensa. I pasti non confermati restano nello storico come previsti dal piano, senza consumare altre scorte.</p>`;
+      h += `</div><p style="font-size:12px;color:var(--muted);padding:0 4px">Con «Fatto» le dosi escono da frigo e dispensa. A fine giornata i pasti rimasti vengono registrati automaticamente e le dosi vengono scalate.</p>`;
     }
 
     h += sezioneCosaManca();
@@ -798,6 +808,7 @@
   function schermoSpesa() {
     if (light()) return schermoSpesaLight();
     const lista = [...S.db.spesa].sort((a, b) =>
+      (a.origine === "piano" ? 0 : 1) - (b.origine === "piano" ? 0 : 1) ||
       (a.fatto ? 1 : 0) - (b.fatto ? 1 : 0) ||
       ["urgente", "entro", "dopo"].indexOf(a.urgenza || "dopo") - ["urgente", "entro", "dopo"].indexOf(b.urgenza || "dopo") ||
       (a.data_serve || "9").localeCompare(b.data_serve || "9"));
@@ -822,7 +833,9 @@
         <button class="btn piccolo" style="min-height:52px" aria-label="Aggiungi">${ico("piu", 20)}</button>
       </form>`;
     if (!lista.length) h += `<p class="vuoto">Lista vuota: nessun acquisto necessario per il periodo selezionato.</p>`;
+    let mostratiExtra = false;
     for (const s of lista) {
+      if(s.origine !== "piano" && !mostratiExtra) { h += '<h2 style="font-size:17px">Altri acquisti</h2>';mostratiExtra=true; }
       const tag = s.data_serve && s.origine === "piano"
         ? `<span class="pill liv-${livello(s.data_serve)}">Serve ${esc(L.nomeGiorno(s.data_serve, oggi()))}</span>`
         : `<span class="pill dopo">Quando capita</span>`;
@@ -872,7 +885,7 @@
       const buchi = new Map(mancanze.flatMap((m) => m.pasti.filter((x) => x.data === sel && x.pasto === p.pasto).map(() => [m.voce, m.tipo])));
       const etich = p.spostato ? `Spostato da ${esc(L.etichettaData(p.spostato.split("|")[0]))} · ${esc(p.spostato.split("|")[1].toLowerCase())}` : "Cambiato";
       h += `<section class="pasto" id="pasto-${esc(k)}"><div class="testa"><h2>${esc(p.pasto)}${p.cambiato ? ` <span class="pill cambiato">${etich}</span>` : ""}</h2>`;
-      if (st && st.stato !== "auto") h += `<span class="pill ${st.stato === "saltato" ? "grigio" : "ok"}">${esc(st.stato === "saltato" ? "Saltato" : st.stato === "fatto" || st.stato === "auto" ? "Fatto" : st.stato === "parziale" ? cap(statoTesto(st.stato,st)) : "Solo " + nomeDi(st.stato.replace(/^solo:/, "")))}</span>`;
+      if (st && st.stato !== "auto") h += `<span class="pill ${st.stato === "saltato" ? "grigio" : "ok"}">${esc(st.stato === "saltato" ? "Saltato" : st.stato === "fatto" || st.stato === "auto" ? "Fatto" : ["parziale","automatico","da_correggere"].includes(st.stato) ? cap(statoTesto(st.stato,st)) : "Solo " + nomeDi(st.stato.replace(/^solo:/, "")))}</span>`;
       else if (buchi.size && !light()) h += `<span style="font-size:12px;font-weight:800;color:var(--red)">${buchi.size === 1 ? "1 ingrediente manca" : buchi.size + " mancano"}</span>`;
       h += `<button class="icona-btn matita" data-a="nota-apri" data-k="${esc(k)}" aria-label="Scrivi cosa hai mangiato a ${esc(p.pasto.toLowerCase())}">${ico("matita", 18)}</button></div>`;
       const nota = notaDi(k);
@@ -899,7 +912,7 @@
       const azioni = [];
       const secondarie = [];
       if (sel <= oggi()) {
-        azioni.push(st && st.stato !== "auto"
+        azioni.push(st && !["auto","da_correggere"].includes(st.stato)
           ? `<button class="btn piccolo sec" data-a="pasto-annulla" data-k="${esc(k)}">Annulla «${esc(st.stato === "saltato" ? "saltato" : "fatto")}»</button>`
           : `<button class="btn piccolo" data-a="pasto" data-k="${esc(k)}" data-stato="fatto">Fatto!</button>`);
         secondarie.push(`<button class="btn piccolo sec" data-a="pasto-altro" data-k="${esc(k)}">${persone().length > 1 ? "Solo una persona / Saltato" : "Saltato"}</button>`);
@@ -985,7 +998,7 @@
   }
 
   /* ---------------- la matita: cosa ho mangiato davvero ---------------- */
-  const NOTA_STORICO = "I pasti senza modifiche riportano quanto previsto dal piano alimentare. I pasti non confermati non attestano il consumo effettivo; puoi correggerli anche nei giorni successivi.";
+  const NOTA_STORICO = "A fine giornata i pasti non confermati vengono segnati automaticamente come fatti secondo il piano. Le registrazioni automatiche sono riconoscibili e puoi correggerle, aggiungere note o attività fisica anche nei giorni successivi.";
   // Per i giorni archiviati usa sempre il contenuto salvato, anche dopo un cambio dieta.
   function pastoArchiviato(k) {
     const r = S.db.pasti.find((x) => x.id === k);
@@ -1005,6 +1018,7 @@
       <p class="sotto">${p && p.libero ? "Pasto libero: scrivi cosa avete mangiato, la dietista lo vedrà nello storico." : "Scrivi cosa avete mangiato di diverso o in più rispetto al piano. Resta nello storico e nel report per la dietista."}</p>
       <label class="campo">Cosa ho mangiato<textarea id="nota-testo" rows="5" class="input area" placeholder="${p && p.libero ? "Es. pizza margherita e insalata; Vale: sushi" : "Es. aggiunto un frutto; al posto della pasta 2 fette di pane"}">${esc(nota ? nota.testo : "")}</textarea></label>
       <button class="btn largo" data-a="nota-salva">Salva</button>
+      ${registrato && registrato.stato === "da_correggere" ? `<button class="btn sec largo" data-a="pasto" data-k="${esc(d.k)}" data-stato="fatto">Fatto secondo il piano</button>` : ""}
       ${data < oggi() ? `<button class="btn sec largo" data-a="storico-stato" data-k="${esc(d.k)}" data-stato="${registrato && registrato.stato === "saltato" ? "auto" : "saltato"}">${registrato && registrato.stato === "saltato" ? "Ripristina il pasto previsto" : "Segna come saltato"}</button>` : ""}
       ${nota ? `<button class="btn rosso largo" data-a="nota-togli">Cancella la nota</button>` : ""}
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
@@ -1213,6 +1227,8 @@
   function statoTesto(st, r) {
     if (st === "parziale") return "confermato da " + ((r && r.contenuto && r.contenuto.confermati) || []).map(nomeDi).join(", ");
     if (st === "saltato") return "saltato";
+    if (st === "automatico") return "fatto automaticamente";
+    if (st === "da_correggere") return "da correggere";
     if (st === "auto") return "da piano";
     if (st === "fatto") return "confermato";
     return "solo " + nomeDi(st.replace(/^solo:/, ""));
@@ -1296,7 +1312,7 @@
     if (!rep.giorni.length) return h + `<p class="vuoto">Nessun pasto nello storico in questi giorni. I pasti previsti vengono conservati dal giorno di inizio della dieta.</p>`;
     h += `<p style="font-size:14px;padding:0 4px"><b>${rep.fatti}</b> pasti nello storico · <b>${rep.saltati}</b> saltati${rep.attivita ? ` · <b>${rep.attivita}</b> attività fisiche (${esc(durata(rep.minuti))})` : ""} · dal ${esc(ddmm(rep.da))} al ${esc(ddmm(rep.a))}</p>`;
     for (const g of [...rep.giorni].reverse()) {
-      h += `<section class="giorno-storico"><h3>${esc(dataLunga(g.data))}</h3>`;
+      h += `<section class="giorno-storico"><h3>${esc(dataLunga(g.data))}</h3><button class="link" data-a="fitness-apri" data-d="${esc(g.data)}">Aggiungi attività fisica</button>`;
       for (const p of g.pasti) {
         if (p.fitness) { h += `<div class="pasto-storico fit"><span class="t"><span>${ico("fitness", 15)} Fitness</span><span class="pill fit">${esc(p.stato)}</span></span><span class="cibi">${esc(p.cibi[0])}</span></div>`; continue; }
         h += `<div class="pasto-storico"><span class="t"><span>${esc(p.pasto)}${p.piatti.length ? " · " + esc(p.piatti.join(", ")) : ""}</span>${p.automatico ? "" : `<span class="pill ${p.stato === "saltato" ? "grigio" : "ok"}">${esc(p.stato)}</span>`}</span>
@@ -1446,6 +1462,13 @@
   }
 
   /* ---------------- IMPOSTAZIONI ---------------- */
+
+  function pannelloMovimentiScorte() {
+    if(light())return "";
+    const r=S.db.piano.find((x)=>x.id==="movimenti_scorte"),voci=r && Array.isArray(r.dati)?r.dati.slice(-10).reverse():[];
+    return `<section class="sezione-imp"><h2>Movimenti delle scorte</h2><p>Ultimi consumi e restituzioni legati ai pasti.</p>${voci.length?voci.map((v)=>`<details><summary>${v.tipo==="consumo"?"Consumo":"Restituzione"} · ${esc(v.pasto.replace("|"," · "))}${v.automatico?" · automatico":""}</summary><ul>${v.movimenti.map((m)=>`<li>${esc(m.prodotto.nome)}: ${v.tipo==="consumo"?"−":"+"}${esc(fmtLight(m.delta,m.unita))}</li>`).join("")}</ul></details>`).join(""):'<p>Nessun movimento registrato con la nuova versione.</p>'}</section>`;
+  }
+
   function schermoImpostazioni() {
     const t = tg(); const w = wa();
     let h = testa("", "Impostazioni", "oggi");
@@ -1511,6 +1534,7 @@
       </section>`}
 
 
+      ${pannelloMovimentiScorte()}
       <section class="sezione-imp"><h2>Backup e ripristino</h2>
         <p>Salva una copia completa di famiglia, piani importati, pasti, note, pesate, fitness, spesa e scorte. Puoi conservarla oppure trasferirla su un altro dispositivo. Non è una sincronizzazione automatica.</p>
         <button class="btn sec largo" data-a="backup-esporta">Scarica il backup completo</button>
@@ -1672,8 +1696,10 @@
         ${!conclusa && !r.coperto ? `<div class="due" style="margin-top:10px"><button class="btn piccolo" data-a="light-copri" data-id="${esc(r.id)}" data-stato="comprato">${r.aggiunta ? "Comprato il resto" : "Comprato"}</button><button class="btn piccolo sec" data-a="light-copri" data-id="${esc(r.id)}" data-stato="disponibile">Ce l'ho già</button></div>` : ""}
         ${!conclusa && r.comprato+r.disponibile > 0 ? `<button class="link" data-a="light-copri" data-id="${esc(r.id)}" data-stato="annulla">Annulla acquisto / disponibilità</button>` : ""}</section>`;
     }
-    if (p.manuali.length) h += '<h2 style="font-size:17px">Aggiunti a mano</h2>';
-    for (const m of p.manuali) h += `<div class="card pad"><span style="font-weight:700">${esc(m.nome)}</span> · ${m.fatto ? "Comprato" : "Da comprare"}${!conclusa ? `<div class="due" style="margin-top:8px"><button class="btn piccolo sec" data-a="light-manuale" data-id="${esc(m.id)}">${m.fatto ? "Da comprare" : "Comprato"}</button><button class="link" data-a="light-manuale-togli" data-id="${esc(m.id)}">Togli</button></div>` : ""}</div>`;
+    if (p.manuali.length) h += '<h2 style="font-size:17px">Altri acquisti</h2>';
+    for(const m of p.manuali) h+=`<section class="card pad"><div class="titolo-sez"><h2 style="font-size:16px">${esc(m.nome)}</h2></div><p style="font-size:13px;color:var(--muted);margin-top:6px">Aggiunto a mano</p><p style="margin:8px 0;font-weight:700">${m.fatto?(m.stato==="disponibile"?"Ce l'ho già":"Comprato"):"Da comprare"}</p>
+      ${!conclusa && !m.fatto?`<div class="due" style="margin-top:10px"><button class="btn piccolo" data-a="light-manuale" data-id="${esc(m.id)}">Comprato</button><button class="btn piccolo sec" data-a="light-manuale-disponibile" data-id="${esc(m.id)}">Ce l'ho già</button></div>`:""}
+      ${!conclusa?`<div class="azioni">${m.fatto?`<button class="link" data-a="light-manuale" data-id="${esc(m.id)}">Annulla acquisto / disponibilità</button>`:""}<button class="link" data-a="light-manuale-togli" data-id="${esc(m.id)}">Togli</button></div>`:""}</section>`;
     return h + '<button class="btn sec largo" data-a="whatsapp-lista">Manda su WhatsApp</button></div>';
   }
   function cambiaPeriodoLight(...args) { return accodaSpesaLight(() => cambiaPeriodoLightOra(...args)); }
@@ -1705,7 +1731,8 @@
     p.righe = fabbisognoPeriodoLight(p);
     if (azione === "aggiungi") p.manuali.push({ id: uid(), nome, fatto: false });
     if (azione === "togli") p.manuali = p.manuali.filter((m) => m.id !== id);
-    if (azione === "spunta") p.manuali = p.manuali.map((m) => m.id === id ? { ...m, fatto: !m.fatto } : m);
+    if (azione === "spunta") p.manuali = p.manuali.map((m) => m.id === id ? { ...m, fatto: !m.fatto, stato:"comprato" } : m);
+    if (azione === "disponibile") p.manuali = p.manuali.map((m) => m.id === id ? { ...m, fatto:true, stato:"disponibile" } : m);
     await salvaStatoLight(stato); render();
   }
 
@@ -2172,7 +2199,7 @@
         <div class="tre">${scorciatoie.map(([n, v]) => `<button type="button" class="btn piccolo ${d.inizio === v ? "" : "sec"}" data-a="imp-data" data-v="${v}">${n}</button>`).join("")}</div>
         <input type="date" class="input" data-f="inizio" value="${esc(d.inizio)}" aria-label="Data di inizio">
       </div>
-      ${passati ? `<div class="avviso blu"><span>I pasti dal <b>${esc(L.etichettaData(d.inizio))}</b> a ieri (${passati} ${passati === 1 ? "giorno" : "giorni"}) entrano nello <b>storico</b> come previsti dal piano, non confermati. Potrai modificarli anche in seguito. Frigo e dispensa non vengono toccati.</span></div>` : ""}`;
+      ${passati ? `<div class="avviso blu"><span>I pasti dal <b>${esc(L.etichettaData(d.inizio))}</b> a ieri (${passati} ${passati === 1 ? "giorno" : "giorni"}) entrano nello <b>storico</b> come fatti automaticamente secondo il piano. Potrai modificarli anche in seguito. Frigo e dispensa non vengono toccati.</span></div>` : ""}`;
   }
 
   /* ---------- il piano a 4 settimane in PDF ---------- */
@@ -2244,7 +2271,7 @@
   }
 
   /* la dieta è cominciata prima di caricarla: i pasti dal giorno di inizio a ieri si
-     registrano come previsti dal piano, non confermati, per lo storico. Non si scala niente da frigo e dispensa:
+     registrano come fatti automaticamente secondo il piano, per lo storico. Non si scala niente da frigo e dispensa:
      quello che c'è in casa adesso è già il risultato di quei giorni. */
   async function storicoArretrato(piano, da) {
     if (!da || da >= oggi()) return 0;
@@ -2260,7 +2287,7 @@
           if (!stati[k].contenuto) await modifica("pasti", k, { contenuto: fotoPasto(p) });
           continue;
         }
-        const riga = { id: k, data: g, pasto: p.pasto, stato: "auto", chi: "", quando: new Date().toISOString(), scalato: [], contenuto: fotoPasto(p) };
+        const riga = { id: k, data: g, pasto: p.pasto, stato: "automatico", chi: "", quando: new Date().toISOString(), scalato: [], contenuto: { ...fotoPasto(p), automatico:true } };
         if (await A.nuovo("pasti", riga)) { inMemoria("pasti", [riga]); n++; }
       }
     }
@@ -2269,33 +2296,58 @@
   }
 
   /* ---------------- azioni ---------------- */
-  async function segnaPasto(k, stato) {
-    const [data, nomePasto] = k.split("|");
-    const g = L.giornoPiano(S.piano, data);
-    const pasto = data < oggi() ? pastoArchiviato(k) : g && g.pasti.find((p) => p.pasto === nomePasto);
-    const prima = [];
-    if (!light() && data >= oggi() && stato !== "saltato" && pasto && !pasto.libero) {
-      const chi = stato.startsWith("solo:") ? stato.slice(5) : stato === "max" || stato === "vale" ? stato : null;
-      const mosse = L.consumaPasto(S.db.inventario, pasto, chi);
-      for (const m of mosse) {
-        const it = S.db.inventario.find((i) => i.id === m.id);
-        prima.push({ ...it });
-        if (m.qty <= 0) await elimina("inventario", m.id);
-        else await modifica("inventario", m.id, { qty: m.qty });
-      }
+  let codaPasti=Promise.resolve();
+  function scriviRigaDb(db,t,r) { const i=db[t].findIndex((x)=>x.id===r.id); if(i<0)db[t].push(r);else db[t][i]={...db[t][i],...r}; }
+  function operazionePasti(fn) {
+    const lavoro=codaPasti.then(()=>{
+      if(!A.transazione) throw new Error("Le nuove operazioni protette sui pasti richiedono l'archivio locale; la versione condivisa verrà configurata con il database");
+      const r=A.transazione(fn);S.db=r.db;return r.risultato;
+    });
+    codaPasti=lavoro.catch(()=>{});return lavoro;
+  }
+  function movimentiRegistrati(r) {
+    const mosse=r && r.scalato || [];
+    if(!mosse.length || mosse.every((x)=>x.versione===2))return mosse;
+    if(!r.contenuto) throw new Error("Questo vecchio pasto non conserva le dosi: verifica la scorta prima di correggerlo");
+    const chi=r.stato.startsWith("solo:")?r.stato.slice(5):["max","vale"].includes(r.stato)?r.stato:null;
+    return L.movimentiConsumo(mosse,r.contenuto,chi);
+  }
+  function registraMovimentiDb(db,k,movimenti,tipo,automatico) {
+    if(!movimenti.length)return;
+    const r=db.piano.find((x)=>x.id==="movimenti_scorte"),elenco=r && Array.isArray(r.dati)?r.dati:[];
+    scriviRigaDb(db,"piano",{id:"movimenti_scorte",dati:[...elenco,{id:uid(),pasto:k,tipo,automatico:!!automatico,quando:new Date().toISOString(),movimenti}]});
+  }
+  function registraPastoDb(db,k,stato,opzioni={}) {
+    const [data,nome]=k.split("|"),r=db.pasti.find((x)=>x.id===k);
+    if(r && r.stato===stato)return false;
+    const giorno=S.piano && L.giornoPiano(S.piano,data);
+    const p=r && r.contenuto || opzioni.pasto || giorno && giorno.pasti.find((x)=>x.pasto===nome);
+    if(!p)throw new Error("Non trovo il contenuto di questo pasto");
+    const vecchie=movimentiRegistrati(r);
+    const conservaConsumi=opzioni.automatico && !opzioni.consuma;
+    if(vecchie.length && !conservaConsumi) { db.inventario=L.applicaMovimenti(db.inventario,vecchie,true);registraMovimentiDb(db,k,vecchie,"restituzione",false); }
+    let nuove=conservaConsumi?vecchie:[];
+    if(opzioni.consuma && stato!=="saltato" && !p.libero) {
+      const chi=stato.startsWith("solo:")?stato.slice(5):["max","vale"].includes(stato)?stato:null;
+      nuove=L.movimentiConsumo(db.inventario,p,chi);db.inventario=L.applicaMovimenti(db.inventario,nuove);registraMovimentiDb(db,k,nuove,"consumo",opzioni.automatico);
     }
-    await salva("pasti", [{ id: k, data, pasto: nomePasto, stato, chi: S.chi || "", quando: new Date().toISOString(), scalato: prima, contenuto: fotoPasto(pasto) }]);
-    chiudiFoglio();
-    dopoModifica();
-    toast(stato === "saltato" ? "Segnato come saltato" : data < oggi() || light() ? "Pasto registrato" : "Fatto: dosi tolte da casa", "Annulla", () => annullaPasto(k));
+    const contenuto={...fotoPasto(p),automatico:!!opzioni.automatico};
+    scriviRigaDb(db,"pasti",{id:k,data,pasto:nome,stato,chi:opzioni.automatico?"":S.chi||"",quando:new Date().toISOString(),scalato:nuove,contenuto});
+    return true;
+  }
+  async function segnaPasto(k,stato) {
+    await operazionePasti((db)=>registraPastoDb(db,k,stato,{consuma:!light()}));
+    chiudiFoglio();dopoModifica();
+    toast(stato==="saltato"?"Segnato come saltato":"Pasto registrato", "Annulla", ()=>annullaPasto(k).catch(erroreArchivio));
   }
   async function annullaPasto(k) {
-    const st = S.db.pasti.find((p) => p.id === k);
-    if (!st) return;
-    // rimette in casa esattamente quello che era stato tolto
-    const scalato = st.scalato || [];
-    if (scalato.length && !light()) await salva("inventario", scalato);
-    await elimina("pasti", k);
+    await operazionePasti((db)=>{
+      const r=db.pasti.find((x)=>x.id===k);if(!r)return;
+      const mosse=movimentiRegistrati(r);
+      if(mosse.length) {db.inventario=L.applicaMovimenti(db.inventario,mosse,true);registraMovimentiDb(db,k,mosse,"restituzione",false);}
+      if(r.data<oggi())scriviRigaDb(db,"pasti",{...r,stato:"da_correggere",scalato:[]});
+      else db.pasti=db.pasti.filter((x)=>x.id!==k);
+    });
     dopoModifica();
   }
 
@@ -2574,6 +2626,7 @@
       case "togli-spesa": await elimina("spesa", b.dataset.id); render(); break;
       case "metti-in-casa": await mettiInCasaComprati(); break;
       case "light-copri": await copriVoceLight(b.dataset.id, b.dataset.stato); break;
+      case "light-manuale-disponibile": await manualeLight("disponibile",b.dataset.id); break;
       case "light-manuale": await manualeLight("spunta", b.dataset.id); break;
       case "light-manuale-togli": await manualeLight("togli", b.dataset.id); break;
       case "whatsapp-lista": condividiWhatsapp(); break;
@@ -2599,8 +2652,8 @@
       case "storico-stato": {
         const r = S.db.pasti.find((x) => x.id === b.dataset.k);
         if (!r || r.data >= oggi()) break;
-        await modifica("pasti", r.id, { stato: b.dataset.stato, chi: S.chi || "", quando: new Date().toISOString() });
-        chiudiFoglio(); dopoModifica(); toast("Storico aggiornato; scorte invariate");
+        await operazionePasti((db)=>registraPastoDb(db,r.id,b.dataset.stato === "auto" ? "automatico" : b.dataset.stato,{consuma:!light(),automatico:b.dataset.stato === "auto"}));
+        chiudiFoglio(); dopoModifica(); toast(light()?"Storico aggiornato":"Storico e scorte aggiornati");
         break;
       }
       case "nota-salva": {
@@ -2942,7 +2995,12 @@
       dopoModifica();
     });
     if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
-    setInterval(aggiornaHomeAutomatica, 30000);
+    setInterval(eventoSicuro(async()=>{
+      if(document.hidden)return;
+      const r=S.db.piano.find((x)=>x.id==="chiusura_giorni");
+      if(S.piano && (!r || r.dati.dal!==oggi())) { await chiudiGiorniPassati();dopoModifica(); }
+      aggiornaHomeAutomatica();
+    }),30000);
     await apriCondivisi();
   }
 
