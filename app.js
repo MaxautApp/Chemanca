@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 17";
+  const VERSIONE = "23.10.2026 · 18";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -847,7 +847,7 @@
         <div class="testo"><span class="nome">${esc(s.nome)}</span>
           <span class="perche">${esc(s.origine === "piano" ? s.motivo : "Aggiunto a mano" + (s.creato_da ? " da " + nomeDi(s.creato_da) : ""))}</span>
           <span class="tags">${tag}${s.fatto ? "" : chi}${s.origine !== "piano" ? `<button class="mini-link" data-a="togli-spesa" data-id="${esc(s.id)}" style="color:var(--muted)">Togli</button>` : ""}</span></div>
-        <span class="q">${esc(acquistoPro(s)?.testo || s.qty_txt || "")}</span></div>${s.origine === "piano" && !s.fatto ? `<div class="due" style="margin:0 0 14px"><button class="btn piccolo" data-a="spunta" data-id="${esc(s.id)}">Tutta la quantità indicata</button><button class="btn piccolo sec" data-a="quantita-spesa" data-id="${esc(s.id)}">Usa quantità diversa</button></div>` : ""}`;
+        <span class="q">${esc(acquistoPro(s)?.testo || s.qty_txt || "")}</span></div>${s.origine === "piano" && !s.fatto ? `<div class="due" style="margin:0 0 14px"><button class="btn piccolo" data-a="spunta" data-id="${esc(s.id)}">Comprato</button><button class="btn piccolo sec" data-a="quantita-spesa" data-id="${esc(s.id)}">Usa quantità diversa</button></div>` : ""}`;
     }
     h += `<div class="due" style="margin-top:4px">
         <button class="btn sec" data-a="whatsapp-lista">Manda su WhatsApp</button>
@@ -1739,7 +1739,7 @@
       const statoRiga = r.rimosso ? "Non più previsto dal piano" : r.aggiunta ? "Ancora da prendere: " + fmtLight(r.manca, r.u) : r.coperto ? "Completo per questa lista" : "Da comprare";
       h += `<section class="card pad"><div class="titolo-sez"><h2 style="font-size:16px">${esc(r.nome)}</h2><b>${r.rimosso ? "" : esc(fmtLight(r.qty, r.u))}</b></div><p style="font-size:13px;color:var(--muted);margin-top:6px">${esc(dettaglio)}</p><p style="margin:8px 0;font-weight:700">${esc(statoRiga)}</p>
         ${r.comprato > 0 ? `<p>Comprato: ${esc(fmtLight(r.comprato,r.u))}</p>` : ""}${r.disponibile > 0 ? `<p>Ce l'ho già: ${esc(fmtLight(r.disponibile,r.u))}</p>` : ""}
-        ${!conclusa && !r.coperto ? `<div class="due" style="margin-top:10px"><button class="btn piccolo" data-a="light-copri" data-id="${esc(r.id)}" data-stato="comprato">Tutta la quantità indicata</button><button class="btn piccolo sec" data-a="quantita-spesa" data-id="${esc(r.id)}">Usa quantità diversa</button></div><button class="link" data-a="light-copri" data-id="${esc(r.id)}" data-stato="disponibile">Ce l'ho già</button>` : ""}
+        ${!conclusa && !r.coperto ? `<div class="due" style="margin-top:10px"><button class="btn piccolo" data-a="light-copri" data-id="${esc(r.id)}" data-stato="comprato">Comprato</button><button class="btn piccolo sec" data-a="light-copri" data-id="${esc(r.id)}" data-stato="disponibile">Ce l'ho già</button></div><button class="link" data-a="quantita-spesa" data-id="${esc(r.id)}">Usa quantità diversa</button>` : ""}
         ${!conclusa && r.comprato+r.disponibile > 0 ? `<button class="link" data-a="light-copri" data-id="${esc(r.id)}" data-stato="annulla">Annulla acquisto / disponibilità</button>` : ""}</section>`;
     }
     if (p.manuali.length) h += '<h2 style="font-size:17px">Altri acquisti</h2>';
