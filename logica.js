@@ -494,7 +494,58 @@
     }).sort((a, b) => Number(a.coperto) - Number(b.coperto) || a.nome.localeCompare(b.nome, "it"));
   }
 
+
+  // Confronta gli stessi giorni di calendario, rispettando rotazioni, alternative e cambi.
+  // Le unità diverse non vengono mai convertite implicitamente.
+  function confrontaPiani(attuale, nuovo, persona, dal, giorni) {
+    const normalizza=(s)=>String(s||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ");
+    const rilevante=(p)=>p && (p.libero || (p.voci||[]).some((v)=>Number(dosi(v)[persona])>0));
+    function alimenti(p) {
+      const m=new Map();
+      for(const v of p && !p.libero?p.voci||[]:[]) {
+        const q=Number(dosi(v)[persona]);if(!(q>0))continue;
+        const nome=normalizza(v.nome),u=normalizza(v.u),key=JSON.stringify([nome,u]);
+        if(m.has(key))m.get(key).q+=q;else m.set(key,{nome:v.nome,q,u:v.u,nomeKey:nome,unitaKey:u});
+      }
+      return m;
+    }
+    const risultati=[],totali={aggiunto:0,rimosso:0,quantita:0,unita:0,pasto:0,piatto:0,pastiModificati:0};
+    for(let i=0;i<giorni;i++) {
+      const data=piuGiorni(dal,i),a=attuale?giornoPiano(attuale,data):null,b=nuovo?giornoPiano(nuovo,data):null;
+      const nomi=[...new Set([...(a?a.pasti:[]),...(b?b.pasti:[])].map((p)=>p.pasto))].sort((x,y)=>(ORA[x]??24)-(ORA[y]??24));
+      const pasti=[];
+      for(const nomeP of nomi) {
+        const vecchi=(a?a.pasti:[]).filter((p)=>p.pasto===nomeP && rilevante(p)),nuovi=(b?b.pasti:[]).filter((p)=>p.pasto===nomeP && rilevante(p));
+        if(!vecchi.length && !nuovi.length)continue;
+        const unisci=(ps)=>ps.length?{libero:ps.every((p)=>p.libero),voci:ps.flatMap((p)=>p.voci||[]),piatti:[...new Set(ps.flatMap((p)=>p.piatti||[]))]}:null;
+        const prima=unisci(vecchi),dopo=unisci(nuovi),ma=alimenti(prima),mb=alimenti(dopo),differenze=[],uguali=[];
+        const stato=(p)=>!p?"Non previsto":p.libero?"Pasto libero":"Pasto previsto";
+        if(stato(prima)!==stato(dopo))differenze.push({tipo:"pasto",nome:nomeP,primaTesto:stato(prima),dopoTesto:stato(dopo)});
+        const piattiA=(prima&&prima.piatti||[]).join(" · "),piattiB=(dopo&&dopo.piatti||[]).join(" · ");
+        if(prima && dopo && normalizza(piattiA)!==normalizza(piattiB))differenze.push({tipo:"piatto",nome:"Piatto",primaTesto:piattiA||"—",dopoTesto:piattiB||"—"});
+        const rimastiA=[],rimastiB=[];
+        for(const [key,v] of ma) {
+          const n=mb.get(key);
+          if(n) {if(Math.abs(v.q-n.q)>1e-6)differenze.push({tipo:"quantita",nome:n.nome,prima:v,dopo:n});else uguali.push({nome:n.nome,q:n.q,u:n.u});}
+          else rimastiA.push(v);
+        }
+        for(const [key,v] of mb)if(!ma.has(key))rimastiB.push(v);
+        const nomiResidui=new Set([...rimastiA,...rimastiB].map((v)=>v.nomeKey));
+        for(const nome of nomiResidui) {
+          const aa=rimastiA.filter((v)=>v.nomeKey===nome),bb=rimastiB.filter((v)=>v.nomeKey===nome);
+          if(aa.length===1 && bb.length===1)differenze.push({tipo:"unita",nome:bb[0].nome,prima:aa[0],dopo:bb[0]});
+          else {for(const v of aa)differenze.push({tipo:"rimosso",nome:v.nome,prima:v});for(const v of bb)differenze.push({tipo:"aggiunto",nome:v.nome,dopo:v});}
+        }
+        if(differenze.length){totali.pastiModificati++;for(const d of differenze)totali[d.tipo]++;}
+        pasti.push({pasto:nomeP,differenze,uguali});
+      }
+      risultati.push({data,pasti});
+    }
+    return {dal,al:piuGiorni(dal,giorni-1),persona,giorni:risultati,totali};
+  }
+
   return {
+    confrontaPiani,
     fabbisognoLight, righeLight, istanteLocale,
     PASTI, ORA, PRESENZA, GENERICHE, REGOLE, regola, fmtLitri,
     iso, daIso, piuGiorni, diffGiorni, nomeGiorno, etichettaData, GIORNI,

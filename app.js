@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 11";
+  const VERSIONE = "23.10.2026 · 12";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -2304,8 +2304,51 @@
   }
 
   function ridisegnaControlloPdf() {
+    const confronto=document.querySelector("#sheet .pdf-confronto");
+    if(confronto && confronto.tagName==="DETAILS" && S.sheet && S.sheet.d)S.sheet.d.confrontoAperto=confronto.open;
     const foglio=document.querySelector("#sheet .foglio"),scroll=foglio?foglio.scrollTop:0;
     renderFoglio();const nuovo=document.querySelector("#sheet .foglio");if(nuovo)nuovo.scrollTop=scroll;
+  }
+
+
+  function pianoDaConfrontarePdf(d,tipo) {
+    if(tipo==="importa")return window.ImportaPdf.unisci(d.letti.filter((x)=>x.id).map((x)=>({id:x.id,piano:x.piano})),d.inizio,"Anteprima importazione");
+    const r=window.ImportaPdf.rimappa(d.quattro,d.mappa);
+    return {inizio:d.inizio,lunedi:true,settimane:r.settimane,extra:r.extra};
+  }
+  function datiConfrontoPdf(d,tipo) {
+    const fonti=fontiControlloPdf(d,tipo),ids=fonti.map((x)=>x.persona).filter(Boolean);
+    if(!ids.length || !abbinamentiValidi(ids) || erroriDosiPdf(d,tipo).length)return {errore:"Completa gli abbinamenti e correggi i valori da verificare per confrontare i piani."};
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(d.inizio||"") || L.iso(L.daIso(d.inizio))!==d.inizio)return {errore:"Scegli una data di inizio valida per confrontare gli stessi giorni di calendario."};
+    const nuovo=pianoDaConfrontarePdf(d,tipo),scelta=d.confrontoPdf||{};
+    const profili=persone();
+    const attualeControllo=datiControlloPdf(d,tipo).fonte;
+    const preferito=attualeControllo && attualeControllo.persona || ids[0];
+    const persona=profili.some((p)=>p.id===scelta.persona)?scelta.persona:preferito;
+    const numeroSettimane=Math.max(1,nuovo.settimane.length),settimana=Math.min(numeroSettimane-1,Math.max(0,Number(scelta.settimana)||0));
+    const rep=L.confrontaPiani(S.piano,nuovo,persona,d.inizio,numeroSettimane*7);
+    const senzaDosi=profili.filter((p)=>{
+      const ha=(piano)=>{if(!piano)return false;for(let i=0;i<numeroSettimane*7;i++){const g=L.giornoPiano(piano,L.piuGiorni(d.inizio,i));if(g && g.pasti.some((m)=>(m.voci||[]).some((v)=>Number(L.dosi(v)[p.id])>0)))return true;}return false;};
+      return ha(S.piano) && !ha(nuovo);
+    });
+    return {nuovo,rep,persona,profili,settimana,numeroSettimane,soloDifferenze:scelta.soloDifferenze!==false,senzaDosi};
+  }
+  function testoValoreConfronto(v) { return v?String(Math.round(v.q*10000)/10000).replace(".",",")+" "+v.u:"—"; }
+  function confrontoPianiPdf(d,tipo) {
+    if(!S.piano)return '<section class="pdf-confronto"><h3>Primo piano alimentare</h3><p class="sotto">Non c’è un piano attuale da confrontare. Puoi verificare il documento nell’anteprima.</p></section>';
+    const c=datiConfrontoPdf(d,tipo);
+    if(c.errore)return '<p class="avviso blu">'+esc(c.errore)+'</p>';
+    const t=c.rep.totali,nomi={aggiunto:"Aggiunto",rimosso:"Rimosso",quantita:"Quantità cambiata",unita:"Unità cambiata",pasto:"Pasto cambiato",piatto:"Piatto cambiato"};
+    const giorni=c.rep.giorni.slice(c.settimana*7,(c.settimana+1)*7);
+    const visibili=giorni.filter((g)=>!c.soloDifferenze || g.pasti.some((p)=>p.differenze.length));
+    return `<details class="pdf-confronto" ${d.confrontoAperto?"open":""}><summary>Confronta con il piano attuale</summary><div class="pdf-confronto-corpo"><p class="sotto">Il confronto usa gli stessi giorni di calendario, dal ${esc(ddmm(c.rep.dal))} al ${esc(ddmm(c.rep.al))}, rispettando le rotazioni e i cambi già presenti nel piano attuale. I pasti salvati nello storico non vengono riscritti.</p>
+      <div class="due"><label class="campo">Persona<select id="pdf-confronto-persona" data-confronto-pdf="persona">${sel(c.persona,c.profili.map((p)=>[p.id,p.nome]))}</select></label><label class="campo">Settimana di confronto<select id="pdf-confronto-settimana" data-confronto-pdf="settimana">${sel(c.settimana,Array.from({length:c.numeroSettimane},(_,i)=>[i,ddmm(L.piuGiorni(d.inizio,i*7))+" – "+ddmm(L.piuGiorni(d.inizio,i*7+6))]))}</select></label></div>
+      <label class="preferenza-home"><input id="pdf-confronto-solo" type="checkbox" data-confronto-pdf="soloDifferenze" ${c.soloDifferenze?"checked":""}> Mostra solo i pasti con differenze</label>
+      <div class="pdf-identita"><b>${esc(nomeDi(c.persona))} · riepilogo della rotazione completa</b><span>${t.pastiModificati} pasti con differenze · ${t.quantita} variazioni di quantità · ${t.unita} variazioni di unità · ${t.aggiunto} alimenti aggiunti · ${t.rimosso} rimossi</span></div>
+      ${c.senzaDosi.length?`<p class="avviso giallo">Nel nuovo piano non ci sono dosi per ${esc(c.senzaDosi.map((p)=>p.nome).join(", "))}, presenti nel piano attuale. Controlla che tutti i PDF siano abbinati prima di confermare.</p>`:""}
+      ${d.modificaPdf?'<p class="avviso blu">Il confronto considera le correzioni già applicate. Applica o annulla la correzione in corso per aggiornarlo.</p>':""}
+      ${!visibili.length?'<p class="sotto">Nessuna differenza per questa persona nella settimana selezionata.</p>':visibili.map((g,i)=>`<details class="pdf-giorno-confronto" ${i===0?"open":""}><summary>${esc(dataLunga(g.data))}</summary>${g.pasti.filter((p)=>!c.soloDifferenze || p.differenze.length).map((p)=>`<section class="pdf-pasto"><h4>${esc(p.pasto)}</h4>${!p.differenze.length?'<p class="sotto">Invariato</p>':p.differenze.map((r)=>`<div class="pdf-differenza"><span class="pdf-tipo-diff">${esc(nomi[r.tipo])}</span><b>${esc(r.nome)}</b><div class="pdf-prima-dopo"><span><small>Attuale</small>${esc(r.primaTesto||testoValoreConfronto(r.prima))}</span><span><small>Nuovo</small>${esc(r.dopoTesto||testoValoreConfronto(r.dopo))}</span></div></div>`).join("")}${!c.soloDifferenze && p.uguali.length?`<p class="sotto">Invariati: ${p.uguali.map((v)=>esc(v.nome+" "+testoValoreConfronto(v))).join(" · ")}</p>`:""}</section>`).join("")}</details>`).join("")}
+      <p class="sotto">Unità diverse vengono mostrate affiancate, senza convertirle automaticamente. Il nuovo piano sarà applicato soltanto dopo la conferma dell’importazione.</p></div></details>`;
   }
 
   function foglioImporta() {
@@ -2321,6 +2364,7 @@
       ${d.avvisi.length ? `<div class="avviso giallo"><span><b>Avvisi della lettura originale:</b><br>${d.avvisi.map(esc).join("<br>")}</span></div>` : ""}
       ${riepilogoErroriPdf(d,"importa")}
       ${anteprimaCompletaPdf(d,"importa")}
+      ${confrontoPianiPdf(d,"importa")}
       ${d.letti.some((x) => !x.id) ? `<p class="avviso blu">I PDF non abbinati vengono conservati: potrai collegarli dopo aver aggiunto il familiare.</p>` : ""}
       <button class="btn largo" data-a="importa-conferma" ${doppi.length || !d.letti.some((x) => x.id) || d.modificaPdf || erroriDosiPdf(d,"importa").length ? "disabled" : ""}>Usa questa dieta</button>
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
@@ -2351,6 +2395,7 @@
       <div class="card" style="background:var(--bg)">${voci}</div>
       ${riepilogoErroriPdf(d,"importa4")}
       ${anteprimaCompletaPdf(d,"importa4")}
+      ${confrontoPianiPdf(d,"importa4")}
       ${d.alternative ? `<div class="avviso verde"><span>Collegato alle tabelle delle alternative della dietista: «Cambia pasto» funziona anche su questo piano.</span></div>` : `<div class="avviso giallo"><span>Senza le tabelle delle alternative «Cambia pasto» non compare. Per averlo scegli questo PDF insieme a quelli della dietista.</span></div>`}
       <button class="btn largo" data-a="importa4-conferma" ${(!d.mappa.A && !d.mappa.B) || !abbinamentiValidi([d.mappa.A,d.mappa.B]) || d.modificaPdf || erroriDosiPdf(d,"importa4").length ? "disabled" : ""}>Usa questo piano</button>
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
@@ -2995,6 +3040,12 @@
     if (el.dataset.abbinaPdf != null && S.sheet && S.sheet.tipo === "abbinaPdf") { S.sheet.d.documenti[Number(el.dataset.abbinaPdf)].id = el.value; return; }
     if (S.sheet && S.sheet.d && S.sheet.d.modificaPdf && ["pdf-edit-nome","pdf-edit-qty","pdf-edit-unita","pdf-edit-pasto"].includes(el.id)) {
       const campi={"pdf-edit-nome":"nome","pdf-edit-qty":"qty","pdf-edit-unita":"unita","pdf-edit-pasto":"pasto"};S.sheet.d.modificaPdf[campi[el.id]]=el.value;return;
+    }
+    if (el.dataset.confrontoPdf && S.sheet && ["importa","importa4"].includes(S.sheet.tipo)) {
+      const c=datiConfrontoPdf(S.sheet.d,S.sheet.tipo);if(c.errore)return;
+      const scelta={persona:c.persona,settimana:c.settimana,soloDifferenze:c.soloDifferenze};
+      scelta[el.dataset.confrontoPdf]=el.dataset.confrontoPdf==="soloDifferenze"?el.checked:el.dataset.confrontoPdf==="settimana"?Number(el.value):el.value;
+      S.sheet.d.confrontoPdf=scelta;S.sheet.d.confrontoAperto=true;ridisegnaControlloPdf();return;
     }
     if (el.dataset.controlloPdf && S.sheet && ["importa","importa4"].includes(S.sheet.tipo)) {
       if(S.sheet.d.modificaPdf){toast("Applica o annulla la correzione prima di cambiare giorno o persona");ridisegnaControlloPdf();return;}
