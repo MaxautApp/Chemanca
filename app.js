@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 9";
+  const VERSIONE = "23.10.2026 · 10";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -2057,7 +2057,7 @@
     const usati = new Set(docs.filter((x) => persone().some((p) => p.id === x.id)).map((x) => x.id));
     return docs.map((x) => {
       if (persone().some((p) => p.id === x.id)) return { ...x };
-      const id = window.ImportaPdf.abbina((x.intestato || "") + " " + (x.file || ""), persone().filter((p) => !usati.has(p.id)));
+      const id = window.ImportaPdf.abbinaPdf(x.intestato, x.file, persone().filter((p) => !usati.has(p.id)));
       if (id) usati.add(id);
       return { ...x, id: id || "" };
     });
@@ -2123,14 +2123,14 @@
         const p = window.ImportaPdf.leggiPersona(pagine);
         if (!p.giorni.some(Boolean)) { avvisi.push(f.name + ": nessuna pagina «Piano alimentare - giorno» trovata"); continue; }
         avvisi.push(...p.avvisi.map((a) => (p.persona || f.name) + ", " + a));
-        letti.push({ file: f.name, intestato: p.persona, piano: p, id: window.ImportaPdf.abbina(p.persona + " " + f.name, persone()) });
+        letti.push({ file: f.name, intestato: p.persona, piano: p, id: window.ImportaPdf.abbinaPdf(p.persona, f.name, persone()) });
       }
       nascondiToast();
       if (quattro) {
         // le tabelle delle alternative: dai PDF della dietista scelti insieme, o dalla dieta già caricata
         const alt = {};
         for (const x of letti) {
-          const id = window.ImportaPdf.abbina(x.intestato + " " + x.file, persone());
+          const id = window.ImportaPdf.abbinaPdf(x.intestato, x.file, persone());
           if (id && x.piano.alternative && Object.keys(x.piano.alternative).length) alt[id] = x.piano.alternative;
         }
         const salvato = pianoSalvato();

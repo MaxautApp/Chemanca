@@ -526,17 +526,30 @@
 
   /* di chi è il PDF: confronta il nome scritto in testa ("Valeria Pasquetti") con i nomi
      scelti nell'app ("Vale", "Max"). Restituisce l'id della persona o null. */
-  function abbina(testo, persone) {
-    const parole = String(testo || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z]+/).filter((w) => w.length >= 2);
-    let meglio = null, punti = 0, ambiguo = false;
-    for (const p of persone || []) {
-      const nomi = String(p.nome || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z]+/).filter((w) => w.length >= 2);
-      const punteggio = Math.max(0, ...nomi.flatMap((n) => parole.map((w) => w === n ? 3 : n.length >= 3 && (w.startsWith(n) || n.startsWith(w)) ? 2 : 0)));
-      if (punteggio > punti) { punti = punteggio; meglio = p.id; ambiguo = false; }
-      else if (punteggio > 0 && punteggio === punti) ambiguo = true;
-    }
-    return ambiguo ? null : meglio;
+  const SOPRANNOMI = {
+    max:["massimo","massimiliano"], vale:["valeria","valentina"],
+    ale:["alessandro","alessandra"], fede:["federico","federica"],
+    fra:["francesco","francesca"], bea:["beatrice"], ste:["stefano","stefania"]
+  };
+  function paroleNome(testo) { return String(testo||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").split(/[^a-z]+/).filter((w)=>w.length>=2); }
+  function equivalenzaNome(a,b) {
+    if(a===b)return 100;
+    if((SOPRANNOMI[a]||[]).includes(b)||(SOPRANNOMI[b]||[]).includes(a))return 80;
+    if(a.length>=3 && b.length>=3 && (a.startsWith(b)||b.startsWith(a)))return 30;
+    return 0;
   }
+  function abbina(testo,persone) {
+    const parole=paroleNome(testo);let meglio=null,punti=0,ambiguo=false;
+    for(const p of persone||[]) {
+      const nomi=paroleNome(p.nome);
+      const punteggio=nomi.reduce((somma,n)=>somma+Math.max(0,...parole.map((w)=>equivalenzaNome(n,w))),0);
+      if(punteggio>punti){punti=punteggio;meglio=p.id;ambiguo=false;}
+      else if(punteggio>0 && punteggio===punti)ambiguo=true;
+    }
+    return ambiguo?null:meglio;
+  }
+  // L'intestazione del documento ha precedenza sul nome del file.
+  function abbinaPdf(intestato,file,persone) { return abbina(intestato,persone)||abbina(file,persone); }
 
   /* unisce i piani delle persone di casa, pasto per pasto, nel formato dell'app:
      lista = [{ id, piano }] (piano = risultato di leggiPersona); ogni voce ha q = {id: quantità} */
@@ -591,5 +604,5 @@
     return righe.map((r) => r.trim()).filter(Boolean);
   }
 
-  return { leggiPersona, leggiAlternative, leggiPianoSettimane, rimappa, collegaAlternative, creaSettimana, caselle, opzioniCasella, applicaScelte, abbina, unisci, quantita, pulisciNome, righeDaPdfjs };
+  return { leggiPersona, leggiAlternative, leggiPianoSettimane, rimappa, collegaAlternative, creaSettimana, caselle, opzioniCasella, applicaScelte, abbina, abbinaPdf, unisci, quantita, pulisciNome, righeDaPdfjs };
 });
