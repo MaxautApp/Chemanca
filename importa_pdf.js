@@ -528,16 +528,14 @@
      scelti nell'app ("Vale", "Max"). Restituisce l'id della persona o null. */
   function abbina(testo, persone) {
     const parole = String(testo || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z]+/).filter((w) => w.length >= 2);
-    let meglio = null, punti = 0;
+    let meglio = null, punti = 0, ambiguo = false;
     for (const p of persone || []) {
-      const n = String(p.nome || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z]/g, "");
-      if (n.length < 2) continue;
-      for (const w of parole) {
-        const s = w === n ? 3 : w.startsWith(n) || n.startsWith(w) ? 2 : n.length >= 3 && w.slice(0, 3) === n.slice(0, 3) ? 1 : 0;
-        if (s > punti) { punti = s; meglio = p.id; }
-      }
+      const nomi = String(p.nome || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z]+/).filter((w) => w.length >= 2);
+      const punteggio = Math.max(0, ...nomi.flatMap((n) => parole.map((w) => w === n ? 3 : n.length >= 3 && (w.startsWith(n) || n.startsWith(w)) ? 2 : 0)));
+      if (punteggio > punti) { punti = punteggio; meglio = p.id; ambiguo = false; }
+      else if (punteggio > 0 && punteggio === punti) ambiguo = true;
     }
-    return meglio;
+    return ambiguo ? null : meglio;
   }
 
   /* unisce i piani delle persone di casa, pasto per pasto, nel formato dell'app:

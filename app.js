@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 1";
+  const VERSIONE = "23.10.2026 · 2";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -1281,6 +1281,7 @@
       </section>
 
       <section class="sezione-imp"><h2>Piano dieta</h2>
+        ${pianoSalvato() && pianoSalvato().fontiPdf ? `<button class="btn sec largo" data-a="pdf-abbina">Abbina i PDF alle persone</button><p>Puoi collegare una dieta già importata a un familiare aggiunto in seguito, senza ricaricare il PDF.</p>` : `<p>Per riassegnare PDF importati con la vecchia versione, ricaricali una volta: verranno conservati separatamente.</p>`}
         <p>${S.piano ? `In uso il piano dal <b>${esc(ddmm(S.piano.inizio))}/${esc(S.piano.inizio.slice(0, 4))}</b>: ${S.piano.settimane.length === 1 ? "1 settimana che si ripete" : S.piano.settimane.length + " settimane a rotazione"} · da <code>${esc(S.piano.fonte || "piano.json")}</code>` : "<b>Nessun piano in uso.</b> Finché non ne carichi uno l'app non segnala cosa manca."}</p>
         <label class="btn carica-pdf">${ico("piu", 22)}<span>Carica la dieta dal PDF<small>«Dieta a menu giornaliero» della dietista</small></span><input type="file" accept="application/pdf,.pdf" multiple data-file="pdf" class="sr"></label>
         <p style="font-size:13px">Scegli insieme i PDF di tutte le persone di casa: l'app legge ogni giorno, unisce le dosi e prende le tabelle delle alternative. Va bene anche uno solo.</p>
@@ -1585,7 +1586,7 @@
   function renderFoglio() {
     const el = $("#sheet");
     if (!S.sheet) { el.classList.remove("on"); el.innerHTML = ""; return; }
-    const fogli = { prodotto: foglioProdotto, rivedi: foglioRivedi, item: foglioItem, nuovoCat: foglioNuovoCat, mancanza: foglioMancanza, pasto: foglioPasto, importa: foglioImporta, importa4: foglioImporta4, alternativa: foglioAlternativa, cambia: foglioCambia, gruppoTap: foglioGruppoTap, nota: foglioNota, inverti: foglioInverti, fitness: foglioFitness, chi: foglioChi, gruppo: foglioGruppo, benvenuto: foglioBenvenuto };
+    const fogli = { prodotto: foglioProdotto, rivedi: foglioRivedi, item: foglioItem, nuovoCat: foglioNuovoCat, mancanza: foglioMancanza, pasto: foglioPasto, importa: foglioImporta, importa4: foglioImporta4, alternativa: foglioAlternativa, cambia: foglioCambia, gruppoTap: foglioGruppoTap, nota: foglioNota, inverti: foglioInverti, fitness: foglioFitness, chi: foglioChi, gruppo: foglioGruppo, benvenuto: foglioBenvenuto, abbinaPdf: foglioAbbinaPdf };
     // il benvenuto non si chiude toccando fuori: servono almeno i nomi
     const fissoP = S.sheet.tipo === "benvenuto" && S.sheet.d.passo < 3;
     el.innerHTML = `<div class="velo" ${fissoP ? "" : 'data-a="chiudi"'}></div><div class="foglio"><span class="maniglia" aria-hidden="true"></span>${fogli[S.sheet.tipo]()}</div>`;
@@ -1736,6 +1737,62 @@
       `</div><button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
   }
 
+
+  function abbinamentiValidi(ids) {
+    const scelti = ids.filter(Boolean);
+    return scelti.every((id) => persone().some((p) => p.id === id)) && new Set(scelti).size === scelti.length;
+  }
+  function documentiPdf(p) {
+    const f = p && p.fontiPdf;
+    if (!f) return [];
+    return f.tipo === "giornaliero" ? f.documenti : ["A", "B"].map((k, i) => ({ intestato: f.quattro.persone[i], file: f.quattro.file, id: f.mappa[k] || "" }));
+  }
+  function suggerisciAbbinamenti(docs) {
+    // Non cambia assegnazioni già valide; propone solo corrispondenze non ambigue.
+    const usati = new Set(docs.filter((x) => persone().some((p) => p.id === x.id)).map((x) => x.id));
+    return docs.map((x) => {
+      if (persone().some((p) => p.id === x.id)) return { ...x };
+      const id = window.ImportaPdf.abbina((x.intestato || "") + " " + (x.file || ""), persone().filter((p) => !usati.has(p.id)));
+      if (id) usati.add(id);
+      return { ...x, id: id || "" };
+    });
+  }
+  function foglioAbbinaPdf() {
+    const docs = S.sheet.d.documenti;
+    return `<h2>Abbina i PDF alle persone</h2><p class="sotto">Controlla il nome di ogni documento. I suggerimenti diventano effettivi solo quando salvi. Lo storico già archiviato resta invariato.</p>
+      ${docs.map((x, i) => `<label class="campo">${esc(x.intestato || "Dieta")}<small>${esc(x.file || "")}</small><select class="input" data-abbina-pdf="${i}">${sel(x.id || "", [["", "Da abbinare in seguito"], ...persone().map((p) => [p.id, p.nome])])}</select></label>`).join("")}
+      <button class="btn largo" data-a="pdf-abbina-salva">Salva gli abbinamenti</button><button class="link" data-a="chiudi">Annulla</button>`;
+  }
+  function ricostruisciPdf(base, documenti) {
+    const f = JSON.parse(JSON.stringify(base.fontiPdf));
+    let nuovo;
+    if (f.tipo === "giornaliero") {
+      f.documenti.forEach((x, i) => { x.id = documenti[i].id; });
+      nuovo = window.ImportaPdf.unisci(f.documenti.filter((x) => x.id).map((x) => ({ id: x.id, piano: x.piano })), base.inizio, base.fonte);
+    } else {
+      f.mappa = { A: documenti[0].id, B: documenti[1].id };
+      const r = window.ImportaPdf.rimappa(f.quattro, f.mappa);
+      nuovo = { settimane: r.settimane, extra: r.extra };
+      const alternative = {};
+      for (const k of ["A", "B"]) if (base.alternative && base.alternative[base.fontiPdf.mappa[k]] && f.mappa[k]) alternative[f.mappa[k]] = base.alternative[base.fontiPdf.mappa[k]];
+      nuovo.alternative = alternative;
+      if (Object.keys(alternative).length) window.ImportaPdf.collegaAlternative(nuovo.settimane, alternative);
+    }
+    return { ...base, ...nuovo, categorie: base.categorie || {}, fontiPdf: f };
+  }
+  async function salvaAbbinamentiPdf() {
+    const docs = S.sheet.d.documenti;
+    if (!docs.some((x) => x.id) || !abbinamentiValidi(docs.map((x) => x.id))) return toast("Scegli persone diverse per i PDF, oppure lasciali da abbinare");
+    const base = pianoSalvato();
+    if (Object.keys(base.cambi || {}).length || Object.keys(base.fissate || {}).length) return toast("Prima ripristina i pasti cambiati e le settimane alternative: così non perderai modifiche durante il nuovo abbinamento");
+    // Archivia il vecchio piano prima di aggiornare le assegnazioni, come nel cambio dieta.
+    if (S.piano) await storicoArretrato(S.piano, S.piano.inizio);
+    const nuovo = ricostruisciPdf(base, docs);
+    await A.scrivi("piano", [{ id: "attuale", dati: nuovo, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
+    inMemoria("piano", [{ id: "attuale", dati: nuovo }]);
+    chiudiFoglio(); dopoModifica(); toast("PDF collegati alle persone; storico precedente conservato");
+  }
+
   /* ---------------- nuova dieta dai PDF ---------------- */
   async function leggiPdfDieta(files) {
     toast("Leggo " + (files.length === 1 ? "il PDF" : "i PDF") + "…");
@@ -1781,11 +1838,11 @@
         return;
       }
       if (!letti.length) return toast("Non ho trovato una dieta nel PDF");
-      // chi non è stato riconosciuto dal nome va alla prima persona ancora libera
+      // Un documento non riconosciuto resta da abbinare: non attribuire dosi al familiare sbagliato.
+      const assegnati = new Set();
       for (const x of letti) {
-        if (x.id && letti.filter((y) => y.id === x.id).length === 1) continue;
-        const libera = persone().find((p) => !letti.some((y) => y !== x && y.id === p.id));
-        x.id = libera ? libera.id : (persone()[0] || {}).id;
+        if (!x.id || assegnati.has(x.id)) x.id = "";
+        else assegnati.add(x.id);
       }
       // di solito si parte dal lunedì: il prossimo, o oggi se è lunedì
       const d = L.daIso(oggi());
@@ -1799,7 +1856,7 @@
 
   function foglioImporta() {
     const d = S.sheet.d;
-    const anteprima = window.ImportaPdf.unisci(d.letti.map((x) => ({ id: x.id, piano: x.piano })), d.inizio, "PDF");
+    const anteprima = window.ImportaPdf.unisci(d.letti.filter((x) => x.id).map((x) => ({ id: x.id, piano: x.piano })), d.inizio, "PDF");
     const nomiG = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"];
     const descr = (p) => {
       if (!p) return "–";
@@ -1815,7 +1872,7 @@
     });
     const doppi = persone().filter((p) => d.letti.filter((x) => x.id === p.id).length > 1);
     const abbinamenti = d.letti.map((x, i) => `<div class="riga"><span class="testo"><span class="nome">${esc(x.intestato || "Dieta")}</span><span class="nota">${esc(x.file)}</span></span>
-      <label class="sr" for="pdf-chi-${i}">Di chi è</label><select class="input" id="pdf-chi-${i}" data-pdf-i="${i}" style="width:auto;height:44px;font-size:15px">${sel(x.id, persone().map((p) => [p.id, p.nome]))}</select></div>`).join("");
+      <label class="sr" for="pdf-chi-${i}">Di chi è</label><select class="input" id="pdf-chi-${i}" data-pdf-i="${i}" style="width:auto;height:44px;font-size:15px">${sel(x.id || "", [["", "Da abbinare in seguito"], ...persone().map((p) => [p.id, p.nome])])}</select></div>`).join("");
     return `<h2>Nuova dieta</h2>
       ${sceltaInizio(d)}
       <p class="sotto">Controlla di chi è ogni PDF. È una settimana che si ripete finché non carichi la prossima.</p>
@@ -1823,7 +1880,8 @@
       ${doppi.length ? `<div class="avviso giallo"><span>Due PDF sono assegnati a ${esc(doppi.map((p) => p.nome).join(", "))}: le dosi si sommerebbero.</span></div>` : ""}
       ${d.avvisi.length ? `<div class="avviso giallo"><span>${d.avvisi.map(esc).join("<br>")}</span></div>` : ""}
       <div class="card" style="background:var(--bg)">${righe}</div>
-      <button class="btn largo" data-a="importa-conferma">Usa questa dieta</button>
+      ${d.letti.some((x) => !x.id) ? `<p class="avviso blu">I PDF non abbinati vengono conservati: potrai collegarli dopo aver aggiunto il familiare.</p>` : ""}
+      <button class="btn largo" data-a="importa-conferma" ${doppi.length || !d.letti.some((x) => x.id) ? "disabled" : ""}>Usa questa dieta</button>
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
   }
 
@@ -1873,8 +1931,10 @@
     const d = S.sheet.d;
     if (!d.inizio) return toast("Scegli la data di inizio");
     if (!d.mappa.A && !d.mappa.B) return toast("Scegli di chi sono le quantità");
+    if (!abbinamentiValidi([d.mappa.A, d.mappa.B])) return toast("Le due colonne devono appartenere a persone diverse");
     const r = window.ImportaPdf.rimappa(d.quattro, d.mappa);
     const p = { inizio: d.inizio, lunedi: true, fonte: d.quattro.file, settimane: r.settimane, extra: r.extra, categorie: S.pianoFile ? S.pianoFile.categorie : {}, alternative: d.alternative || null, fissate: {} };
+    p.fontiPdf = { tipo: "settimane", quattro: JSON.parse(JSON.stringify(d.quattro)), mappa: { ...d.mappa } };
     if (p.alternative) window.ImportaPdf.collegaAlternative(p.settimane, p.alternative);
     if (S.piano && d.inizio > oggi()) p.prima = { ...S.piano, prima: undefined };
     if (S.piano) await storicoArretrato(S.piano, S.piano.inizio);
@@ -1889,7 +1949,10 @@
   async function confermaImport() {
     const d = S.sheet.d;
     if (!d.inizio) return toast("Scegli la data di inizio");
-    const p = window.ImportaPdf.unisci(d.letti.map((x) => ({ id: x.id, piano: x.piano })), d.inizio, "PDF del " + new Date().toLocaleDateString("it-IT"));
+    if (!d.letti.some((x) => x.id)) return toast("Abbina almeno un PDF a una persona");
+    if (!abbinamentiValidi(d.letti.map((x) => x.id))) return toast("Ogni persona può avere un solo PDF: correggi gli abbinamenti");
+    const p = window.ImportaPdf.unisci(d.letti.filter((x) => x.id).map((x) => ({ id: x.id, piano: x.piano })), d.inizio, "PDF del " + new Date().toLocaleDateString("it-IT"));
+    p.fontiPdf = { tipo: "giornaliero", documenti: JSON.parse(JSON.stringify(d.letti)) };
     if (S.pianoFile) p.categorie = S.pianoFile.categorie;
     // fino al giorno di inizio resta valido il piano di adesso
     if (S.piano && d.inizio > oggi()) p.prima = { ...S.piano, prima: undefined };
@@ -2346,9 +2409,13 @@
         if (S.chi === b.dataset.id) { S.chi = persone()[0].id; LS.set("ds_chi", S.chi); }
         dopoModifica(); break;
       }
+      case "pdf-abbina": apriFoglio({ tipo: "abbinaPdf", d: { documenti: suggerisciAbbinamenti(documentiPdf(pianoSalvato())) } }); break;
+      case "pdf-abbina-salva": await salvaAbbinamentiPdf(); break;
       case "persone-salva": {
         const lista = persone().map((p) => { const el = document.querySelector(`[data-persona="${p.id}"]`); return { ...p, nome: (el && el.value.trim()) || p.nome }; });
-        await salvaPersone(lista); render(); toast("Nomi salvati"); break;
+        await salvaPersone(lista); dopoModifica();
+        if (pianoSalvato() && pianoSalvato().fontiPdf) apriFoglio({ tipo: "abbinaPdf", d: { documenti: suggerisciAbbinamenti(documentiPdf(pianoSalvato())) } });
+        else toast("Nomi salvati"); break;
       }
       case "salva-sb":
         LS.set("ds_sb_url", $("#sb-url").value.trim()); LS.set("ds_sb_anon", $("#sb-anon").value.trim());
@@ -2431,6 +2498,7 @@
       if (el.dataset.f !== "tipo") renderFoglio();
       return;
     }
+    if (el.dataset.abbinaPdf != null && S.sheet && S.sheet.tipo === "abbinaPdf") { S.sheet.d.documenti[Number(el.dataset.abbinaPdf)].id = el.value; return; }
     if (el.dataset.q4 && S.sheet && S.sheet.tipo === "importa4") { S.sheet.d.mappa[el.dataset.q4] = el.value; renderFoglio(); return; }
     if (el.dataset.pdfI != null && S.sheet && S.sheet.tipo === "importa") { S.sheet.d.letti[Number(el.dataset.pdfI)].id = el.value; renderFoglio(); return; }
     if (el.dataset.f && S.sheet && S.sheet.d) {
