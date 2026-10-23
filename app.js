@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 18";
+  const VERSIONE = "23.10.2026 · 19";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -19,10 +19,19 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* memoria piena o privata */ } },
     del(k) { try { localStorage.removeItem(k); } catch { /* */ } },
   };
+  const temaScuro = () => LS.get("ds_tema", "chiaro") === "scuro";
+  function applicaTema() {
+    const scuro=temaScuro();
+    if(document.documentElement)document.documentElement.dataset.tema=scuro?"scuro":"chiaro";
+    document.querySelector('meta[name="theme-color"]')?.setAttribute?.("content",scuro?"#000000":"#F3F5F1");
+  }
+  applicaTema();
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   const ddmm = (s) => s ? s.slice(8, 10) + "/" + s.slice(5, 7) : "";
 
   const ICONE = {
+    sole: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/>',
+    luna: '<path d="M20.5 14A8.8 8.8 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z"/>',
     casa: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
     frigo: '<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M5 10h14"/><path d="M9 5v2"/><path d="M9 13v3"/>',
     dispensa: '<path d="M3 9h18v12H3z"/><path d="M3 9l2-5h14l2 5"/><path d="M10 13h4"/>',
@@ -242,7 +251,8 @@
   }
   function coloreDi(id) {
     const i = persone().findIndex((x) => x.id === id);
-    return COLORI_PERSONE[(i < 0 ? 0 : i) % COLORI_PERSONE.length];
+    const n=(i < 0 ? 0 : i) % COLORI_PERSONE.length;
+    return `var(--persona-${n}, ${COLORI_PERSONE[n]})`;
   }
   async function salvaPersone(lista) {
     await salva("piano", [{ id: "persone", dati: lista, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
@@ -549,7 +559,7 @@
         h += `<div class="titolo-sez"><h2>Oggi si mangia</h2><button class="link" data-a="vai" data-tab="piano">Piano →</button></div><div class="due">`;
         for (const p of restanti) {
           const buchi = c.mancanze.filter((m) => m.pasti.some((x) => x.data === oggi() && x.pasto === p.pasto));
-          h += `<button data-a="vai" data-tab="piano" style="background:#fff;border:0;border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:4px;text-align:left">
+          h += `<button data-a="vai" data-tab="piano" style="background:var(--card);border:0;border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:4px;text-align:left">
             <span style="font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">${esc(p.pasto)}</span>
             <span style="font-size:14px;font-weight:700;line-height:1.3">${esc(descrPasto(p))}</span>
             <span style="font-size:13px;font-weight:700;color:${buchi.length ? "var(--red)" : "var(--green)"}">${buchi.length ? "Manca: " + esc(buchi.map((b) => b.voce).join(", ")) : "Tutto in casa"}</span>
@@ -1200,8 +1210,8 @@
     const passo = [1, 2, 5, 10].map((m) => m * p10).find((x) => x >= grezzo);
     let g = "";
     for (let v = Math.ceil(lo / passo) * passo; v <= hi + 1e-9; v += passo) {
-      g += `<line x1="${sx}" x2="${W - dx}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="#E3E8E2" stroke-width="1"/>`;
-      g += `<text x="${sx - 6}" y="${(Y(v) + 3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="#55605A">${L.fmtNum(v)}</text>`;
+      g += `<line x1="${sx}" x2="${W - dx}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`;
+      g += `<text x="${sx - 6}" y="${(Y(v) + 3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--muted)">${L.fmtNum(v)}</text>`;
     }
     const pts = lista.map((x, i) => [X(tempi[i]), Y(kg[i])]);
     const linea = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
@@ -1211,10 +1221,10 @@
       ${g}
       <path d="${area}" fill="${colore}" fill-opacity="0.12"/>
       <path d="${linea}" fill="none" stroke="${colore}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-      ${pts.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${i === pts.length - 1 ? 5 : 3.5}" fill="${colore}" stroke="#fff" stroke-width="1.5"/>`).join("")}
-      <text x="${Math.min(ult[0], W - dx - 4).toFixed(1)}" y="${(ult[1] - 10).toFixed(1)}" text-anchor="end" font-size="12" font-weight="800" fill="#16201A">${L.fmtNum(kg[kg.length - 1])} kg</text>
-      <text x="${pts[0][0].toFixed(1)}" y="${H - 8}" text-anchor="start" font-size="10" fill="#55605A">${ddmm(lista[0].data)}</text>
-      <text x="${(W - dx).toFixed(1)}" y="${H - 8}" text-anchor="end" font-size="10" fill="#55605A">${ddmm(lista[lista.length - 1].data)}</text>
+      ${pts.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${i === pts.length - 1 ? 5 : 3.5}" fill="${colore}" stroke="var(--card)" stroke-width="1.5"/>`).join("")}
+      <text x="${Math.min(ult[0], W - dx - 4).toFixed(1)}" y="${(ult[1] - 10).toFixed(1)}" text-anchor="end" font-size="12" font-weight="800" fill="var(--ink)">${L.fmtNum(kg[kg.length - 1])} kg</text>
+      <text x="${pts[0][0].toFixed(1)}" y="${H - 8}" text-anchor="start" font-size="10" fill="var(--muted)">${ddmm(lista[0].data)}</text>
+      <text x="${(W - dx).toFixed(1)}" y="${H - 8}" text-anchor="end" font-size="10" fill="var(--muted)">${ddmm(lista[lista.length - 1].data)}</text>
     </svg>`;
   }
 
@@ -1524,6 +1534,12 @@
         <p>${light() ? "<b>Light</b>: Piano, Spesa, Peso e storico, con Cambia pasto, Inverti pasti e Fitness. Spesa per 24 ore oppure periodi di 3, 7 o 14 giorni, con Comprato e Ce l’ho già, senza inventario." : "<b>PRO</b>: tutto, anche frigo e dispensa, codice a barre e cosa manca giorno per giorno."}</p>
       </section>
 
+      <section class="sezione-imp"><h2>Aspetto</h2>
+        <div class="segmenti scelta-tema" role="group" aria-label="Aspetto dell’app">
+          <button data-a="tema" data-v="chiaro" aria-pressed="${!temaScuro()}">${ico("sole",20)} Chiara</button>
+          <button data-a="tema" data-v="scuro" aria-pressed="${temaScuro()}">${ico("luna",20)} Scura</button>
+        </div><p>La scelta viene ricordata su questo dispositivo per Light e PRO.</p>
+      </section>
       <section class="sezione-imp"><h2>Chi usa questo telefono</h2>
         <div class="segmenti">${persone().map((p) => `<button aria-pressed="${S.chi === p.id}" data-a="chi" data-v="${esc(p.id)}">${esc(p.nome)}</button>`).join("")}</div>
       </section>
@@ -3003,6 +3019,10 @@
       case "storico-giorni": S.storicoIntervallo=null; S.storicoGiorni = Number(b.dataset.v); render(); break;
       case "report-stampa": stampaReport(); break;
       case "report-testo": await esportaTesto(); break;
+      case "tema": {
+        if(!["chiaro","scuro"].includes(b.dataset.v))break;
+        LS.set("ds_tema",b.dataset.v);applicaTema();render();break;
+      }
       case "modo":
         LS.set("ds_modo", b.dataset.v);
         fermaScanner();

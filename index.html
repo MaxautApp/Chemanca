@@ -12,6 +12,14 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    // Applica la preferenza prima del primo disegno, evitando il lampo chiaro.
+    try {
+      const scuro=JSON.parse(localStorage.getItem("ds_tema"))==="scuro";
+      document.documentElement.dataset.tema=scuro?"scuro":"chiaro";
+      document.querySelector('meta[name="theme-color"]').setAttribute("content",scuro?"#000000":"#F3F5F1");
+    } catch { document.documentElement.dataset.tema="chiaro"; }
+  </script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
