@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 8";
+  const VERSIONE = "23.10.2026 · 9";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -2159,22 +2159,56 @@
     }
   }
 
+
+  // Anteprima dai dati di ciascun documento: non somma le dosi fra familiari.
+  function fontiControlloPdf(d, tipo) {
+    if(tipo === "importa") return d.letti.map((x,i)=>({key:"pdf:"+i,nome:x.intestato||x.piano.persona||x.file,file:x.file,persona:x.id||"",settimane:[x.piano.giorni],extra:[],avvisi:x.piano.avvisi||[]}));
+    return ["A","B"].map((k,i)=>({key:k,nome:d.quattro.persone[i]||("Colonna "+k),file:d.quattro.file,persona:d.mappa[k]||"",settimane:d.quattro.settimane,extra:d.quattro.extra||[],colonna:k,avvisi:[]}));
+  }
+  function datiControlloPdf(d,tipo) {
+    const fonti=fontiControlloPdf(d,tipo);
+    const scelta=d.controlloPdf || {documento:fonti[0] && fonti[0].key,giorno:0,settimana:0};
+    const fonte=fonti.find((x)=>x.key===scelta.documento)||fonti[0];
+    if(!fonte)return {fonti,fonte:null,pasti:[]};
+    const settimana=Math.max(0,Math.min(Number(scelta.settimana)||0,fonte.settimane.length-1));
+    const giorno=Math.max(0,Math.min(Number(scelta.giorno)||0,6));
+    const originali=fonte.settimane[settimana] && fonte.settimane[settimana][giorno];
+    const pasti=(originali||[]).map((p)=>({...p,voci:(p.voci||[]).filter((v)=>!fonte.colonna || v.q && Object.prototype.hasOwnProperty.call(v.q,fonte.colonna) && v.q[fonte.colonna] !== 0).map((v)=>({...v,q:fonte.colonna?v.q[fonte.colonna]:v.q}))}));
+    const extra=fonte.extra.filter((v)=>!fonte.colonna || v.q && Object.prototype.hasOwnProperty.call(v.q,fonte.colonna) && v.q[fonte.colonna] !== 0).map((v)=>({...v,q:fonte.colonna?v.q[fonte.colonna]:v.q}));
+    if(extra.length)pasti.push({pasto:"Fuori pasto",piatti:["Indicazioni quotidiane"],voci:extra});
+    const controlli=[];
+    if(!originali || !originali.length)controlli.push("Nessun pasto riconosciuto per questo giorno: controlla il PDF originale.");
+    for(const p of pasti) {
+      if(!p.libero && !p.voci.length)controlli.push(p.pasto+": nessun alimento attribuito a questa persona; verifica il documento.");
+      for(const v of p.voci) if(!dosePdfValida(v.q) || typeof v.u!=="string" || !v.u.trim())controlli.push(p.pasto+", "+v.nome+": quantità o unità da verificare sul PDF.");
+    }
+    return {fonti,fonte,settimana,giorno,pasti,controlli};
+  }
+  function dosePdfValida(q) { return typeof q==="number" && Number.isFinite(q) && q>0; }
+  function dosePdfTesto(v) {
+    if(!dosePdfValida(v.q))return "Dose da verificare";
+    return String(v.q).replace(".",",")+" "+(typeof v.u==="string" && v.u.trim()?v.u:"(unità mancante)");
+  }
+  function anteprimaCompletaPdf(d,tipo) {
+    const a=datiControlloPdf(d,tipo);if(!a.fonte)return '<p class="avviso giallo">Nessun documento da controllare.</p>';
+    const giorni=["Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato","Domenica"];
+    const persona=a.fonte.persona?nomeDi(a.fonte.persona):"Da abbinare in seguito";
+    return `<section class="pdf-controllo" aria-label="Anteprima completa del piano"><h3>Controlla il piano prima di salvarlo</h3><p class="sotto">Sfoglia ogni giorno e persona. Le quantità sono quelle lette dal documento, senza conversioni o somme fra familiari.</p>
+      <label class="campo">Documento / persona<select id="pdf-anteprima-documento" data-controllo-pdf="documento">${sel(a.fonte.key,a.fonti.map((x)=>[x.key,(x.nome||"Dieta")+" → "+(x.persona?nomeDi(x.persona):"Da abbinare")]))}</select></label>
+      <div class="due">${a.fonte.settimane.length>1?`<label class="campo">Settimana<select id="pdf-anteprima-settimana" data-controllo-pdf="settimana">${sel(a.settimana,a.fonte.settimane.map((_,i)=>[i,"Settimana "+(i+1)]))}</select></label>`:""}<label class="campo">Giorno<select id="pdf-anteprima-giorno" data-controllo-pdf="giorno">${sel(a.giorno,giorni.map((n,i)=>[i,n]))}</select></label></div>
+      <div class="pdf-identita"><b>${esc(persona)}</b><span>Intestazione PDF: ${esc(a.fonte.nome||"non riconosciuta")}</span><span>${esc(a.fonte.file||"Documento importato")}</span><span>Inizio dieta: ${esc(d.inizio||"da scegliere")} · ${esc(giorni[a.giorno])}${a.fonte.settimane.length>1?" · settimana "+(a.settimana+1):""}</span></div>
+      ${!a.fonte.persona?'<p class="avviso giallo">Questo documento non è ancora abbinato. Puoi controllarlo, ma non verrà aggiunto alle dosi di altri familiari.</p>':""}
+      ${a.controlli.length?`<div class="avviso giallo"><ul>${a.controlli.map((x)=>`<li>${esc(x)}</li>`).join("")}</ul></div>`:""}
+      ${a.pasti.map((p)=>`<section class="pdf-pasto"><h4>${esc(p.pasto)}</h4>${p.piatti && p.piatti.length?`<p class="pdf-piatto">${esc(p.piatti.join(" · "))}</p>`:""}${p.libero?'<p class="pill grigio">Pasto libero</p>':""}${p.voci.length?`<table class="pdf-dosi"><caption class="sr">Alimenti e dosi di ${esc(p.pasto)} per ${esc(persona)}</caption><thead><tr><th scope="col">Alimento</th><th scope="col">Quantità</th></tr></thead><tbody>${p.voci.map((v)=>`<tr><td>${esc(v.nome||"Alimento non riconosciuto")}</td><td class="${dosePdfValida(v.q)&&v.u?"":"pdf-da-verificare"}">${esc(dosePdfTesto(v))}</td></tr>`).join("")}</tbody></table>`:!p.libero?'<p class="sotto">Nessun alimento riconosciuto per questa persona.</p>':""}</section>`).join("")}
+      <p class="sotto">L'anteprima non modifica il piano attuale. I dati vengono applicati soltanto con il pulsante di conferma.</p></section>`;
+  }
+  function ridisegnaControlloPdf() {
+    const foglio=document.querySelector("#sheet .foglio"),scroll=foglio?foglio.scrollTop:0;
+    renderFoglio();const nuovo=document.querySelector("#sheet .foglio");if(nuovo)nuovo.scrollTop=scroll;
+  }
+
   function foglioImporta() {
     const d = S.sheet.d;
-    const anteprima = window.ImportaPdf.unisci(d.letti.filter((x) => x.id).map((x) => ({ id: x.id, piano: x.piano })), d.inizio, "PDF");
-    const nomiG = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"];
-    const descr = (p) => {
-      if (!p) return "–";
-      if (p.libero) return "pasto libero";
-      if (p.piatti[0]) return p.piatti[0];
-      const v = p.voci.find((x) => !L.GENERICHE.has(x.nome) && !/^pane/i.test(x.nome) && !L.PRESENZA.has(x.u)) || p.voci[0];
-      return v ? v.nome : "–";
-    };
-    let righe = "";
-    anteprima.settimane[0].forEach((pasti, g) => {
-      const n = pasti.reduce((s, p) => s + p.voci.length, 0);
-      righe += `<div class="riga"><span class="testo"><span class="nome">${nomiG[g]}</span><span class="nota">Pranzo: ${esc(descr(pasti.find((p) => p.pasto === "Pranzo")))} · Cena: ${esc(descr(pasti.find((p) => p.pasto === "Cena")))}</span></span><span class="q" style="font-size:13px;color:var(--muted)">${n} alimenti</span></div>`;
-    });
     const doppi = persone().filter((p) => d.letti.filter((x) => x.id === p.id).length > 1);
     const abbinamenti = d.letti.map((x, i) => `<div class="riga"><span class="testo"><span class="nome">${esc(x.intestato || "Dieta")}</span><span class="nota">${esc(x.file)}</span></span>
       <label class="sr" for="pdf-chi-${i}">Di chi è</label><select class="input" id="pdf-chi-${i}" data-pdf-i="${i}" style="width:auto;height:44px;font-size:15px">${sel(x.id || "", [["", "Da abbinare in seguito"], ...persone().map((p) => [p.id, p.nome])])}</select></div>`).join("");
@@ -2184,7 +2218,7 @@
       <div class="card" style="background:var(--bg)">${abbinamenti}</div>
       ${doppi.length ? `<div class="avviso giallo"><span>Due PDF sono assegnati a ${esc(doppi.map((p) => p.nome).join(", "))}: le dosi si sommerebbero.</span></div>` : ""}
       ${d.avvisi.length ? `<div class="avviso giallo"><span>${d.avvisi.map(esc).join("<br>")}</span></div>` : ""}
-      <div class="card" style="background:var(--bg)">${righe}</div>
+      ${anteprimaCompletaPdf(d,"importa")}
       ${d.letti.some((x) => !x.id) ? `<p class="avviso blu">I PDF non abbinati vengono conservati: potrai collegarli dopo aver aggiunto il familiare.</p>` : ""}
       <button class="btn largo" data-a="importa-conferma" ${doppi.length || !d.letti.some((x) => x.id) ? "disabled" : ""}>Usa questa dieta</button>
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
@@ -2206,19 +2240,6 @@
   function foglioImporta4() {
     const d = S.sheet.d;
     const q = d.quattro;
-    const nomiG = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
-    const descr = (p) => {
-      if (!p) return "–";
-      if (p.libero) return "pasto libero";
-      if (p.piatti[0]) return p.piatti[0];
-      const v = p.voci.find((x) => !L.GENERICHE.has(x.nome) && !/^pane/i.test(x.nome) && !L.PRESENZA.has(x.u)) || p.voci[0];
-      return v ? v.nome : "–";
-    };
-    const settimane = q.settimane.map((s, i) => {
-      const n = s.reduce((t, g) => t + g.reduce((u, p) => u + p.voci.length, 0), 0);
-      const esempio = s.slice(0, 3).map((g, k) => `${nomiG[k]}: ${descr(g.find((p) => p.pasto === "Pranzo"))}`).join(" · ");
-      return `<div class="riga"><span class="testo"><span class="nome">Settimana ${i + 1}</span><span class="nota">${esc(esempio)}…</span></span><span class="q" style="font-size:13px;color:var(--muted)">${n} alimenti</span></div>`;
-    }).join("");
     const opz = persone().map((p) => [p.id, p.nome]);
     const voci = q.persone.map((nome, i) => `<div class="riga"><span class="testo"><span class="nome">${i === 0 ? "Prima" : "Seconda"} quantità · ${esc(nome)}</span><span class="nota">${i === 0 ? "il valore a sinistra o con la M" : "il valore a destra o con la V"}</span></span>
       <label class="sr" for="q4-${i}">Di chi è</label><select class="input" id="q4-${i}" data-q4="${i === 0 ? "A" : "B"}" style="width:auto;height:44px;font-size:15px">${sel(d.mappa[i === 0 ? "A" : "B"] || "", [["", "Nessuno"], ...opz])}</select></div>`).join("");
@@ -2226,9 +2247,9 @@
       ${sceltaInizio(d)}
       <p class="sotto">Letto da ${esc(q.file)}. Le settimane si alternano una dopo l'altra, poi si ricomincia dalla prima.</p>
       <div class="card" style="background:var(--bg)">${voci}</div>
-      <div class="card" style="background:var(--bg)">${settimane}</div>
+      ${anteprimaCompletaPdf(d,"importa4")}
       ${d.alternative ? `<div class="avviso verde"><span>Collegato alle tabelle delle alternative della dietista: «Cambia pasto» funziona anche su questo piano.</span></div>` : `<div class="avviso giallo"><span>Senza le tabelle delle alternative «Cambia pasto» non compare. Per averlo scegli questo PDF insieme a quelli della dietista.</span></div>`}
-      <button class="btn largo" data-a="importa4-conferma">Usa questo piano</button>
+      <button class="btn largo" data-a="importa4-conferma" ${(!d.mappa.A && !d.mappa.B) || !abbinamentiValidi([d.mappa.A,d.mappa.B]) ? "disabled" : ""}>Usa questo piano</button>
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
   }
 
@@ -2854,8 +2875,14 @@
       return;
     }
     if (el.dataset.abbinaPdf != null && S.sheet && S.sheet.tipo === "abbinaPdf") { S.sheet.d.documenti[Number(el.dataset.abbinaPdf)].id = el.value; return; }
-    if (el.dataset.q4 && S.sheet && S.sheet.tipo === "importa4") { S.sheet.d.mappa[el.dataset.q4] = el.value; renderFoglio(); return; }
-    if (el.dataset.pdfI != null && S.sheet && S.sheet.tipo === "importa") { S.sheet.d.letti[Number(el.dataset.pdfI)].id = el.value; renderFoglio(); return; }
+    if (el.dataset.controlloPdf && S.sheet && ["importa","importa4"].includes(S.sheet.tipo)) {
+      const a=datiControlloPdf(S.sheet.d,S.sheet.tipo);
+      const c={documento:a.fonte.key,giorno:a.giorno,settimana:a.settimana};
+      c[el.dataset.controlloPdf]=el.dataset.controlloPdf==="documento"?el.value:Number(el.value);
+      S.sheet.d.controlloPdf=c;ridisegnaControlloPdf();return;
+    }
+    if (el.dataset.q4 && S.sheet && S.sheet.tipo === "importa4") { S.sheet.d.mappa[el.dataset.q4] = el.value; ridisegnaControlloPdf(); return; }
+    if (el.dataset.pdfI != null && S.sheet && S.sheet.tipo === "importa") { S.sheet.d.letti[Number(el.dataset.pdfI)].id = el.value; ridisegnaControlloPdf(); return; }
     if (el.dataset.f && S.sheet && S.sheet.d) {
       S.sheet.d[el.dataset.f] = el.value;
       if (el.dataset.f === "inizio" && (S.sheet.tipo === "importa" || S.sheet.tipo === "importa4") && /^\d{4}-\d{2}-\d{2}$/.test(el.value)) { renderFoglio(); return; }
