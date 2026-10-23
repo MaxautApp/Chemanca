@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "22.10.2026 · 3";
+  const VERSIONE = "23.10.2026 · 1";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -346,41 +346,16 @@
   }
 
   /* ---------------- i giorni passati si chiudono da soli ----------------
-     All'apertura i pasti dei giorni prima di oggi si danno per fatti: le dosi escono da
-     frigo e dispensa senza chiedere niente. Si parte dal giorno del primo avvio (niente
-     storia arretrata) e al massimo da una settimana fa. Con due telefoni il pasto lo chiude
-     chi lo registra per primo: l'altro trova la riga e non scala due volte. */
+     I pasti passati vengono conservati come previsti dal piano, non confermati.
+     Nessun consumo automatico delle scorte; le registrazioni già presenti restano intatte. */
   let chiudendo = false;
   async function chiudiGiorniPassati() {
     if (chiudendo || !S.piano) return;
     chiudendo = true;
     try {
-      const dalGiorno = LS.get("ds_auto_da", null);
-      if (!dalGiorno) { LS.set("ds_auto_da", oggi()); return; }
-      const settimanaFa = L.piuGiorni(oggi(), -7);
-      let d = dalGiorno < settimanaFa ? settimanaFa : dalGiorno;
-      const stati = statiPasti();
-      let chiusi = 0;
-      for (; d < oggi(); d = L.piuGiorni(d, 1)) {
-        const g = L.giornoPiano(S.piano, d);
-        if (!g) continue;
-        for (const p of g.pasti) {
-          const k = L.chiavePasto(d, p.pasto);
-          if (stati[k]) continue;
-          const mosse = p.libero ? [] : L.consumaPasto(S.db.inventario, p, null);
-          const prima = mosse.map((m) => ({ ...S.db.inventario.find((i) => i.id === m.id) }));
-          const riga = { id: k, data: d, pasto: p.pasto, stato: "auto", chi: "", quando: new Date().toISOString(), scalato: prima, contenuto: fotoPasto(p) };
-          if (!(await A.nuovo("pasti", riga))) continue;
-          inMemoria("pasti", [riga]);
-          for (const m of mosse) {
-            if (m.qty <= 0) await elimina("inventario", m.id);
-            else await modifica("inventario", m.id, { qty: m.qty });
-          }
-          chiusi++;
-        }
-      }
-      LS.set("ds_auto_da", oggi());
-      if (chiusi) toast(`Pasti dei giorni scorsi segnati come fatti (${chiusi})`);
+      // Recupera tutto il periodo, anche se la dieta è iniziata prima del caricamento.
+      // I pasti presunti alimentano lo storico, senza consumare le scorte attuali.
+      await storicoArretrato(S.piano, S.piano.inizio);
     } catch (e) {
       console.error(e);
     } finally { chiudendo = false; }
@@ -787,7 +762,7 @@
       const buchi = new Map(mancanze.flatMap((m) => m.pasti.filter((x) => x.data === sel && x.pasto === p.pasto).map(() => [m.voce, m.tipo])));
       const etich = p.spostato ? `Spostato da ${esc(L.etichettaData(p.spostato.split("|")[0]))} · ${esc(p.spostato.split("|")[1].toLowerCase())}` : "Cambiato";
       h += `<section class="pasto"><div class="testa"><h2>${esc(p.pasto)}${p.cambiato ? ` <span class="pill cambiato">${etich}</span>` : ""}</h2>`;
-      if (st) h += `<span class="pill ${st.stato === "saltato" ? "grigio" : "ok"}">${esc(st.stato === "saltato" ? "Saltato" : st.stato === "fatto" || st.stato === "auto" ? "Fatto" : "Solo " + nomeDi(st.stato.replace(/^solo:/, "")))}</span>`;
+      if (st && st.stato !== "auto") h += `<span class="pill ${st.stato === "saltato" ? "grigio" : "ok"}">${esc(st.stato === "saltato" ? "Saltato" : st.stato === "fatto" || st.stato === "auto" ? "Fatto" : "Solo " + nomeDi(st.stato.replace(/^solo:/, "")))}</span>`;
       else if (buchi.size && !light()) h += `<span style="font-size:12px;font-weight:800;color:var(--red)">${buchi.size === 1 ? "1 ingrediente manca" : buchi.size + " mancano"}</span>`;
       h += `<button class="icona-btn matita" data-a="nota-apri" data-k="${esc(k)}" aria-label="Scrivi cosa hai mangiato a ${esc(p.pasto.toLowerCase())}">${ico("matita", 18)}</button></div>`;
       const nota = notaDi(k);
@@ -813,7 +788,7 @@
       }
       const azioni = [];
       if (sel <= oggi()) {
-        azioni.push(st
+        azioni.push(st && st.stato !== "auto"
           ? `<button class="btn piccolo sec" data-a="pasto-annulla" data-k="${esc(k)}">Annulla «${esc(st.stato === "saltato" ? "saltato" : "fatto")}»</button>`
           : `<button class="btn piccolo" data-a="pasto" data-k="${esc(k)}" data-stato="fatto">Fatto</button><button class="btn piccolo sec" data-a="pasto-altro" data-k="${esc(k)}">Altro</button>`);
       }
@@ -897,17 +872,27 @@
   }
 
   /* ---------------- la matita: cosa ho mangiato davvero ---------------- */
+  const NOTA_STORICO = "I pasti senza modifiche riportano quanto previsto dal piano alimentare. I pasti non confermati non attestano il consumo effettivo; puoi correggerli anche nei giorni successivi.";
+  // Per i giorni archiviati usa sempre il contenuto salvato, anche dopo un cambio dieta.
+  function pastoArchiviato(k) {
+    const r = S.db.pasti.find((x) => x.id === k);
+    if (r && r.contenuto) return r.contenuto;
+    const [data, nome] = k.split("|");
+    const g = S.piano && L.giornoPiano(S.piano, data);
+    return g && g.pasti.find((p) => p.pasto === nome);
+  }
   function notaDi(k) { return S.db.note.find((n) => n.id === k && n.testo); }
   function foglioNota() {
     const d = S.sheet.d;
     const [data, pasto] = d.k.split("|");
-    const g = L.giornoPiano(S.piano, data);
-    const p = g && g.pasti.find((x) => x.pasto === pasto);
+    const p = pastoArchiviato(d.k);
+    const registrato = S.db.pasti.find((r) => r.id === d.k);
     const nota = notaDi(d.k);
     return `<h2>${esc(pasto)} di ${esc(L.nomeGiorno(data, oggi()))}</h2>
       <p class="sotto">${p && p.libero ? "Pasto libero: scrivi cosa avete mangiato, la dietista lo vedrà nello storico." : "Scrivi cosa avete mangiato di diverso o in più rispetto al piano. Resta nello storico e nel report per la dietista."}</p>
       <label class="campo">Cosa ho mangiato<textarea id="nota-testo" rows="5" class="input area" placeholder="${p && p.libero ? "Es. pizza margherita e insalata; Vale: sushi" : "Es. aggiunto un frutto; al posto della pasta 2 fette di pane"}">${esc(nota ? nota.testo : "")}</textarea></label>
       <button class="btn largo" data-a="nota-salva">Salva</button>
+      ${data < oggi() ? `<button class="btn sec largo" data-a="storico-stato" data-k="${esc(d.k)}" data-stato="${registrato && registrato.stato === "saltato" ? "auto" : "saltato"}">${registrato && registrato.stato === "saltato" ? "Ripristina il pasto previsto" : "Segna come saltato"}</button>` : ""}
       ${nota ? `<button class="btn rosso largo" data-a="nota-togli">Cancella la nota</button>` : ""}
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
   }
@@ -1113,7 +1098,8 @@
   }
   function statoTesto(st) {
     if (st === "saltato") return "saltato";
-    if (st === "fatto" || st === "auto") return "fatto";
+    if (st === "auto") return "da piano";
+    if (st === "fatto") return "confermato";
     return "solo " + nomeDi(st.replace(/^solo:/, ""));
   }
 
@@ -1144,6 +1130,7 @@
       if (!giorno) { giorno = { data: r.data, pasti: [] }; giorni.push(giorno); }
       const nota = notaDi(r.id);
       giorno.pasti.push({
+        id: r.id, automatico: r.stato === "auto",
         nota: nota ? nota.testo : "",
         pasto: r.pasto, stato: statoTesto(r.stato),
         piatti: contenuto ? contenuto.piatti : [], libero: !!(contenuto && contenuto.libero), cibi,
@@ -1189,15 +1176,16 @@
       h += `<label class="campo">Di chi<select id="storico-persona" class="input">${sel(S.storicoPersona, [["tutti", "Tutti"], ...persone().map((p) => [p.id, p.nome])])}</select></label>`;
     }
     h += `<div class="due"><button class="btn" data-a="report-stampa">Stampa o PDF</button><button class="btn sec" data-a="report-testo">File di testo</button></div>
+      <p class="avviso blu">${esc(NOTA_STORICO)}</p>
       <p style="font-size:13px;color:var(--muted);padding:0 4px">Il report per la dietista: pasti di questi giorni${rep.pesi.length ? " e pesate" : ""}. Con «Stampa o PDF» scegli «Salva come PDF» nella finestra di stampa.</p>`;
-    if (!rep.giorni.length) return h + `<p class="vuoto">Nessun pasto registrato in questi giorni. I pasti entrano nello storico con «Fatto», oppure da soli il giorno dopo.</p>`;
-    h += `<p style="font-size:14px;padding:0 4px"><b>${rep.fatti}</b> pasti fatti · <b>${rep.saltati}</b> saltati${rep.attivita ? ` · <b>${rep.attivita}</b> attività fisiche (${esc(durata(rep.minuti))})` : ""} · dal ${esc(ddmm(rep.da))} al ${esc(ddmm(rep.a))}</p>`;
+    if (!rep.giorni.length) return h + `<p class="vuoto">Nessun pasto nello storico in questi giorni. I pasti previsti vengono conservati dal giorno di inizio della dieta.</p>`;
+    h += `<p style="font-size:14px;padding:0 4px"><b>${rep.fatti}</b> pasti nello storico · <b>${rep.saltati}</b> saltati${rep.attivita ? ` · <b>${rep.attivita}</b> attività fisiche (${esc(durata(rep.minuti))})` : ""} · dal ${esc(ddmm(rep.da))} al ${esc(ddmm(rep.a))}</p>`;
     for (const g of [...rep.giorni].reverse()) {
       h += `<section class="giorno-storico"><h3>${esc(dataLunga(g.data))}</h3>`;
       for (const p of g.pasti) {
         if (p.fitness) { h += `<div class="pasto-storico fit"><span class="t"><span>${ico("fitness", 15)} Fitness</span><span class="pill fit">${esc(p.stato)}</span></span><span class="cibi">${esc(p.cibi[0])}</span></div>`; continue; }
-        h += `<div class="pasto-storico"><span class="t"><span>${esc(p.pasto)}${p.piatti.length ? " · " + esc(p.piatti.join(", ")) : ""}</span><span class="pill ${p.stato === "saltato" ? "grigio" : "ok"}">${esc(p.stato)}</span></span>
-          <span class="cibi">${p.libero ? "Pasto libero" : esc(p.cibi.join(" · ")) || "—"}</span>${p.nota ? `<span class="cibi nota-st">${ico("matita", 13)} ${esc(p.nota)}</span>` : ""}</div>`;
+        h += `<div class="pasto-storico"><span class="t"><span>${esc(p.pasto)}${p.piatti.length ? " · " + esc(p.piatti.join(", ")) : ""}</span>${p.automatico ? "" : `<span class="pill ${p.stato === "saltato" ? "grigio" : "ok"}">${esc(p.stato)}</span>`}</span>
+          <span class="cibi">${p.libero ? "Pasto libero" : esc(p.cibi.join(" · ")) || "—"}</span>${p.nota ? `<span class="cibi nota-st">${ico("matita", 13)} ${esc(p.nota)}</span>` : ""}<button class="link" data-a="nota-apri" data-k="${esc(p.id)}">${p.libero && !p.nota ? "Scrivi cosa hai mangiato" : "Modifica"}</button></div>`;
       }
       h += `</section>`;
     }
@@ -1215,13 +1203,13 @@
 
   function testoReport(rep) {
     const t = intestazioneReport(rep);
-    const out = ["CheManca? · " + t.titolo, t.periodo, ""];
+    const out = ["CheManca? · " + t.titolo, t.periodo, "", NOTA_STORICO, ""];
     if (rep.pesi.length) {
       out.push("PESO");
       for (const p of rep.pesi) out.push(`${p.nome}: ${righePeso(p).join(" · ") || "nessuna pesata nel periodo"}`);
       out.push("");
     }
-    out.push(`PASTI (${rep.fatti} fatti, ${rep.saltati} saltati)` + (rep.attivita ? ` · FITNESS: ${rep.attivita} attività, ${durata(rep.minuti)}` : ""));
+    out.push(`PASTI (${rep.fatti} da piano o confermati, ${rep.saltati} saltati)` + (rep.attivita ? ` · FITNESS: ${rep.attivita} attività, ${durata(rep.minuti)}` : ""));
     for (const g of rep.giorni) {
       out.push("", dataLunga(g.data));
       for (const p of g.pasti) {
@@ -1237,11 +1225,11 @@
   function stampaReport() {
     const rep = datiReport(daStorico(), oggi(), S.storicoPersona);
     const t = intestazioneReport(rep);
-    let h = `<h1>${esc(t.titolo)}</h1><p>${esc(t.periodo)} · ${rep.fatti} pasti fatti, ${rep.saltati} saltati${rep.attivita ? ` · fitness: ${rep.attivita} attività, ${esc(durata(rep.minuti))}` : ""}</p>`;
+    let h = `<h1>${esc(t.titolo)}</h1><p>${esc(t.periodo)} · ${rep.fatti} pasti nello storico, ${rep.saltati} saltati${rep.attivita ? ` · fitness: ${rep.attivita} attività, ${esc(durata(rep.minuti))}` : ""}</p>`;
     if (rep.pesi.length) {
       h += `<h2>Peso</h2><table><tbody>${rep.pesi.map((p) => `<tr><th>${esc(p.nome)}</th><td>${esc(righePeso(p).join(" · ") || "nessuna pesata nel periodo")}</td></tr>`).join("")}</tbody></table>`;
     }
-    h += `<h2>Pasti</h2>`;
+    h += `<p>${esc(NOTA_STORICO)}</p><h2>Pasti</h2>`;
     for (const g of rep.giorni) {
       h += `<div class="giorno"><h3>${esc(dataLunga(g.data))}</h3><table><tbody>${g.pasti.map((p) =>
         p.fitness ? `<tr class="fit"><th style="width:22%">Fitness<br><small>${esc(p.stato)}</small></th><td>${esc(p.cibi[0])}</td></tr>` :
@@ -1848,7 +1836,7 @@
         <div class="tre">${scorciatoie.map(([n, v]) => `<button type="button" class="btn piccolo ${d.inizio === v ? "" : "sec"}" data-a="imp-data" data-v="${v}">${n}</button>`).join("")}</div>
         <input type="date" class="input" data-f="inizio" value="${esc(d.inizio)}" aria-label="Data di inizio">
       </div>
-      ${passati ? `<div class="avviso blu"><span>I pasti dal <b>${esc(L.etichettaData(d.inizio))}</b> a ieri (${passati} ${passati === 1 ? "giorno" : "giorni"}) entrano nello <b>storico</b> come fatti. Frigo e dispensa non vengono toccati.</span></div>` : ""}`;
+      ${passati ? `<div class="avviso blu"><span>I pasti dal <b>${esc(L.etichettaData(d.inizio))}</b> a ieri (${passati} ${passati === 1 ? "giorno" : "giorni"}) entrano nello <b>storico</b> come previsti dal piano, non confermati. Potrai modificarli anche in seguito. Frigo e dispensa non vengono toccati.</span></div>` : ""}`;
   }
 
   /* ---------- il piano a 4 settimane in PDF ---------- */
@@ -1889,6 +1877,7 @@
     const p = { inizio: d.inizio, lunedi: true, fonte: d.quattro.file, settimane: r.settimane, extra: r.extra, categorie: S.pianoFile ? S.pianoFile.categorie : {}, alternative: d.alternative || null, fissate: {} };
     if (p.alternative) window.ImportaPdf.collegaAlternative(p.settimane, p.alternative);
     if (S.piano && d.inizio > oggi()) p.prima = { ...S.piano, prima: undefined };
+    if (S.piano) await storicoArretrato(S.piano, S.piano.inizio);
     await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
     const n = await storicoArretrato(p, d.inizio);
     chiudiFoglio();
@@ -1904,6 +1893,7 @@
     if (S.pianoFile) p.categorie = S.pianoFile.categorie;
     // fino al giorno di inizio resta valido il piano di adesso
     if (S.piano && d.inizio > oggi()) p.prima = { ...S.piano, prima: undefined };
+    if (S.piano) await storicoArretrato(S.piano, S.piano.inizio);
     await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
     const n = await storicoArretrato(p, d.inizio);
     chiudiFoglio();
@@ -1913,7 +1903,7 @@
   }
 
   /* la dieta è cominciata prima di caricarla: i pasti dal giorno di inizio a ieri si
-     registrano come fatti, per lo storico. Non si scala niente da frigo e dispensa:
+     registrano come previsti dal piano, non confermati, per lo storico. Non si scala niente da frigo e dispensa:
      quello che c'è in casa adesso è già il risultato di quei giorni. */
   async function storicoArretrato(piano, da) {
     if (!da || da >= oggi()) return 0;
@@ -1924,8 +1914,12 @@
       if (!giorno) continue;
       for (const p of giorno.pasti) {
         const k = L.chiavePasto(g, p.pasto);
-        if (stati[k]) continue;
-        const riga = { id: k, data: g, pasto: p.pasto, stato: "auto", chi: "", quando: new Date().toISOString(), scalato: [], contenuto: fotoPasto(p), arretrato: true };
+        if (stati[k]) {
+          // Completa i vecchi record prima che il piano corrente venga sostituito.
+          if (!stati[k].contenuto) await modifica("pasti", k, { contenuto: fotoPasto(p) });
+          continue;
+        }
+        const riga = { id: k, data: g, pasto: p.pasto, stato: "auto", chi: "", quando: new Date().toISOString(), scalato: [], contenuto: fotoPasto(p) };
         if (await A.nuovo("pasti", riga)) { inMemoria("pasti", [riga]); n++; }
       }
     }
@@ -1937,9 +1931,9 @@
   async function segnaPasto(k, stato) {
     const [data, nomePasto] = k.split("|");
     const g = L.giornoPiano(S.piano, data);
-    const pasto = g && g.pasti.find((p) => p.pasto === nomePasto);
+    const pasto = data < oggi() ? pastoArchiviato(k) : g && g.pasti.find((p) => p.pasto === nomePasto);
     const prima = [];
-    if (stato !== "saltato" && pasto && !pasto.libero) {
+    if (data >= oggi() && stato !== "saltato" && pasto && !pasto.libero) {
       const chi = stato.startsWith("solo:") ? stato.slice(5) : stato === "max" || stato === "vale" ? stato : null;
       const mosse = L.consumaPasto(S.db.inventario, pasto, chi);
       for (const m of mosse) {
@@ -1952,7 +1946,7 @@
     await salva("pasti", [{ id: k, data, pasto: nomePasto, stato, chi: S.chi || "", quando: new Date().toISOString(), scalato: prima, contenuto: fotoPasto(pasto) }]);
     chiudiFoglio();
     dopoModifica();
-    toast(stato === "saltato" ? "Segnato come saltato" : "Fatto: dosi tolte da casa", "Annulla", () => annullaPasto(k));
+    toast(stato === "saltato" ? "Segnato come saltato" : data < oggi() || light() ? "Pasto registrato" : "Fatto: dosi tolte da casa", "Annulla", () => annullaPasto(k));
   }
   async function annullaPasto(k) {
     const st = S.db.pasti.find((p) => p.id === k);
@@ -2246,12 +2240,23 @@
       }
       case "cambia-scegli": d.scelte[b.dataset.c] = b.dataset.v; renderFoglio(); break;
       case "nota-apri": apriFoglio({ tipo: "nota", d: { k: b.dataset.k } }); setTimeout(() => { const t = $("#nota-testo"); if (t) t.focus(); }, 50); break;
+      case "storico-stato": {
+        const r = S.db.pasti.find((x) => x.id === b.dataset.k);
+        if (!r || r.data >= oggi()) break;
+        await modifica("pasti", r.id, { stato: b.dataset.stato, chi: S.chi || "", quando: new Date().toISOString() });
+        chiudiFoglio(); dopoModifica(); toast("Storico aggiornato; scorte invariate");
+        break;
+      }
       case "nota-salva": {
         const testo = ($("#nota-testo").value || "").trim();
         const [data, pasto] = d.k.split("|");
         if (!testo) { await elimina("note", d.k); }
         else await salva("note", [{ id: d.k, data, pasto, testo, chi: S.chi || "", quando: new Date().toISOString() }]);
-        chiudiFoglio(); render(); toast(testo ? "Nota salvata" : "Nota tolta");
+        if (testo && data <= oggi() && !S.db.pasti.some((r) => r.id === d.k)) {
+          const p = pastoArchiviato(d.k);
+          if (p) await salva("pasti", [{ id: d.k, data, pasto, stato: "auto", chi: S.chi || "", quando: new Date().toISOString(), scalato: [], contenuto: fotoPasto(p) }]);
+        }
+        chiudiFoglio(); render(); toast(testo ? "Nota salvata nello storico" : "Nota tolta");
         break;
       }
       case "nota-togli": await elimina("note", d.k); chiudiFoglio(); render(); toast("Nota tolta"); break;
@@ -2292,7 +2297,8 @@
         const c = p.cambi && p.cambi[b.dataset.k];
         if (c && c.coppia && p.cambi[c.coppia] && p.cambi[c.coppia].coppia === b.dataset.k) delete p.cambi[c.coppia];
         if (p.cambi) delete p.cambi[b.dataset.k];
-        await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
+        if (S.piano) await storicoArretrato(S.piano, S.piano.inizio);
+    await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
         dopoModifica(); toast(c && c.coppia ? "Tutti e due i pasti tornano al loro posto" : "Torna il pasto del piano");
         break;
       }
@@ -2385,7 +2391,8 @@
       case "alt-usa": {
         const p = JSON.parse(JSON.stringify(pianoSalvato()));
         p.fissate = { ...(p.fissate || {}), [d.inizioSett]: d.settimana };
-        await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
+        if (S.piano) await storicoArretrato(S.piano, S.piano.inizio);
+    await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
         const quando = nomeSettimana(d.inizioSett);
         chiudiFoglio(); dopoModifica();
         toast("Settimana alternativa " + quando);
@@ -2394,7 +2401,8 @@
       case "alt-togli": {
         const p = JSON.parse(JSON.stringify(pianoSalvato()));
         if (p.fissate) delete p.fissate[b.dataset.d];
-        await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
+        if (S.piano) await storicoArretrato(S.piano, S.piano.inizio);
+    await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
         dopoModifica(); toast("Torna la settimana tipo");
         break;
       }
@@ -2448,7 +2456,8 @@
         const p = JSON.parse(await el.files[0].text());
         if (!p.inizio || !Array.isArray(p.settimane)) throw new Error("non sembra un piano.json");
         if (S.piano && p.inizio > oggi()) p.prima = { ...S.piano, prima: undefined };
-        await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
+        if (S.piano) await storicoArretrato(S.piano, S.piano.inizio);
+    await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
         dopoModifica(); toast("Nuovo piano in uso dal " + ddmm(p.inizio));
       } catch (e) { toast("Piano non valido: " + e.message); }
       el.value = "";
@@ -2473,7 +2482,8 @@
       if (Object.keys(p.fissate || {}).length && !confirm("Le settimane alternative già create vanno ricreate dopo il cambio di data. Continuare?")) return;
       p.inizio = nuova;
       p.fissate = {};
-      await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
+      if (S.piano) await storicoArretrato(S.piano, S.piano.inizio);
+    await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
       const n = await storicoArretrato(p, nuova);
       dopoModifica();
       toast("Dieta dal " + ddmm(nuova) + (n ? ` · ${n} pasti passati nello storico` : ""));
