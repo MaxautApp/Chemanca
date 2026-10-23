@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 10";
+  const VERSIONE = "23.10.2026 · 11";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -2165,6 +2165,7 @@
     if(tipo === "importa") return d.letti.map((x,i)=>({key:"pdf:"+i,nome:x.intestato||x.piano.persona||x.file,file:x.file,persona:x.id||"",settimane:[x.piano.giorni],extra:[],avvisi:x.piano.avvisi||[]}));
     return ["A","B"].map((k,i)=>({key:k,nome:d.quattro.persone[i]||("Colonna "+k),file:d.quattro.file,persona:d.mappa[k]||"",settimane:d.quattro.settimane,extra:d.quattro.extra||[],colonna:k,avvisi:[]}));
   }
+  function voceDellaColonnaPdf(v,k) { return !k || !v.q || typeof v.q!=="object" || Object.prototype.hasOwnProperty.call(v.q,k) && v.q[k]!==0; }
   function datiControlloPdf(d,tipo) {
     const fonti=fontiControlloPdf(d,tipo);
     const scelta=d.controlloPdf || {documento:fonti[0] && fonti[0].key,giorno:0,settimana:0};
@@ -2173,14 +2174,14 @@
     const settimana=Math.max(0,Math.min(Number(scelta.settimana)||0,fonte.settimane.length-1));
     const giorno=Math.max(0,Math.min(Number(scelta.giorno)||0,6));
     const originali=fonte.settimane[settimana] && fonte.settimane[settimana][giorno];
-    const pasti=(originali||[]).map((p)=>({...p,voci:(p.voci||[]).filter((v)=>!fonte.colonna || v.q && Object.prototype.hasOwnProperty.call(v.q,fonte.colonna) && v.q[fonte.colonna] !== 0).map((v)=>({...v,q:fonte.colonna?v.q[fonte.colonna]:v.q}))}));
-    const extra=fonte.extra.filter((v)=>!fonte.colonna || v.q && Object.prototype.hasOwnProperty.call(v.q,fonte.colonna) && v.q[fonte.colonna] !== 0).map((v)=>({...v,q:fonte.colonna?v.q[fonte.colonna]:v.q}));
-    if(extra.length)pasti.push({pasto:"Fuori pasto",piatti:["Indicazioni quotidiane"],voci:extra});
+    const pasti=(originali||[]).map((p,pi)=>({...p,_pi:pi,voci:(p.voci||[]).map((v,vi)=>({...v,_pdf:{pi,vi,extra:false}})).filter((v)=>voceDellaColonnaPdf(v,fonte.colonna)).map((v)=>({...v,q:fonte.colonna?(v.q||{})[fonte.colonna]:v.q}))}));
+    const extra=fonte.extra.map((v,vi)=>({...v,_pdf:{pi:-1,vi,extra:true}})).filter((v)=>voceDellaColonnaPdf(v,fonte.colonna)).map((v)=>({...v,q:fonte.colonna?(v.q||{})[fonte.colonna]:v.q}));
+    if(extra.length)pasti.push({pasto:"Fuori pasto",piatti:["Indicazioni quotidiane"],_extra:true,voci:extra});
     const controlli=[];
     if(!originali || !originali.length)controlli.push("Nessun pasto riconosciuto per questo giorno: controlla il PDF originale.");
     for(const p of pasti) {
       if(!p.libero && !p.voci.length)controlli.push(p.pasto+": nessun alimento attribuito a questa persona; verifica il documento.");
-      for(const v of p.voci) if(!dosePdfValida(v.q) || typeof v.u!=="string" || !v.u.trim())controlli.push(p.pasto+", "+v.nome+": quantità o unità da verificare sul PDF.");
+      for(const v of p.voci) if(!dosePdfValida(v.q) || !String(v.nome||"").trim() || typeof v.u!=="string" || !v.u.trim())controlli.push(p.pasto+", "+v.nome+": quantità o unità da verificare sul PDF.");
     }
     return {fonti,fonte,settimana,giorno,pasti,controlli};
   }
@@ -2193,15 +2194,115 @@
     const a=datiControlloPdf(d,tipo);if(!a.fonte)return '<p class="avviso giallo">Nessun documento da controllare.</p>';
     const giorni=["Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato","Domenica"];
     const persona=a.fonte.persona?nomeDi(a.fonte.persona):"Da abbinare in seguito";
-    return `<section class="pdf-controllo" aria-label="Anteprima completa del piano"><h3>Controlla il piano prima di salvarlo</h3><p class="sotto">Sfoglia ogni giorno e persona. Le quantità sono quelle lette dal documento, senza conversioni o somme fra familiari.</p>
+    return `<section class="pdf-controllo" aria-label="Anteprima completa del piano"><h3>Controlla il piano prima di salvarlo</h3><p class="sotto">Sfoglia ogni giorno e persona. Le quantità sono quelle lette dal documento o corrette da te, senza conversioni o somme fra familiari.</p>
       <label class="campo">Documento / persona<select id="pdf-anteprima-documento" data-controllo-pdf="documento">${sel(a.fonte.key,a.fonti.map((x)=>[x.key,(x.nome||"Dieta")+" → "+(x.persona?nomeDi(x.persona):"Da abbinare")]))}</select></label>
       <div class="due">${a.fonte.settimane.length>1?`<label class="campo">Settimana<select id="pdf-anteprima-settimana" data-controllo-pdf="settimana">${sel(a.settimana,a.fonte.settimane.map((_,i)=>[i,"Settimana "+(i+1)]))}</select></label>`:""}<label class="campo">Giorno<select id="pdf-anteprima-giorno" data-controllo-pdf="giorno">${sel(a.giorno,giorni.map((n,i)=>[i,n]))}</select></label></div>
       <div class="pdf-identita"><b>${esc(persona)}</b><span>Intestazione PDF: ${esc(a.fonte.nome||"non riconosciuta")}</span><span>${esc(a.fonte.file||"Documento importato")}</span><span>Inizio dieta: ${esc(d.inizio||"da scegliere")} · ${esc(giorni[a.giorno])}${a.fonte.settimane.length>1?" · settimana "+(a.settimana+1):""}</span></div>
       ${!a.fonte.persona?'<p class="avviso giallo">Questo documento non è ancora abbinato. Puoi controllarlo, ma non verrà aggiunto alle dosi di altri familiari.</p>':""}
       ${a.controlli.length?`<div class="avviso giallo"><ul>${a.controlli.map((x)=>`<li>${esc(x)}</li>`).join("")}</ul></div>`:""}
-      ${a.pasti.map((p)=>`<section class="pdf-pasto"><h4>${esc(p.pasto)}</h4>${p.piatti && p.piatti.length?`<p class="pdf-piatto">${esc(p.piatti.join(" · "))}</p>`:""}${p.libero?'<p class="pill grigio">Pasto libero</p>':""}${p.voci.length?`<table class="pdf-dosi"><caption class="sr">Alimenti e dosi di ${esc(p.pasto)} per ${esc(persona)}</caption><thead><tr><th scope="col">Alimento</th><th scope="col">Quantità</th></tr></thead><tbody>${p.voci.map((v)=>`<tr><td>${esc(v.nome||"Alimento non riconosciuto")}</td><td class="${dosePdfValida(v.q)&&v.u?"":"pdf-da-verificare"}">${esc(dosePdfTesto(v))}</td></tr>`).join("")}</tbody></table>`:!p.libero?'<p class="sotto">Nessun alimento riconosciuto per questa persona.</p>':""}</section>`).join("")}
+      ${a.pasti.map((p)=>`<section class="pdf-pasto"><h4>${esc(p.pasto)}</h4>${p.piatti && p.piatti.length?`<p class="pdf-piatto">${esc(p.piatti.join(" · "))}</p>`:""}${p.libero?'<p class="pill grigio">Pasto libero</p>':""}${p.voci.length?`<table class="pdf-dosi"><caption class="sr">Alimenti e dosi di ${esc(p.pasto)} per ${esc(persona)}</caption><thead><tr><th scope="col">Alimento</th><th scope="col">Quantità</th></tr></thead><tbody>${p.voci.map((v)=>`<tr><td>${esc(v.nome||"Alimento non riconosciuto")}<button class="pdf-correggi" data-a="pdf-modifica" data-pi="${v._pdf.pi}" data-vi="${v._pdf.vi}" data-extra="${v._pdf.extra?"1":"0"}">Correggi</button></td><td class="${dosePdfValida(v.q)&&v.u?"":"pdf-da-verificare"}">${esc(dosePdfTesto(v))}</td></tr>`).join("")}</tbody></table>`:!p.libero?'<p class="sotto">Nessun alimento riconosciuto per questa persona.</p>':""}${!p._extra?`<button class="link" data-a="pdf-aggiungi" data-pi="${p._pi}">Aggiungi alimento a ${esc(p.pasto.toLowerCase())}</button>`:""}</section>`).join("")}
+      <button class="btn sec largo" data-a="pdf-aggiungi" data-pi="-1">Aggiungi un pasto o un alimento mancante</button>
+      ${editorCorrezionePdf(d)}
+      ${d.correzioniPdf && d.correzioniPdf.length?`<p class="sotto">${d.correzioniPdf.length} ${d.correzioniPdf.length === 1 ? "correzione manuale" : "correzioni manuali"} nell’importazione.</p><button class="link" data-a="pdf-annulla-correzione">Annulla ultima correzione</button>`:""}
       <p class="sotto">L'anteprima non modifica il piano attuale. I dati vengono applicati soltanto con il pulsante di conferma.</p></section>`;
   }
+
+  function contestoModificaPdf(d,tipo,edit) {
+    const fonte=fontiControlloPdf(d,tipo).find((x)=>x.key===edit.documento);
+    if(!fonte)throw new Error("Documento non disponibile");
+    const pasti=fonte.settimane[edit.settimana] && fonte.settimane[edit.settimana][edit.giorno];
+    const pasto=edit.pi>=0 && pasti ? pasti[edit.pi] : null;
+    const lista=edit.extra?fonte.extra:pasto && pasto.voci;
+    return {fonte,pasti,pasto,lista,voce:lista && edit.vi>=0?lista[edit.vi]:null};
+  }
+  function apriCorrezionePdf(pi,vi,extra=false) {
+    const d=S.sheet.d,a=datiControlloPdf(d,S.sheet.tipo);
+    const edit={documento:a.fonte.key,settimana:a.settimana,giorno:a.giorno,pi,vi,extra};
+    const c=contestoModificaPdf(d,S.sheet.tipo,edit),v=c.voce;
+    const qty=v?(c.fonte.colonna?(v.q||{})[c.fonte.colonna]:v.q):"";
+    d.modificaPdf={...edit,nome:v?v.nome||"":"",qty:qty==null?"":String(qty).replace(".",","),unita:v?v.u||"":"g",pasto:c.pasto?c.pasto.pasto:"Pranzo"};
+    ridisegnaControlloPdf();
+    document.getElementById("pdf-correzione-editor")?.scrollIntoView({block:"nearest",behavior:"smooth"});
+  }
+  function editorCorrezionePdf(d) {
+    const e=d.modificaPdf;if(!e)return "";
+    return `<section class="pdf-editor" id="pdf-correzione-editor" aria-label="Correggi alimento"><h4>${e.vi<0?"Aggiungi alimento":"Correggi alimento"}</h4><p class="sotto">Riporta ciò che è prescritto nel PDF. Non vengono calcolate sostituzioni o nuove dosi.</p>
+      ${e.extra?'<p class="avviso blu">Questa voce appartiene alle indicazioni quotidiane: la correzione vale per tutti i giorni e le settimane di questo piano, solo per la persona selezionata.</p>':""}
+      ${e.pi<0 && !e.extra?`<label class="campo">Pasto<select id="pdf-edit-pasto">${sel(e.pasto,L.PASTI.map((p)=>[p,p]))}</select></label>`:""}
+      <label class="campo">Alimento<input class="input" id="pdf-edit-nome" value="${esc(e.nome)}" autocomplete="off"></label>
+      <div class="due"><label class="campo">Quantità<input class="input" id="pdf-edit-qty" inputmode="decimal" value="${esc(e.qty)}" placeholder="Es. 100"></label><label class="campo">Unità<input class="input" id="pdf-edit-unita" value="${esc(e.unita)}" list="pdf-unita-comuni" autocomplete="off"></label></div>
+      <datalist id="pdf-unita-comuni">${["g","ml","n.","vasetto","cucchiaino","cucchiaini","tazzina"].map((u)=>`<option value="${u}"></option>`).join("")}</datalist>
+      ${d.erroreCorrezione?`<p class="avviso rosso" role="alert">${esc(d.erroreCorrezione)}</p>`:""}
+      <div class="due"><button class="btn piccolo" data-a="pdf-correzione-salva">Applica correzione</button><button class="btn piccolo sec" data-a="pdf-correzione-chiudi">Annulla</button></div>
+      ${e.vi>=0?'<button class="link" data-a="pdf-correzione-elimina">Rimuovi questo alimento dalla persona selezionata</button>':""}</section>`;
+  }
+  function applicaCorrezionePdf(d,tipo,e,elimina=false) {
+    const c=contestoModificaPdf(d,tipo,e);
+    const nome=String(e.nome||"").trim(),unita=String(e.unita||"").trim();
+    const testo=String(e.qty??"").trim();
+    const qty=/^\d+(?:[.,]\d+)?$/.test(testo)?Number(testo.replace(",",".")):NaN;
+    if(!elimina && (!nome || !unita || !Number.isFinite(qty) || qty<=0))throw new Error("Inserisci un alimento, una quantità positiva e l'unità riportata nel PDF");
+    if(elimina && !c.voce)throw new Error("Alimento non trovato");
+    if(!c.pasto && !e.extra && !L.PASTI.includes(e.pasto))throw new Error("Scegli il pasto a cui appartiene l'alimento");
+    const pastoDestinazione=c.pasto || c.pasti && c.pasti.find((p)=>p.pasto===e.pasto);
+    if(!elimina && c.fonte.colonna && pastoDestinazione && pastoDestinazione.libero)throw new Error("Questo pasto risulta libero nel PDF condiviso: controlla il documento prima di aggiungere alimenti prescritti");
+    const indice=tipo==="importa"?Number(e.documento.split(":")[1]):-1;
+    const fonteRaw=tipo==="importa"?d.letti[indice].piano:d.quattro;
+    const prima=c.voce?JSON.parse(JSON.stringify(c.voce)):null;
+    const snapshot=JSON.parse(JSON.stringify(fonteRaw));
+    const count=(d.correzioniPdf||[]).length;
+    let lista=c.lista,pasto=c.pasto;
+    if(!lista) {
+      const settimana=c.fonte.settimane[e.settimana];
+      if(!settimana)throw new Error("Settimana non disponibile");
+      if(!settimana[e.giorno])settimana[e.giorno]=[];
+      const giorni=settimana[e.giorno];
+      pasto=giorni.find((p)=>p.pasto===e.pasto);
+      if(!pasto){pasto={pasto:e.pasto,libero:false,piatti:[],voci:[]};giorni.push(pasto);giorni.sort((a,b)=>L.PASTI.indexOf(a.pasto)-L.PASTI.indexOf(b.pasto));}
+      lista=pasto.voci;
+    }
+    if(c.voce && c.fonte.colonna && (!c.voce.q || typeof c.voce.q!=="object"))c.voce.q={A:null,B:null};
+    if(elimina) {
+      if(c.fonte.colonna){delete c.voce.q[c.fonte.colonna];if(!Object.values(c.voce.q).some((v)=>v!==0))lista.splice(e.vi,1);}
+      else lista.splice(e.vi,1);
+    } else if(c.voce) {
+      if(c.fonte.colonna) {
+        const k=c.fonte.colonna,altre=Object.entries(c.voce.q).some(([id,n])=>id!==k && n!==0);
+        // Nome e unità possono differire fra le persone: separa la riga senza toccare le altre dosi.
+        if(altre && (c.voce.nome!==nome || c.voce.u!==unita)) {
+          delete c.voce.q[k];lista.push({nome,u:unita,q:{[k]:qty}});
+        } else {c.voce.nome=nome;c.voce.u=unita;c.voce.q[k]=qty;delete c.voce.alt;delete c.voce.altPiatto;}
+      } else {c.voce.nome=nome;c.voce.q=qty;c.voce.u=unita;delete c.voce.alt;delete c.voce.altPiatto;}
+    } else lista.push({nome,u:unita,q:c.fonte.colonna?{[c.fonte.colonna]:qty}:qty});
+    if(!elimina && pasto)pasto.libero=false;
+    (d.annullamentiPdf=d.annullamentiPdf||[]).push({indice,prima:snapshot,count});
+    (d.correzioniPdf=d.correzioniPdf||[]).push({documento:c.fonte.file,intestato:c.fonte.nome,persona:c.fonte.persona,colonna:c.fonte.colonna||null,settimana:e.settimana+1,giorno:e.giorno,pasto:e.extra?"Indicazioni quotidiane":pasto.pasto,tipo:elimina?"rimozione":prima?"modifica":"aggiunta",prima,dopo:elimina?null:{nome,q:qty,u:unita},quando:new Date().toISOString()});
+    d.modificaPdf=null;d.erroreCorrezione="";
+  }
+  function annullaCorrezionePdf(d,tipo) {
+    const u=d.annullamentiPdf && d.annullamentiPdf.pop();if(!u)return;
+    if(tipo==="importa")d.letti[u.indice].piano=u.prima;else d.quattro=u.prima;
+    d.correzioniPdf=(d.correzioniPdf||[]).slice(0,u.count);d.modificaPdf=null;d.erroreCorrezione="";
+  }
+  function erroriDosiPdf(d,tipo) {
+    const errori=[];
+    for(const fonte of fontiControlloPdf(d,tipo)) {
+      if(!fonte.persona)continue;
+      const verifica=(v,sett,giorno)=>{
+        if(fonte.colonna && !voceDellaColonnaPdf(v,fonte.colonna))return;
+        const q=fonte.colonna?(v.q||{})[fonte.colonna]:v.q;
+        if(!dosePdfValida(q)||!String(v.nome||"").trim()||!String(v.u||"").trim())errori.push({documento:fonte.key,settimana:sett,giorno,nome:fonte.nome});
+      };
+      fonte.settimane.forEach((w,sett)=>(w||[]).forEach((g,giorno)=>(g||[]).forEach((p)=>(p.voci||[]).forEach((v)=>verifica(v,sett,giorno)))));
+      fonte.extra.forEach((v)=>verifica(v,0,0));
+    }
+    return errori;
+  }
+  function riepilogoErroriPdf(d,tipo) {
+    const n=erroriDosiPdf(d,tipo).length;
+    return n?`<div class="avviso giallo"><span>${n} quantità, unità o alimenti da verificare nei documenti abbinati. Correggili prima di applicare il piano.<button class="link" data-a="pdf-primo-errore">Vai al primo valore da verificare</button></span></div>`:"";
+  }
+
   function ridisegnaControlloPdf() {
     const foglio=document.querySelector("#sheet .foglio"),scroll=foglio?foglio.scrollTop:0;
     renderFoglio();const nuovo=document.querySelector("#sheet .foglio");if(nuovo)nuovo.scrollTop=scroll;
@@ -2217,10 +2318,11 @@
       <p class="sotto">Controlla di chi è ogni PDF. È una settimana che si ripete finché non carichi la prossima.</p>
       <div class="card" style="background:var(--bg)">${abbinamenti}</div>
       ${doppi.length ? `<div class="avviso giallo"><span>Due PDF sono assegnati a ${esc(doppi.map((p) => p.nome).join(", "))}: le dosi si sommerebbero.</span></div>` : ""}
-      ${d.avvisi.length ? `<div class="avviso giallo"><span>${d.avvisi.map(esc).join("<br>")}</span></div>` : ""}
+      ${d.avvisi.length ? `<div class="avviso giallo"><span><b>Avvisi della lettura originale:</b><br>${d.avvisi.map(esc).join("<br>")}</span></div>` : ""}
+      ${riepilogoErroriPdf(d,"importa")}
       ${anteprimaCompletaPdf(d,"importa")}
       ${d.letti.some((x) => !x.id) ? `<p class="avviso blu">I PDF non abbinati vengono conservati: potrai collegarli dopo aver aggiunto il familiare.</p>` : ""}
-      <button class="btn largo" data-a="importa-conferma" ${doppi.length || !d.letti.some((x) => x.id) ? "disabled" : ""}>Usa questa dieta</button>
+      <button class="btn largo" data-a="importa-conferma" ${doppi.length || !d.letti.some((x) => x.id) || d.modificaPdf || erroriDosiPdf(d,"importa").length ? "disabled" : ""}>Usa questa dieta</button>
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
   }
 
@@ -2247,20 +2349,22 @@
       ${sceltaInizio(d)}
       <p class="sotto">Letto da ${esc(q.file)}. Le settimane si alternano una dopo l'altra, poi si ricomincia dalla prima.</p>
       <div class="card" style="background:var(--bg)">${voci}</div>
+      ${riepilogoErroriPdf(d,"importa4")}
       ${anteprimaCompletaPdf(d,"importa4")}
       ${d.alternative ? `<div class="avviso verde"><span>Collegato alle tabelle delle alternative della dietista: «Cambia pasto» funziona anche su questo piano.</span></div>` : `<div class="avviso giallo"><span>Senza le tabelle delle alternative «Cambia pasto» non compare. Per averlo scegli questo PDF insieme a quelli della dietista.</span></div>`}
-      <button class="btn largo" data-a="importa4-conferma" ${(!d.mappa.A && !d.mappa.B) || !abbinamentiValidi([d.mappa.A,d.mappa.B]) ? "disabled" : ""}>Usa questo piano</button>
+      <button class="btn largo" data-a="importa4-conferma" ${(!d.mappa.A && !d.mappa.B) || !abbinamentiValidi([d.mappa.A,d.mappa.B]) || d.modificaPdf || erroriDosiPdf(d,"importa4").length ? "disabled" : ""}>Usa questo piano</button>
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
   }
 
   async function confermaImport4() {
     const d = S.sheet.d;
+    if(d.modificaPdf || erroriDosiPdf(d,"importa4").length)return toast("Completa le correzioni dei valori da verificare");
     if (!d.inizio) return toast("Scegli la data di inizio");
     if (!d.mappa.A && !d.mappa.B) return toast("Scegli di chi sono le quantità");
     if (!abbinamentiValidi([d.mappa.A, d.mappa.B])) return toast("Le due colonne devono appartenere a persone diverse");
     const r = window.ImportaPdf.rimappa(d.quattro, d.mappa);
     const p = { inizio: d.inizio, lunedi: true, fonte: d.quattro.file, settimane: r.settimane, extra: r.extra, categorie: S.pianoFile ? S.pianoFile.categorie : {}, alternative: d.alternative || null, fissate: {} };
-    p.fontiPdf = { tipo: "settimane", quattro: JSON.parse(JSON.stringify(d.quattro)), mappa: { ...d.mappa } };
+    p.fontiPdf = { tipo: "settimane", quattro: JSON.parse(JSON.stringify(d.quattro)), mappa: { ...d.mappa }, correzioni:JSON.parse(JSON.stringify(d.correzioniPdf||[])) };
     if (p.alternative) window.ImportaPdf.collegaAlternative(p.settimane, p.alternative);
     if (S.piano && d.inizio > oggi()) p.prima = { ...S.piano, prima: undefined };
     if (S.piano) await storicoArretrato(S.piano, S.piano.inizio);
@@ -2274,11 +2378,12 @@
 
   async function confermaImport() {
     const d = S.sheet.d;
+    if(d.modificaPdf || erroriDosiPdf(d,"importa").length)return toast("Completa le correzioni dei valori da verificare");
     if (!d.inizio) return toast("Scegli la data di inizio");
     if (!d.letti.some((x) => x.id)) return toast("Abbina almeno un PDF a una persona");
     if (!abbinamentiValidi(d.letti.map((x) => x.id))) return toast("Ogni persona può avere un solo PDF: correggi gli abbinamenti");
     const p = window.ImportaPdf.unisci(d.letti.filter((x) => x.id).map((x) => ({ id: x.id, piano: x.piano })), d.inizio, "PDF del " + new Date().toLocaleDateString("it-IT"));
-    p.fontiPdf = { tipo: "giornaliero", documenti: JSON.parse(JSON.stringify(d.letti)) };
+    p.fontiPdf = { tipo: "giornaliero", documenti: JSON.parse(JSON.stringify(d.letti)), correzioni:JSON.parse(JSON.stringify(d.correzioniPdf||[])) };
     if (S.pianoFile) p.categorie = S.pianoFile.categorie;
     // fino al giorno di inizio resta valido il piano di adesso
     if (S.piano && d.inizio > oggi()) p.prima = { ...S.piano, prima: undefined };
@@ -2818,6 +2923,19 @@
         dopoModifica(); toast("Piano svuotato");
         break;
       case "piano-ripristina": await elimina("piano", "attuale"); dopoModifica(); toast("Torna il piano pubblicato con l'app"); break;
+      case "pdf-modifica": apriCorrezionePdf(Number(b.dataset.pi),Number(b.dataset.vi),b.dataset.extra==="1"); break;
+      case "pdf-aggiungi": apriCorrezionePdf(Number(b.dataset.pi),-1,false); break;
+      case "pdf-correzione-chiudi": d.modificaPdf=null;d.erroreCorrezione="";ridisegnaControlloPdf();break;
+      case "pdf-correzione-salva":
+      case "pdf-correzione-elimina": {
+        const edit={...d.modificaPdf,nome:$("#pdf-edit-nome").value,qty:$("#pdf-edit-qty").value,unita:$("#pdf-edit-unita").value,pasto:$("#pdf-edit-pasto")?$("#pdf-edit-pasto").value:d.modificaPdf.pasto};
+        try{applicaCorrezionePdf(d,S.sheet.tipo,edit,a==="pdf-correzione-elimina");}catch(e){d.modificaPdf=edit;d.erroreCorrezione=e.message;}
+        ridisegnaControlloPdf();break;
+      }
+      case "pdf-annulla-correzione": annullaCorrezionePdf(d,S.sheet.tipo);ridisegnaControlloPdf();break;
+      case "pdf-primo-errore": {
+        const e=erroriDosiPdf(d,S.sheet.tipo)[0];if(e){d.modificaPdf=null;d.controlloPdf={documento:e.documento,settimana:e.settimana,giorno:e.giorno};ridisegnaControlloPdf();}break;
+      }
       case "importa-conferma": await confermaImport(); break;
       case "importa4-conferma": await confermaImport4(); break;
       case "imp-data": d.inizio = b.dataset.v; renderFoglio(); break;
@@ -2875,7 +2993,11 @@
       return;
     }
     if (el.dataset.abbinaPdf != null && S.sheet && S.sheet.tipo === "abbinaPdf") { S.sheet.d.documenti[Number(el.dataset.abbinaPdf)].id = el.value; return; }
+    if (S.sheet && S.sheet.d && S.sheet.d.modificaPdf && ["pdf-edit-nome","pdf-edit-qty","pdf-edit-unita","pdf-edit-pasto"].includes(el.id)) {
+      const campi={"pdf-edit-nome":"nome","pdf-edit-qty":"qty","pdf-edit-unita":"unita","pdf-edit-pasto":"pasto"};S.sheet.d.modificaPdf[campi[el.id]]=el.value;return;
+    }
     if (el.dataset.controlloPdf && S.sheet && ["importa","importa4"].includes(S.sheet.tipo)) {
+      if(S.sheet.d.modificaPdf){toast("Applica o annulla la correzione prima di cambiare giorno o persona");ridisegnaControlloPdf();return;}
       const a=datiControlloPdf(S.sheet.d,S.sheet.tipo);
       const c={documento:a.fonte.key,giorno:a.giorno,settimana:a.settimana};
       c[el.dataset.controlloPdf]=el.dataset.controlloPdf==="documento"?el.value:Number(el.value);
