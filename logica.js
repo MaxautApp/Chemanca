@@ -91,16 +91,25 @@
      stati: { "2026-10-14|Pranzo": {stato:"fatto"} } — un pasto confermato non conta più.
      ora: l'ora attuale. I pasti di oggi già passati (più di un'ora fa) si danno per mangiati:
      consumano la scorta simulata ma non generano allarmi, ormai è tardi per comprare. */
-  function pastiFinestra(piano, oggi, giorni, stati, ora) {
+  function istanteLocale(data, ora = 0) {
+    const d = daIso(data), minuti = Math.round(ora * 60);
+    d.setHours(Math.floor(minuti / 60), minuti % 60, 0, 0); return d.getTime();
+  }
+  function nelle24Ore(data, pasto, dal, ora) {
+    const inizio = istanteLocale(dal, ora), quando = istanteLocale(data, ORA[pasto] ?? 12);
+    return quando >= inizio && quando < inizio + 86400000;
+  }
+  function pastiFinestra(piano, oggi, giorni, stati, ora, oreFinestra) {
     const out = [];
-    for (let i = 0; i < giorni; i++) {
+    for (let i = 0; i < (oreFinestra === 24 ? 3 : giorni); i++) {
       const data = piuGiorni(oggi, i);
       const g = giornoPiano(piano, data);
       if (!g) continue;
       for (const p of g.pasti) {
+        if (oreFinestra === 24 && !nelle24Ore(data, p.pasto, oggi, ora || 0)) continue;
         const k = chiavePasto(data, p.pasto);
         if (stati && stati[k]) continue;
-        const passato = i === 0 && ora != null && ORA[p.pasto] + 1 < ora;
+        const passato = oreFinestra !== 24 && i === 0 && ora != null && ORA[p.pasto] + 1 < ora;
         out.push({ data, chiave: k, ...p, passato, settimana: g.settimana, ord: i * 100 + ORA[p.pasto] });
       }
     }
@@ -215,10 +224,10 @@
   /* ---------------- il calcolo: cosa manca nei prossimi giorni ----------------
      Scorre i pasti in ordine di tempo e "mangia" la scorta simulata: così sa non solo
      cosa manca ma per quale pasto, e se le uova bastano per giovedì ma non per venerdì. */
-  function calcolaMancanze(piano, inventario, stati, oggi, giorni, ora) {
+  function calcolaMancanze(piano, inventario, stati, oggi, giorni, ora, oreFinestra) {
     giorni = giorni || 3;
     const stock = inventario.map((it) => ({ ...it, qty: Number(it.qty) || 0 }));
-    const pasti = pastiFinestra(piano, oggi, giorni, stati, ora);
+    const pasti = pastiFinestra(piano, oggi, giorni, stati, ora, oreFinestra);
     const perVoce = new Map();
     const tutteVoci = new Set();
     for (const p of pasti) {
@@ -429,15 +438,15 @@
 
 
   // Lista Light per un periodo fisso: nessun inventario, consumo o equivalenza implicita.
-  function fabbisognoLight(piano, dal, giorni, persone) {
+  function fabbisognoLight(piano, dal, giorni, persone, oraInizio = 0) {
     if (!piano) return [];
     const ids = persone ? new Set(persone.map((p) => p.id)) : null;
     const righe = new Map();
-    for (let i = 0; i < giorni; i++) {
+    for (let i = 0; i < (giorni === 1 ? 3 : giorni); i++) {
       const data = piuGiorni(dal, i), giorno = giornoPiano(piano, data);
       if (!giorno) continue;
       for (const p of giorno.pasti) {
-        if (p.libero) continue;
+        if (p.libero || (giorni === 1 && !nelle24Ore(data, p.pasto, dal, oraInizio))) continue;
         for (const v of p.voci) {
           const q = Object.fromEntries(Object.entries(dosi(v)).filter(([id, n]) => (!ids || ids.has(id)) && Number(n) > 0).map(([id, n]) => [id, Number(n)]));
           const totale = Object.values(q).reduce((a, b) => a + b, 0);
@@ -466,7 +475,7 @@
   }
 
   return {
-    fabbisognoLight, righeLight,
+    fabbisognoLight, righeLight, istanteLocale,
     PASTI, ORA, PRESENZA, GENERICHE, REGOLE, regola, fmtLitri,
     iso, daIso, piuGiorni, diffGiorni, nomeGiorno, etichettaData, GIORNI,
     giornoPiano, chiavePasto, lunediDi, inizioSettimane, pastiFinestra, quantoServe, dosi,

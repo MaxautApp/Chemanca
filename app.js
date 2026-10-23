@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 4";
+  const VERSIONE = "23.10.2026 · 5";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -254,12 +254,18 @@
     if (S.piano && S.pianoFile && !Object.keys(S.piano.categorie || {}).length) S.piano.categorie = S.pianoFile.categorie;
   }
 
+  function giorniSpesaPro() {
+    const r = S.db.piano.find((x) => x.id === "spesa_pro");
+    return r && r.dati && [1,3,7,14].includes(r.dati.giorni) ? r.dati.giorni : 3;
+  }
   function ricalcola() {
     scegliPiano();
-    if (!S.piano) { S.calc = { mancanze: [], totaleVoci: 0, pronte: 0, pasti: [] }; S.calc7 = S.calc; return; }
+    if (!S.piano) { S.calc = { mancanze: [], totaleVoci: 0, pronte: 0, pasti: [] }; S.calc7 = S.calc; S.calcSpesa = S.calc; return; }
     const inv = S.db.inventario;
     S.calc = L.calcolaMancanze(S.piano, inv, statiPasti(), oggi(), 3, oraAdesso());
     S.calc7 = L.calcolaMancanze(S.piano, inv, statiPasti(), oggi(), 7, oraAdesso());
+    const giorni = giorniSpesaPro();
+    S.calcSpesa = L.calcolaMancanze(S.piano, inv, statiPasti(), oggi(), giorni, oraAdesso(), giorni === 1 ? 24 : undefined);
   }
 
   let allineando = false;
@@ -275,7 +281,7 @@
     if (allineando || !S.calc) return;
     allineando = true;
     try {
-      const ops = L.allineaSpesa(S.db.spesa, (S.calc7 || S.calc).mancanze, oggi());
+      const ops = L.allineaSpesa(S.db.spesa, (S.calcSpesa || S.calc).mancanze, oggi());
       // id fisso per le voci dal piano: due telefoni che allineano insieme non creano doppioni
       const nuove = ops.inserisci.map((r) => ({ ...r, id: "piano:" + r.voce, creato: new Date().toISOString() }));
       if (nuove.length) await salva("spesa", nuove);
@@ -737,7 +743,8 @@
     const presi = lista.filter((s) => s.fatto).length;
     let h = testa("", "Spesa");
     h += `<div class="corpo">
-      <p style="font-size:14px;color:var(--muted);padding:0 4px;margin-top:-6px">${daPrendere} da prendere · si aggiorna da sola con quello che manca nei prossimi 7 giorni, coi colori del giorno in cui serve</p>`;
+      <p style="font-size:14px;color:var(--muted);padding:0 4px;margin-top:-6px">${daPrendere} da prendere · ${giorniSpesaPro() === 1 ? "prossime 24 ore" : "prossimi " + giorniSpesaPro() + " giorni"}, sottraendo le scorte disponibili</p>`;
+    h += `<label class="campo">Periodo della spesa<select id="pro-spesa-giorni">${sel(giorniSpesaPro(), [[1,"1 giorno · prossime 24 ore"],[3,"3 giorni"],[7,"7 giorni"],[14,"14 giorni"]])}</select></label>`;
     if (!esterni) {
       // avvisi solo dentro l'app per ora
     } else if (avvisiAttivi() || whatsappAttivo()) {
@@ -752,7 +759,7 @@
         <input class="input" id="nuova-voce" placeholder="Aggiungi: caffè, detersivo…" style="flex:1" autocomplete="off">
         <button class="btn piccolo" style="min-height:52px" aria-label="Aggiungi">${ico("piu", 20)}</button>
       </form>`;
-    if (!lista.length) h += `<p class="vuoto">Lista vuota: per i prossimi 3 giorni avete tutto.</p>`;
+    if (!lista.length) h += `<p class="vuoto">Lista vuota: nessun acquisto necessario per il periodo selezionato.</p>`;
     for (const s of lista) {
       const tag = s.data_serve && s.origine === "piano"
         ? `<span class="pill liv-${livello(s.data_serve)}">Serve ${esc(L.nomeGiorno(s.data_serve, oggi()))}</span>`
@@ -1311,12 +1318,14 @@
         ids.add(r.id);
         if (t === "pesi" && !(typeof r.kg === "number" && Number.isFinite(r.kg) && r.kg > 0)) throw new Error("Pesata non valida");
         if (t === "piano" && r.id === "persone" && (!Array.isArray(r.dati) || r.dati.some((p) => !p || typeof p.id !== "string" || typeof p.nome !== "string") || new Set(r.dati.map((p) => p.id)).size !== r.dati.length)) throw new Error("Nominativi non validi");
+        if (t === "piano" && r.id === "spesa_pro" && (!r.dati || ![1,3,7,14].includes(r.dati.giorni))) throw new Error("Periodo spesa PRO non valido");
         if (t === "piano" && r.id === "spesa_light") {
           const d = r.dati;
           if (!d || !Array.isArray(d.periodi) || !d.periodi.length || !d.periodi.some((p) => p.id === d.attivo)) throw new Error("Liste Light non valide");
           const listaIds = new Set();
           for (const p of d.periodi) {
-            if (!p || typeof p.id !== "string" || listaIds.has(p.id) || !/^\d{4}-\d{2}-\d{2}$/.test(p.dal || "") || L.iso(L.daIso(p.dal)) !== p.dal || ![3,7,14].includes(p.giorni) || p.id !== p.dal + "|" + p.giorni || !Array.isArray(p.manuali) || !Array.isArray(p.righe) || !p.coperture || typeof p.coperture !== "object" || Array.isArray(p.coperture)) throw new Error("Periodo della spesa Light non valido");
+            if (!p || typeof p.id !== "string" || listaIds.has(p.id) || !/^\d{4}-\d{2}-\d{2}$/.test(p.dal || "") || L.iso(L.daIso(p.dal)) !== p.dal || ![1,3,7,14].includes(p.giorni) || p.id !== p.dal + "|" + p.giorni || !Array.isArray(p.manuali) || !Array.isArray(p.righe) || !p.coperture || typeof p.coperture !== "object" || Array.isArray(p.coperture)) throw new Error("Periodo della spesa Light non valido");
+            if (p.oraInizio != null && !(typeof p.oraInizio === "number" && Number.isFinite(p.oraInizio) && p.oraInizio >= 0 && p.oraInizio < 24)) throw new Error("Orario della lista non valido");
             listaIds.add(p.id);
             if (p.manuali.some((m) => !m || typeof m.id !== "string" || typeof m.nome !== "string" || typeof m.fatto !== "boolean")) throw new Error("Voci manuali Light non valide");
             if (p.righe.some((x) => !x || typeof x.id !== "string" || typeof x.nome !== "string" || typeof x.u !== "string" || !(typeof x.qty === "number" && Number.isFinite(x.qty) && x.qty >= 0) || !x.q || typeof x.q !== "object")) throw new Error("Quantità della lista Light non valide");
@@ -1376,7 +1385,7 @@
     h += `<div class="corpo">
       <section class="sezione-imp"><h2>Versione dell'app</h2>
         <div class="segmenti"><button aria-pressed="${!light()}" data-a="modo" data-v="pro">PRO</button><button aria-pressed="${light()}" data-a="modo" data-v="light">Light</button></div>
-        <p>${light() ? "<b>Light</b>: Piano, Spesa, Peso e storico, con Cambia pasto, Inverti pasti e Fitness. Spesa per periodi di 3, 7 o 14 giorni, con Comprato e Ce l’ho già, senza inventario." : "<b>PRO</b>: tutto, anche frigo e dispensa, codice a barre e cosa manca giorno per giorno."}</p>
+        <p>${light() ? "<b>Light</b>: Piano, Spesa, Peso e storico, con Cambia pasto, Inverti pasti e Fitness. Spesa per 24 ore oppure periodi di 3, 7 o 14 giorni, con Comprato e Ce l’ho già, senza inventario." : "<b>PRO</b>: tutto, anche frigo e dispensa, codice a barre e cosa manca giorno per giorno."}</p>
       </section>
 
       <section class="sezione-imp"><h2>Chi usa questo telefono</h2>
@@ -1530,42 +1539,58 @@
     return lavoro;
   }
   function nuovaListaLight(dal, giorni) {
-    return { id: dal + "|" + giorni, dal, giorni, coperture: {}, manuali: [], righe: L.fabbisognoLight(S.piano, dal, giorni, persone()) };
+    const oraInizio = giorni === 1 && dal === oggi() ? Math.floor(oraAdesso() * 60) / 60 : 0;
+    return { id: dal + "|" + giorni, dal, giorni, oraInizio, coperture: {}, manuali: [], righe: L.fabbisognoLight(S.piano, dal, giorni, persone(), oraInizio) };
   }
+  function finePeriodoLight(p) { return p.giorni === 1 ? L.iso(new Date(L.istanteLocale(p.dal, p.oraInizio || 0) + 86400000)) : L.piuGiorni(p.dal, p.giorni - 1); }
+  function conclusaListaLight(p) { return p.giorni === 1 ? L.istanteLocale(oggi(),oraAdesso()) >= L.istanteLocale(p.dal,p.oraInizio || 0) + 86400000 : finePeriodoLight(p) < oggi(); }
+  function oreLight(ore) { const m = Math.round(ore * 60); return String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0"); }
   function statoSpesaLight() {
     const r = S.db.piano.find((x) => x.id === "spesa_light");
     if (r && r.dati && Array.isArray(r.dati.periodi) && r.dati.periodi.length) return r.dati;
-    const p = nuovaListaLight(oggi(), 7);
+    const p = nuovaListaLight(oggi(), 3);
     // Le voci manuali precedenti vengono copiate una volta; i dati PRO restano intatti.
     p.manuali = S.db.spesa.filter((x) => x.origine === "mano").map((x) => ({ id: x.id, nome: x.nome, fatto: !!x.fatto }));
-    return { attivo: p.id, periodi: [p] };
+    return { attivo: p.id, periodi: [p], durataPredefinita: 3 };
   }
   function periodoSpesaLight(stato = statoSpesaLight()) {
     return stato.periodi.find((x) => x.id === stato.attivo) || stato.periodi[0];
   }
   function fabbisognoPeriodoLight(p) {
-    const fine = L.piuGiorni(p.dal, p.giorni - 1);
+    const fine = finePeriodoLight(p);
     // Le liste concluse rimangono consultabili anche dopo aver caricato una nuova dieta.
-    if (fine < oggi()) return p.righe || [];
-    return L.fabbisognoLight(S.piano, p.dal, p.giorni, persone());
+    if (conclusaListaLight(p)) return p.righe || [];
+    return L.fabbisognoLight(S.piano, p.dal, p.giorni, persone(), p.oraInizio || 0);
   }
   function righeListaLight(p = periodoSpesaLight()) { return L.righeLight(fabbisognoPeriodoLight(p), p.coperture); }
   async function salvaStatoLight(stato) {
     await salva("piano", [{ id: "spesa_light", dati: stato, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
   }
   async function assicuraSpesaLight() {
-    if (!S.db.piano.some((x) => x.id === "spesa_light")) await salvaStatoLight(statoSpesaLight());
+    const esistente = S.db.piano.find((x) => x.id === "spesa_light");
+    if (!esistente) { await salvaStatoLight(statoSpesaLight()); return; }
+    if (esistente.dati.durataPredefinita !== 3) {
+      const stato = JSON.parse(JSON.stringify(esistente.dati)), nuovo = nuovaListaLight(oggi(),3);
+      if (!stato.periodi.some((p) => p.id === nuovo.id)) stato.periodi.push(nuovo);
+      stato.attivo = nuovo.id; stato.durataPredefinita = 3; await salvaStatoLight(stato);
+    }
   }
   function fmtLight(q, u) {
     return L.fmtNum(q) + " " + (u === "n." ? "pz" : u);
   }
-  function nomePeriodoLight(p) { return ddmm(p.dal) + " – " + ddmm(L.piuGiorni(p.dal, p.giorni - 1)) + " (" + p.giorni + " giorni)"; }
+  function nomePeriodoLight(p) {
+    if (p.giorni === 1) {
+      const fine = new Date(L.istanteLocale(p.dal,p.oraInizio || 0) + 86400000);
+      return ddmm(p.dal) + " " + oreLight(p.oraInizio || 0) + " – " + ddmm(L.iso(fine)) + " " + oreLight(fine.getHours()+fine.getMinutes()/60) + " (24 ore)";
+    }
+    return ddmm(p.dal) + " – " + ddmm(finePeriodoLight(p)) + " (" + p.giorni + " giorni)";
+  }
   function schermoSpesaLight() {
     const stato = statoSpesaLight(), p = periodoSpesaLight(stato), righe = righeListaLight(p);
-    const fine = L.piuGiorni(p.dal, p.giorni - 1), conclusa = fine < oggi();
+    const fine = finePeriodoLight(p), conclusa = conclusaListaLight(p);
     const mancanti = righe.filter((r) => !r.coperto).length + p.manuali.filter((r) => !r.fatto).length;
-    let h = testa("", "Spesa") + `<div class="corpo"><section class="card pad"><h2>Spesa dal ${esc(ddmm(p.dal))} al ${esc(ddmm(fine))}</h2><p>${mancanti} voci da prendere. Comprato e «Ce l'ho già» valgono soltanto per questa lista.</p>
-      <form data-form="light-periodo" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"><div class="due"><label class="campo">Dal giorno<input type="date" id="light-dal" value="${esc(p.dal)}" required></label><label class="campo">Durata<select id="light-giorni">${sel(p.giorni, [[3,"3 giorni"],[7,"7 giorni"],[14,"14 giorni"]])}</select></label></div><button class="btn sec" type="submit">Apri questa lista</button></form>
+    let h = testa("", "Spesa") + `<div class="corpo"><section class="card pad"><h2>Spesa ${esc(nomePeriodoLight(p))}</h2><p>${mancanti} voci da prendere. Comprato e «Ce l'ho già» valgono soltanto per questa lista.</p>
+      <form data-form="light-periodo" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"><div class="due"><label class="campo">Dal giorno<input type="date" id="light-dal" value="${esc(p.dal)}" required></label><label class="campo">Durata<select id="light-giorni">${sel(p.giorni, [[1,"1 giorno · 24 ore"],[3,"3 giorni"],[7,"7 giorni"],[14,"14 giorni"]])}</select></label></div><button class="btn sec" type="submit">Apri questa lista</button></form>
       ${stato.periodi.length > 1 ? `<label class="campo" style="margin-top:12px">Liste salvate<select id="light-liste">${sel(p.id, stato.periodi.map((x) => [x.id, nomePeriodoLight(x)]))}</select></label>` : ""}</section>
       ${conclusa ? '<p class="avviso blu">Periodo concluso: la lista resta nello storico della spesa.</p>' : '<p style="font-size:13px;color:var(--muted)">Le quantità seguono il piano, senza sottrarre scorte. Se il piano cambia, gli acquisti restano e vengono indicate le eventuali aggiunte. Ogni periodo è una lista autonoma.</p>'}
       ${!S.piano && !conclusa ? '<p class="avviso giallo">Carica un piano per generare gli alimenti. Puoi comunque aggiungere voci a mano.</p>' : ""}
@@ -1585,7 +1610,7 @@
   }
   function cambiaPeriodoLight(...args) { return accodaSpesaLight(() => cambiaPeriodoLightOra(...args)); }
   async function cambiaPeriodoLightOra(dal, giorni) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dal) || L.iso(L.daIso(dal)) !== dal || ![3,7,14].includes(giorni)) throw new Error("Scegli una data valida e una durata di 3, 7 o 14 giorni");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dal) || L.iso(L.daIso(dal)) !== dal || ![1,3,7,14].includes(giorni)) throw new Error("Scegli una data valida e una durata di 1, 3, 7 o 14 giorni");
     const stato = JSON.parse(JSON.stringify(statoSpesaLight()));
     const attuale = periodoSpesaLight(stato); attuale.righe = fabbisognoPeriodoLight(attuale);
     const id = dal + "|" + giorni;
@@ -1595,7 +1620,7 @@
   function copriVoceLight(...args) { return accodaSpesaLight(() => copriVoceLightOra(...args)); }
   async function copriVoceLightOra(id, azione) {
     const stato = JSON.parse(JSON.stringify(statoSpesaLight())), p = periodoSpesaLight(stato);
-    if (L.piuGiorni(p.dal, p.giorni-1) < oggi()) throw new Error("Questa lista è conclusa: apri un nuovo periodo");
+    if (conclusaListaLight(p)) throw new Error("Questa lista è conclusa: apri un nuovo periodo");
     const r = righeListaLight(p).find((x) => x.id === id); if (!r) return;
     p.righe = fabbisognoPeriodoLight(p);
     if (azione === "annulla") delete p.coperture[id];
@@ -1608,7 +1633,7 @@
   function manualeLight(...args) { return accodaSpesaLight(() => manualeLightOra(...args)); }
   async function manualeLightOra(azione, id, nome) {
     const stato = JSON.parse(JSON.stringify(statoSpesaLight())), p = periodoSpesaLight(stato);
-    if (L.piuGiorni(p.dal,p.giorni-1) < oggi()) throw new Error("Questa lista è conclusa: apri un nuovo periodo");
+    if (conclusaListaLight(p)) throw new Error("Questa lista è conclusa: apri un nuovo periodo");
     p.righe = fabbisognoPeriodoLight(p);
     if (azione === "aggiungi") p.manuali.push({ id: uid(), nome, fatto: false });
     if (azione === "togli") p.manuali = p.manuali.filter((m) => m.id !== id);
@@ -2294,7 +2319,7 @@
     for (const s of presi) {
       const c = cat.find((x) => x.nome === s.nome) || cat.find((x) => (x.voci || [])[0] === s.voce);
       if (c) {
-        const m = (S.calc7 ? S.calc7.mancanze : []).find((x) => x.voce === s.voce);
+        const m = (S.calcSpesa ? S.calcSpesa.mancanze : []).find((x) => x.voce === s.voce);
         S.scelta.set(c.nome, { qty: qtyPerMancanza(c, m), luogo: c.luogo || "frigo" });
       } else senza.push(s.nome);
     }
@@ -2721,6 +2746,12 @@
   });
   document.addEventListener("change", eventoSicuro(async (ev) => {
     const el = ev.target;
+    if (el.id === "pro-spesa-giorni") {
+      const giorni = Number(el.value);
+      if (![1,3,7,14].includes(giorni)) return;
+      await salva("piano", [{ id: "spesa_pro", dati: { giorni }, aggiornato: new Date().toISOString() }]);
+      ricalcola(); await allineaSpesa(); render(); return;
+    }
     if (el.id === "light-liste") { const p = statoSpesaLight().periodi.find((x) => x.id === el.value); if (p) await cambiaPeriodoLight(p.dal,p.giorni); return; }
     if (el.dataset.file === "backup" && el.files[0]) {
       try {
