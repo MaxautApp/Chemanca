@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 12";
+  const VERSIONE = "23.10.2026 · 13";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -846,7 +846,7 @@
         <div class="testo"><span class="nome">${esc(s.nome)}</span>
           <span class="perche">${esc(s.origine === "piano" ? s.motivo : "Aggiunto a mano" + (s.creato_da ? " da " + nomeDi(s.creato_da) : ""))}</span>
           <span class="tags">${tag}${s.fatto ? "" : chi}${s.origine !== "piano" ? `<button class="mini-link" data-a="togli-spesa" data-id="${esc(s.id)}" style="color:var(--muted)">Togli</button>` : ""}</span></div>
-        <span class="q">${esc(s.qty_txt || "")}</span></div>`;
+        <span class="q">${esc(acquistoPro(s)?.testo || s.qty_txt || "")}</span></div>${s.origine === "piano" && !s.fatto ? `<div class="due" style="margin:0 0 14px"><button class="btn piccolo" data-a="spunta" data-id="${esc(s.id)}">Tutta la quantità indicata</button><button class="btn piccolo sec" data-a="quantita-spesa" data-id="${esc(s.id)}">Usa quantità diversa</button></div>` : ""}`;
     }
     h += `<div class="due" style="margin-top:4px">
         <button class="btn sec" data-a="whatsapp-lista">Manda su WhatsApp</button>
@@ -1690,10 +1690,10 @@
     if (!righe.length && !p.manuali.length) h += '<p class="vuoto">Nessun alimento previsto per questo periodo.</p>';
     for (const r of righe) {
       const dettaglio = Object.entries(r.q || {}).map(([id, q]) => nomeDi(id) + " " + fmtLight(q, r.u)).join(" · ");
-      const statoRiga = r.rimosso ? "Non più previsto dal piano" : r.aggiunta ? "Piano aggiornato: aggiungi " + fmtLight(r.manca, r.u) : r.coperto ? "Completo per questa lista" : "Da comprare";
+      const statoRiga = r.rimosso ? "Non più previsto dal piano" : r.aggiunta ? "Ancora da prendere: " + fmtLight(r.manca, r.u) : r.coperto ? "Completo per questa lista" : "Da comprare";
       h += `<section class="card pad"><div class="titolo-sez"><h2 style="font-size:16px">${esc(r.nome)}</h2><b>${r.rimosso ? "" : esc(fmtLight(r.qty, r.u))}</b></div><p style="font-size:13px;color:var(--muted);margin-top:6px">${esc(dettaglio)}</p><p style="margin:8px 0;font-weight:700">${esc(statoRiga)}</p>
         ${r.comprato > 0 ? `<p>Comprato: ${esc(fmtLight(r.comprato,r.u))}</p>` : ""}${r.disponibile > 0 ? `<p>Ce l'ho già: ${esc(fmtLight(r.disponibile,r.u))}</p>` : ""}
-        ${!conclusa && !r.coperto ? `<div class="due" style="margin-top:10px"><button class="btn piccolo" data-a="light-copri" data-id="${esc(r.id)}" data-stato="comprato">${r.aggiunta ? "Comprato il resto" : "Comprato"}</button><button class="btn piccolo sec" data-a="light-copri" data-id="${esc(r.id)}" data-stato="disponibile">Ce l'ho già</button></div>` : ""}
+        ${!conclusa && !r.coperto ? `<div class="due" style="margin-top:10px"><button class="btn piccolo" data-a="light-copri" data-id="${esc(r.id)}" data-stato="comprato">Tutta la quantità indicata</button><button class="btn piccolo sec" data-a="quantita-spesa" data-id="${esc(r.id)}">Usa quantità diversa</button></div><button class="link" data-a="light-copri" data-id="${esc(r.id)}" data-stato="disponibile">Ce l'ho già</button>` : ""}
         ${!conclusa && r.comprato+r.disponibile > 0 ? `<button class="link" data-a="light-copri" data-id="${esc(r.id)}" data-stato="annulla">Annulla acquisto / disponibilità</button>` : ""}</section>`;
     }
     if (p.manuali.length) h += '<h2 style="font-size:17px">Altri acquisti</h2>';
@@ -1712,7 +1712,7 @@
     stato.attivo = id; await salvaStatoLight(stato); render();
   }
   function copriVoceLight(...args) { return accodaSpesaLight(() => copriVoceLightOra(...args)); }
-  async function copriVoceLightOra(id, azione) {
+  async function copriVoceLightOra(id, azione, quantita = null) {
     const stato = JSON.parse(JSON.stringify(statoSpesaLight())), p = periodoSpesaLight(stato);
     if (conclusaListaLight(p)) throw new Error("Questa lista è conclusa: apri un nuovo periodo");
     const r = righeListaLight(p).find((x) => x.id === id); if (!r) return;
@@ -1720,7 +1720,9 @@
     if (azione === "annulla") delete p.coperture[id];
     else if (["comprato", "disponibile"].includes(azione)) {
       const c = p.coperture[id] || { nome: r.nome, u: r.u, comprato: 0, disponibile: 0 };
-      c[azione] = (Number(c[azione]) || 0) + r.manca; p.coperture[id] = c;
+      const q = quantita == null ? r.manca : Number(quantita);
+      if (!Number.isFinite(q) || q <= 0) throw new Error("Inserisci una quantità maggiore di zero");
+      c[azione] = (Number(c[azione]) || 0) + q; p.coperture[id] = c;
     }
     await salvaStatoLight(stato); render();
   }
@@ -1891,7 +1893,7 @@
   function renderFoglio() {
     const el = $("#sheet");
     if (!S.sheet) { el.classList.remove("on"); el.innerHTML = ""; return; }
-    const fogli = { prodotto: foglioProdotto, rivedi: foglioRivedi, item: foglioItem, nuovoCat: foglioNuovoCat, mancanza: foglioMancanza, pasto: foglioPasto, importa: foglioImporta, importa4: foglioImporta4, alternativa: foglioAlternativa, cambia: foglioCambia, gruppoTap: foglioGruppoTap, nota: foglioNota, inverti: foglioInverti, fitness: foglioFitness, chi: foglioChi, gruppo: foglioGruppo, benvenuto: foglioBenvenuto, abbinaPdf: foglioAbbinaPdf, backup: foglioBackup };
+    const fogli = { quantitaSpesa: foglioQuantitaSpesa, prodotto: foglioProdotto, rivedi: foglioRivedi, item: foglioItem, nuovoCat: foglioNuovoCat, mancanza: foglioMancanza, pasto: foglioPasto, importa: foglioImporta, importa4: foglioImporta4, alternativa: foglioAlternativa, cambia: foglioCambia, gruppoTap: foglioGruppoTap, nota: foglioNota, inverti: foglioInverti, fitness: foglioFitness, chi: foglioChi, gruppo: foglioGruppo, benvenuto: foglioBenvenuto, abbinaPdf: foglioAbbinaPdf, backup: foglioBackup };
     // il benvenuto non si chiude toccando fuori: servono almeno i nomi
     const fissoP = S.sheet.tipo === "benvenuto" && S.sheet.d.passo < 3;
     el.innerHTML = `<div class="velo" ${fissoP ? "" : 'data-a="chiudi"'}></div><div class="foglio"><span class="maniglia" aria-hidden="true"></span>${fogli[S.sheet.tipo]()}</div>`;
@@ -1925,6 +1927,39 @@
       </div>
       <button class="btn largo" data-a="salva-prodotto">Aggiungi ${d.luogo === "frigo" ? "al frigo" : "alla dispensa"}</button>
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
+  }
+
+
+  function acquistoPro(s) { return S.db.piano.find(x=>x.id==="quantita_acquisti")?.dati?.[s.id]; }
+  function datiAcquistoPro(s) {
+    const c=catalogo().find(x=>x.nome===s.nome)||catalogoPerVoce(s.voce);
+    const m=(S.calcSpesa?.mancanze||[]).find(x=>x.voce===s.voce);
+    return c ? {nome:c.nome, unita:c.unita, qty:qtyPerMancanza(c,m), luogo:c.luogo||"frigo"} : null;
+  }
+  async function segnaAcquistoPro(id, quantita=null) {
+    await operazionePasti(db=>{
+      const s=db.spesa.find(x=>x.id===id);if(!s)return;
+      const a=datiAcquistoPro(s);
+      let r=db.piano.find(x=>x.id==="quantita_acquisti");
+      if(!r){r={id:"quantita_acquisti",dati:{}};db.piano.push(r);}
+      if(s.fatto && quantita==null){s.fatto=false;delete r.dati[id];return;}
+      if(a){a.qty=quantita==null?a.qty:Number(quantita);if(!Number.isFinite(a.qty)||a.qty<=0)throw Error("Inserisci una quantità maggiore di zero");a.testo=fmtLight(a.qty,a.unita);r.dati[id]=a;}
+      s.fatto=true;s.prende=s.prende||S.chi||null;
+    });render();renderNav();
+  }
+  function apriQuantitaSpesa(id) {
+    if(light()) {
+      const r=righeListaLight().find(x=>x.id===id);if(!r)return;
+      apriFoglio({tipo:"quantitaSpesa",d:{id,light:true,nome:r.nome,unita:r.u,qty:r.manca}});
+    } else {
+      const s=S.db.spesa.find(x=>x.id===id);if(!s)return;
+      const a=datiAcquistoPro(s);if(!a){toast("Per questo alimento scegli prima un prodotto nel catalogo");return;}
+      apriFoglio({tipo:"quantitaSpesa",d:{id,light:false,...a}});
+    }
+  }
+  function foglioQuantitaSpesa() {
+    const d=S.sheet.d;
+    return `<h2>Quanto hai comprato?</h2><p class="sotto">${esc(d.nome)}</p><label>Quantità (${esc(d.unita)})<input type="text" inputmode="decimal" data-f="qty" value="${esc(d.qty)}"></label><p class="sotto">${d.light?"La quantità restante rimane nella lista.":"Questa quantità verrà proposta nel riepilogo Metti in casa; le scorte verranno aggiornate al salvataggio."}</p><button class="btn largo" data-a="salva-quantita-spesa">Conferma quantità</button><button class="link" data-a="chiudi">Annulla</button>`;
   }
 
   function foglioRivedi() {
@@ -2548,21 +2583,24 @@
   }
 
   async function salvaScelta() {
-    const cat = new Map(catalogo().map((c) => [c.nome, c]));
-    let n = 0;
-    for (const [nome, s] of S.scelta) {
-      const c = cat.get(nome);
-      if (!c || s.qty <= 0) continue;
-      // se c'è già lo stesso prodotto nello stesso posto, si somma
-      const esiste = S.db.inventario.find((i) => i.nome === nome && i.luogo === s.luogo && i.unita === c.unita && Number(i.qty) > 0);
-      if (esiste) await modifica("inventario", esiste.id, { qty: Number(esiste.qty) + s.qty, aggiornato: new Date().toISOString() });
-      else await salva("inventario", [{ nome, voci: c.voci || [], luogo: s.luogo, qty: s.qty, unita: c.unita, g_pz: c.g_pz || null, manuale: true, scadenza: null, creato_da: S.chi || "", aggiornato: new Date().toISOString() }]);
-      n++;
-    }
-    S.scelta.clear();
-    chiudiFoglio();
-    dopoModifica();
-    toast(`${n} ${n === 1 ? "prodotto messo" : "prodotti messi"} in casa`);
+    const cat = new Map(catalogo().map(c=>[c.nome,c]));
+    const n=await operazionePasti(db=>{
+      let n=0;
+      for(const [nome,s] of S.scelta){
+        const c=cat.get(nome);if(!c||s.qty<=0)continue;
+        const esiste=db.inventario.find(i=>i.nome===nome&&i.luogo===s.luogo&&i.unita===c.unita&&Number(i.qty)>0);
+        if(esiste){esiste.qty=Number(esiste.qty)+s.qty;esiste.aggiornato=new Date().toISOString();}
+        else db.inventario.push({id:uid(),nome,voci:c.voci||[],luogo:s.luogo,qty:s.qty,unita:c.unita,g_pz:c.g_pz||null,manuale:true,scadenza:null,creato_da:S.chi||"",aggiornato:new Date().toISOString()});
+        if(s.spesaIds?.length){
+          db.spesa=db.spesa.filter(x=>!s.spesaIds.includes(x.id));
+          const r=db.piano.find(x=>x.id==="quantita_acquisti");
+          if(r)for(const id of s.spesaIds)delete r.dati[id];
+        }
+        n++;
+      }
+      return n;
+    });
+    S.scelta.clear();chiudiFoglio();dopoModifica();toast(n+" prodotti messi in casa");
   }
 
   async function salvaProdotto() {
@@ -2612,10 +2650,12 @@
       const c = cat.find((x) => x.nome === s.nome) || cat.find((x) => (x.voci || [])[0] === s.voce);
       if (c) {
         const m = (S.calcSpesa ? S.calcSpesa.mancanze : []).find((x) => x.voce === s.voce);
-        S.scelta.set(c.nome, { qty: qtyPerMancanza(c, m), luogo: c.luogo || "frigo" });
+        const a=acquistoPro(s), precedente=S.scelta.get(c.nome);
+        if(precedente?.spesaIds?.includes(s.id)) continue;
+        S.scelta.set(c.nome, { qty: (precedente?.qty||0)+(a?.qty ?? qtyPerMancanza(c, m)), luogo: a?.luogo || c.luogo || "frigo", spesaIds:[...(precedente?.spesaIds||[]),s.id] });
       } else senza.push(s.nome);
     }
-    await elimina("spesa", presi.map((s) => s.id));
+    // La lista viene aggiornata solo dopo il salvataggio effettivo delle scorte.
     S.tab = "aggiungi"; S.aggTab = "senza"; LS.set("ds_aggtab", "senza");
     dopoModifica();
     if (S.scelta.size) apriFoglio({ tipo: "rivedi" });
@@ -2791,11 +2831,18 @@
       case "prendo": await modifica("spesa", b.dataset.id, { prende: S.chi || "max" }); render(); break;
       case "spunta": {
         const s = S.db.spesa.find((x) => x.id === b.dataset.id);
-        await modifica("spesa", s.id, { fatto: !s.fatto, prende: s.prende || S.chi || null });
+        await segnaAcquistoPro(s.id);
         render(); renderNav(); break;
       }
       case "togli-spesa": await elimina("spesa", b.dataset.id); render(); break;
       case "metti-in-casa": await mettiInCasaComprati(); break;
+      case "quantita-spesa": apriQuantitaSpesa(b.dataset.id); break;
+      case "salva-quantita-spesa": {
+        const d=S.sheet.d,q=Number(String(d.qty).replace(",","."));
+        if(!Number.isFinite(q)||q<=0){toast("Inserisci una quantità maggiore di zero");break;}
+        if(d.light) await copriVoceLight(d.id,"comprato",q); else await segnaAcquistoPro(d.id,q);
+        chiudiFoglio();break;
+      }
       case "light-copri": await copriVoceLight(b.dataset.id, b.dataset.stato); break;
       case "light-manuale-disponibile": await manualeLight("disponibile",b.dataset.id); break;
       case "light-manuale": await manualeLight("spunta", b.dataset.id); break;
