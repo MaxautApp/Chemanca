@@ -1,6 +1,6 @@
 /* Service worker: l'app si apre anche senza rete (i dati arrivano quando torna).
    Rete prima, copia salvata come riserva: così un aggiornamento su GitHub arriva subito. */
-const CACHE = "chemanca-v10";
+const CACHE = "chemanca-v11";
 const FILE = ["./", "index.html", "style.css", "app.js", "logica.js", "catalogo.js", "importa_pdf.js", "config.js", "piano.json", "manifest.webmanifest", "icon.svg"];
 
 self.addEventListener("install", (e) => {
