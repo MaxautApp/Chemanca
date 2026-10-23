@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 2";
+  const VERSIONE = "23.10.2026 · 3";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -69,6 +69,7 @@
     storicoGiorni: 7,
     storicoPersona: "tutti",
     online: false,
+    erroreSalvataggio: "",
   };
   const OGGI_FORZATO = new URLSearchParams(location.search).get("oggi");
   // ?modo=light o ?modo=pro nel link imposta la versione (utile per far provare la Light)
@@ -78,28 +79,56 @@
   const oggi = () => OGGI_FORZATO || L.iso(new Date());
   const oraAdesso = () => { const d = new Date(); return OGGI_FORZATO ? Number(new URLSearchParams(location.search).get("ora") || 7) : d.getHours() + d.getMinutes() / 60; };
 
+  function eventoSicuro(fn) {
+    return async (ev) => { try { await fn(ev); } catch (e) { erroreArchivio(e); } };
+  }
   /* ---------------- archivio: Supabase o solo telefono ---------------- */
   function vuoto() { return Object.fromEntries(TABELLE.map((t) => [t, []])); }
 
   function archivioLocale() {
-    let db = LS.get("ds_db", null) || vuoto();
-    for (const t of TABELLE) db[t] = db[t] || [];
-    const salva = () => LS.set("ds_db", db);
+    let db, letturaFallita = false;
+    try {
+      const raw = localStorage.getItem("ds_db");
+      db = raw === null ? vuoto() : JSON.parse(raw);
+      if (!db || typeof db !== "object" || Array.isArray(db)) throw new Error("Archivio non valido");
+      for (const t of TABELLE) {
+        if (db[t] == null) db[t] = [];
+        if (!Array.isArray(db[t])) throw new Error("Tabella non valida: " + t);
+      }
+    } catch { db = vuoto(); letturaFallita = true; }
+    function verifica() { if (letturaFallita) throw new Error("Archivio locale non leggibile. Ripristina un backup da Impostazioni; i dati originali non sono stati sovrascritti."); }
+    function conferma(nuovo, ripristino = false) {
+      if (!ripristino) verifica();
+      // localStorage sostituisce un solo valore: se fallisce, il vecchio archivio rimane intatto.
+      try { localStorage.setItem("ds_db", JSON.stringify(nuovo)); }
+      catch { throw new Error("Salvataggio non riuscito: memoria del browser piena o non disponibile. Libera spazio e riprova."); }
+      db = nuovo; letturaFallita = false;
+      if (ripristino) S.erroreSalvataggio = "";
+    }
     return {
       tipo: "locale",
-      async carica() { return JSON.parse(JSON.stringify(db)); },
+      async carica() { verifica(); return JSON.parse(JSON.stringify(db)); },
       async scrivi(t, righe) {
-        for (const r of righe) db[t] = db[t].filter((x) => x.id !== r.id).concat({ ...r });
-        salva();
+        verifica();
+        let lista = db[t];
+        for (const r of righe) lista = lista.filter((x) => x.id !== r.id).concat({ ...r });
+        conferma({ ...db, [t]: lista });
       },
       async nuovo(t, riga) {
+        verifica();
         if (db[t].some((x) => x.id === riga.id)) return false;
-        db[t].push({ ...riga }); salva(); return true;
+        conferma({ ...db, [t]: [...db[t], { ...riga }] }); return true;
       },
-      async modifica(t, id, patch) { db[t] = db[t].map((x) => (x.id === id ? { ...x, ...patch } : x)); salva(); },
-      async elimina(t, ids) { db[t] = db[t].filter((x) => !ids.includes(x.id)); salva(); },
+      async modifica(t, id, patch) { verifica(); conferma({ ...db, [t]: db[t].map((x) => x.id === id ? { ...x, ...patch } : x) }); },
+      async elimina(t, ids) { verifica(); conferma({ ...db, [t]: db[t].filter((x) => !ids.includes(x.id)) }); },
       ascolta() {},
-      async azzera(nuovoDb) { db = nuovoDb || vuoto(); salva(); },
+      async azzera(nuovoDb) { conferma(nuovoDb || vuoto()); },
+      async ripristina(nuovoDb) {
+        const precedente = localStorage.getItem("ds_db");
+        // Non distruggere mai la copia precedente se non c'è spazio per conservarla.
+        if (precedente !== null) localStorage.setItem("ds_db_pre_ripristino", precedente);
+        conferma(nuovoDb, true);
+      },
     };
   }
 
@@ -161,23 +190,24 @@
   }
   async function salva(t, righe) {
     righe = [].concat(righe).map((r) => ({ id: r.id || uid(), ...r }));
+    try { await A.scrivi(t, righe); } catch (e) { erroreArchivio(e); throw e; }
     inMemoria(t, righe);
-    try { await A.scrivi(t, righe); } catch (e) { erroreArchivio(e); }
     return righe;
   }
   async function modifica(t, id, patch) {
+    try { await A.modifica(t, id, patch); } catch (e) { erroreArchivio(e); throw e; }
     inMemoria(t, [{ id, ...patch }]);
-    try { await A.modifica(t, id, patch); } catch (e) { erroreArchivio(e); }
   }
   async function elimina(t, ids) {
     ids = [].concat(ids);
+    try { await A.elimina(t, ids); } catch (e) { erroreArchivio(e); throw e; }
     S.db[t] = S.db[t].filter((x) => !ids.includes(x.id));
-    try { await A.elimina(t, ids); } catch (e) { erroreArchivio(e); }
   }
   function erroreArchivio(e) {
     console.error(e);
-    toast("Non riesco a salvare: " + (e.message || e) + ". Ricarico i dati.");
-    ricarica();
+    S.erroreSalvataggio = e.message || String(e);
+    toast(S.erroreSalvataggio);
+    renderTesta();
   }
 
   let attesaRicarica = null;
@@ -250,7 +280,7 @@
     ricalcola();
     render();
     if (scrivi !== null) {
-      allineaSpesa().then(() => { renderNav(); if (S.tab === "spesa") render(); });
+      allineaSpesa().then(() => { renderNav(); if (S.tab === "spesa") render(); }).catch(erroreArchivio);
       controllaAvvisi();
     }
   }
@@ -324,10 +354,12 @@
         ${condiviso ? `<span class="stato-rete on" id="stato-rete">${S.online ? "Condiviso" : "Condiviso…"}</span>` : ""}
         ${conIndietro ? "" : `<button class="icona-btn" data-a="vai" data-tab="imp" aria-label="Impostazioni">${ico("ingranaggio")}</button>`}
       </div>
-    </header>`;
+    </header><div id="errore-salvataggio" class="avviso rosso" role="alert" style="margin:0 16px 14px;${S.erroreSalvataggio ? "" : "display:none"}" ${S.erroreSalvataggio ? "" : "hidden"}>${esc(S.erroreSalvataggio || "")}</div>`;
   }
   function renderTesta() {
     const el = $("#stato-rete");
+    const errore = document.getElementById("errore-salvataggio");
+    if (errore) { errore.textContent = S.erroreSalvataggio || ""; errore.hidden = !S.erroreSalvataggio; errore.style.display = S.erroreSalvataggio ? "" : "none"; }
     if (el) el.textContent = condiviso ? (S.online ? "Condiviso" : "Condiviso…") : "Solo qui";
   }
 
@@ -1257,6 +1289,65 @@
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
 
+
+  function validaBackup(file) {
+    if (!file || file.formato !== "chemanca-backup" || file.versione !== 1 || !file.dati || typeof file.dati !== "object") throw new Error("Questo file non è un backup completo di CheManca?");
+    const dati = {};
+    for (const t of TABELLE) {
+      const righe = file.dati[t];
+      if (!Array.isArray(righe)) throw new Error("Backup incompleto: manca " + t);
+      const ids = new Set();
+      for (const r of righe) {
+        if (!r || typeof r !== "object" || Array.isArray(r) || typeof r.id !== "string" || !r.id || ids.has(r.id)) throw new Error("Record non valido o duplicato in " + t);
+        ids.add(r.id);
+        if (t === "pesi" && !(typeof r.kg === "number" && Number.isFinite(r.kg) && r.kg > 0)) throw new Error("Pesata non valida");
+        if (t === "piano" && r.id === "persone" && (!Array.isArray(r.dati) || r.dati.some((p) => !p || typeof p.id !== "string" || typeof p.nome !== "string") || new Set(r.dati.map((p) => p.id)).size !== r.dati.length)) throw new Error("Nominativi non validi");
+        if (t === "piano" && r.id === "attuale" && r.dati != null) {
+          const settimane = r.dati.settimane;
+          const valide = Array.isArray(settimane) && settimane.length > 0 && settimane.every((w) => Array.isArray(w) && w.length === 7 && w.every((g) => Array.isArray(g) && g.every((p) => p && typeof p.pasto === "string" && Array.isArray(p.voci))));
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(r.dati.inizio || "") || !valide) throw new Error("Piano alimentare non valido");
+        }
+      }
+      dati[t] = JSON.parse(JSON.stringify(righe));
+    }
+    return dati;
+  }
+  async function creaBackup() {
+    const dati = await A.carica();
+    // Include anche il piano pubblicato, per renderlo indipendente dalla versione sul nuovo dispositivo.
+    if (!dati.piano.some((r) => r.id === "attuale") && S.piano) dati.piano.push({ id: "attuale", dati: JSON.parse(JSON.stringify(S.piano)), aggiornato: new Date().toISOString() });
+    return { formato: "chemanca-backup", versione: 1, creato: new Date().toISOString(), app: VERSIONE, dati };
+  }
+  async function esportaBackup() {
+    const backup = await creaBackup();
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob), a = document.createElement("a");
+    a.href = url; a.download = "CheManca-backup-" + oggi() + ".json"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    toast("Backup preparato: conserva il file scaricato");
+  }
+  function anteprimaBackup(file, nome) {
+    const dati = validaBackup(file);
+    apriFoglio({ tipo: "backup", d: { dati, nome, creato: typeof file.creato === "string" ? file.creato : "" } });
+  }
+  function foglioBackup() {
+    const d = S.sheet.d, profili = d.dati.piano.find((r) => r.id === "persone");
+    return `<h2>Ripristina il backup</h2><p class="sotto">${esc(d.nome)}${d.creato ? " · " + esc(d.creato) : ""}</p>
+      <p>Famiglia: ${esc(profili ? profili.dati.map((p) => p.nome).join(", ") : "non specificata")}</p>
+      <p>${d.dati.pasti.length} pasti · ${d.dati.pesi.length} pesate · ${d.dati.note.length} note · ${d.dati.fitness.length} attività</p>
+      <p class="avviso giallo">Il ripristino sostituisce i dati di questo browser. Una copia dei dati attuali viene conservata prima della sostituzione. Il file di backup originale resta sul tuo dispositivo.</p>
+      <button class="btn largo" data-a="backup-conferma">Sostituisci i dati con questo backup</button><button class="link" data-a="chiudi">Annulla</button>`;
+  }
+  async function ripristinaBackup(dati) {
+    if (A.tipo !== "locale") throw new Error("Il ripristino è disponibile solo in modalità locale");
+    await A.ripristina(dati);
+    S.db = await A.carica();
+    if (!persone().some((p) => p.id === S.chi)) S.chi = (persone()[0] || {}).id || null;
+    LS.set("ds_chi", S.chi);
+    S.giornoSel = null; S.pesoPersona = null; S.storicoPersona = "tutti"; S.scelta.clear();
+    chiudiFoglio(); dopoModifica(null); toast("Backup ripristinato");
+  }
+
   /* ---------------- IMPOSTAZIONI ---------------- */
   function schermoImpostazioni() {
     const t = tg(); const w = wa();
@@ -1322,6 +1413,12 @@
       </section>`}
 
 
+      <section class="sezione-imp"><h2>Backup e ripristino</h2>
+        <p>Salva una copia completa di famiglia, piani importati, pasti, note, pesate, fitness, spesa e scorte. Puoi conservarla oppure trasferirla su un altro dispositivo. Non è una sincronizzazione automatica.</p>
+        <button class="btn sec largo" data-a="backup-esporta">Scarica il backup completo</button>
+        ${A.tipo === "locale" ? `<label class="btn sec carica-pdf"><span>Ripristina da un backup</span><input type="file" accept="application/json,.json" data-file="backup" class="sr"></label><button class="link" data-a="backup-precedente">Recupera i dati precedenti all'ultimo ripristino</button>` : ""}
+        <p>Il backup contiene dati personali: conservalo in un posto riservato. Credenziali e token degli avvisi non sono inclusi.</p>
+      </section>
       <section class="sezione-imp"><h2>Dati</h2>
         <p>Cancella frigo, dispensa, spesa, pasti segnati, pesate e note di questo telefono.</p>
         <button class="btn rosso" data-a="svuota">Cancella tutto</button>
@@ -1586,7 +1683,7 @@
   function renderFoglio() {
     const el = $("#sheet");
     if (!S.sheet) { el.classList.remove("on"); el.innerHTML = ""; return; }
-    const fogli = { prodotto: foglioProdotto, rivedi: foglioRivedi, item: foglioItem, nuovoCat: foglioNuovoCat, mancanza: foglioMancanza, pasto: foglioPasto, importa: foglioImporta, importa4: foglioImporta4, alternativa: foglioAlternativa, cambia: foglioCambia, gruppoTap: foglioGruppoTap, nota: foglioNota, inverti: foglioInverti, fitness: foglioFitness, chi: foglioChi, gruppo: foglioGruppo, benvenuto: foglioBenvenuto, abbinaPdf: foglioAbbinaPdf };
+    const fogli = { prodotto: foglioProdotto, rivedi: foglioRivedi, item: foglioItem, nuovoCat: foglioNuovoCat, mancanza: foglioMancanza, pasto: foglioPasto, importa: foglioImporta, importa4: foglioImporta4, alternativa: foglioAlternativa, cambia: foglioCambia, gruppoTap: foglioGruppoTap, nota: foglioNota, inverti: foglioInverti, fitness: foglioFitness, chi: foglioChi, gruppo: foglioGruppo, benvenuto: foglioBenvenuto, abbinaPdf: foglioAbbinaPdf, backup: foglioBackup };
     // il benvenuto non si chiude toccando fuori: servono almeno i nomi
     const fissoP = S.sheet.tipo === "benvenuto" && S.sheet.d.passo < 3;
     el.innerHTML = `<div class="velo" ${fissoP ? "" : 'data-a="chiudi"'}></div><div class="foglio"><span class="maniglia" aria-hidden="true"></span>${fogli[S.sheet.tipo]()}</div>`;
@@ -2182,7 +2279,7 @@
   }
 
   /* ---------------- gestione dei tocchi ---------------- */
-  document.addEventListener("click", async (ev) => {
+  document.addEventListener("click", eventoSicuro(async (ev) => {
     const b = ev.target.closest("[data-a]");
     if (!b) return;
     const a = b.dataset.a;
@@ -2409,6 +2506,14 @@
         if (S.chi === b.dataset.id) { S.chi = persone()[0].id; LS.set("ds_chi", S.chi); }
         dopoModifica(); break;
       }
+      case "backup-esporta": await esportaBackup(); break;
+      case "backup-conferma": await ripristinaBackup(d.dati); break;
+      case "backup-precedente": {
+        const raw = localStorage.getItem("ds_db_pre_ripristino");
+        if (!raw) { toast("Non c'è una copia precedente al ripristino"); break; }
+        anteprimaBackup({ formato: "chemanca-backup", versione: 1, dati: JSON.parse(raw) }, "Dati precedenti all'ultimo ripristino");
+        break;
+      }
       case "pdf-abbina": apriFoglio({ tipo: "abbinaPdf", d: { documenti: suggerisciAbbinamenti(documentiPdf(pianoSalvato())) } }); break;
       case "pdf-abbina-salva": await salvaAbbinamentiPdf(); break;
       case "persone-salva": {
@@ -2484,7 +2589,7 @@
         await A.azzera(); S.db = vuoto(); dopoModifica(); toast("Tutto cancellato");
         break;
     }
-  });
+  }));
 
   // campi dei fogli e ricerche: aggiornano lo stato mentre si scrive
   document.addEventListener("input", (ev) => {
@@ -2517,8 +2622,15 @@
     if (el.dataset.in) { S[el.dataset.in] = el.value; render(); }
     if (el.id === "storico-persona") { S.storicoPersona = el.value; render(); }
   });
-  document.addEventListener("change", async (ev) => {
+  document.addEventListener("change", eventoSicuro(async (ev) => {
     const el = ev.target;
+    if (el.dataset.file === "backup" && el.files[0]) {
+      try {
+        if (el.files[0].size > 25 * 1024 * 1024) throw new Error("File troppo grande: scegli un backup di CheManca?");
+        anteprimaBackup(JSON.parse(await el.files[0].text()), el.files[0].name);
+      } catch (e) { toast("Backup non valido: " + e.message); }
+      el.value = ""; return;
+    }
     if (el.dataset.file === "piano" && el.files[0]) {
       try {
         const p = JSON.parse(await el.files[0].text());
@@ -2534,8 +2646,8 @@
       await leggiPdfDieta([...el.files]);
       el.value = "";
     }
-  });
-  document.addEventListener("submit", async (ev) => {
+  }));
+  document.addEventListener("submit", eventoSicuro(async (ev) => {
     ev.preventDefault();
     const f = ev.target.dataset.form;
     if (f === "ean") {
@@ -2574,7 +2686,7 @@
       render(); renderNav();
       $("#nuova-voce") && $("#nuova-voce").focus();
     }
-  });
+  }));
   document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && S.sheet && !(S.sheet.tipo === "benvenuto" && S.sheet.d.passo < 3)) chiudiFoglio(); });
 
   function apriProdotto(d) { fermaScanner(); apriFoglio({ tipo: "prodotto", d }); }
@@ -2598,7 +2710,8 @@
     try { S.pianoFile = await (await fetch("piano.json", { cache: "no-cache" })).json(); }
     catch { S.pianoFile = null; }
     try { S.db = await A.carica(); }
-    catch (e) { console.error(e); toast("Database non raggiungibile: " + (e.message || e)); }
+    catch (e) { console.error(e); S.erroreSalvataggio = e.message || String(e); toast(S.erroreSalvataggio); }
+    if (S.erroreSalvataggio && A.tipo === "locale") { S.tab = "imp"; render(); return; }
     scegliPiano();
     await chiudiGiorniPassati();
     A.ascolta(ricaricaPresto);
