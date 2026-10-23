@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 16";
+  const VERSIONE = "23.10.2026 · 17";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -444,14 +444,14 @@
     if (r.stato === "parziale") return (r.contenuto && r.contenuto.confermati || []).includes(id);
     return r.stato === "solo:" + id || r.stato === id;
   }
-  const FINE_PASTO_HOME = { Colazione: 9.5, "Metà mattina": 11.5, Pranzo: 14, Merenda: 17.5, Cena: 21 };
+  const FINE_PASTO_HOME = { Colazione: 9.5, "Metà mattina": 11.5, Pranzo: 14, Merenda: 17.5, Cena: 24 };
   function prossimoPastoHome() {
     if (!S.piano) return null;
     const stati = statiPasti();
     for (let i=0;i<8;i++) {
       const data=L.piuGiorni(oggi(),i),g=L.giornoPiano(S.piano,data); if(!g) continue;
       const pasti=[...g.pasti].filter((p)=>p.pasto!=="Fuori pasto" && pastoPerPersona(p,S.chi)).sort((a,b)=>(L.ORA[a.pasto]??12)-(L.ORA[b.pasto]??12));
-      for (const p of pasti) if ((i>0 || oraAdesso() <= (FINE_PASTO_HOME[p.pasto] ?? 24)) && !registratoPerPersona(stati[L.chiavePasto(data,p.pasto)],S.chi)) return { ...p, data };
+      for (const p of pasti) if ((i>0 || oraAdesso() <= (FINE_PASTO_HOME[p.pasto] ?? 24)) && ((i===0 && p.pasto==="Cena") || !registratoPerPersona(stati[L.chiavePasto(data,p.pasto)],S.chi))) return { ...p, data };
     }
     return null;
   }
@@ -488,8 +488,9 @@
     let h=testa(dataLunga(oggi()),"Ciao "+nomeDi(S.chi))+`<div class="corpo"><div class="home-intro"><p>Il tuo piano, giorno dopo giorno.</p>${persone().length>1?`<label class="campo">Stai guardando il piano di<select id="home-persona">${sel(S.chi,persone().map((p)=>[p.id,p.nome]))}</select></label>`:""}</div><div class="home-grid">`;
     if(!S.piano) h+=`<section class="home-card home-principale"><span class="home-etichetta">Il tuo piano alimentare</span><h2>Partiamo dalla tua dieta</h2><p>Carica il PDF della dietista e controlla l'abbinamento con i nomi della famiglia.</p><label class="btn largo carica-pdf">${ico("piu",20)}<span>Carica la dieta dal PDF</span><input type="file" accept="application/pdf,.pdf" multiple data-file="pdf" class="sr"></label></section>`;
     else if(prossimo) {
+      const giaFatto=registratoPerPersona(stati[L.chiavePasto(prossimo.data,prossimo.pasto)],S.chi);
       const dosi=(prossimo.voci||[]).filter((v)=>Number(L.dosi(v)[S.chi])>0).map((v)=>`<li><span>${esc(v.nome)}</span><b>${esc(fmtLight(L.dosi(v)[S.chi],v.u))}</b></li>`).join("");
-      h+=`<section class="home-card home-principale"><span class="home-etichetta">Prossimo pasto · ${esc(L.nomeGiorno(prossimo.data,oggi()))}</span><h2>${esc(prossimo.pasto)} <small>${esc(oreLight(L.ORA[prossimo.pasto]??12))}</small></h2><p class="home-caption">Orario indicativo · dosi per ${esc(nomeDi(S.chi))}</p>${prossimo.libero?'<p>Pasto libero: puoi scrivere cosa hai mangiato anche in seguito.</p>':`<ul class="home-dosi">${dosi}</ul>`}<div class="home-azioni-pasto"><button class="btn sec" data-a="piano-apri" data-d="${esc(prossimo.data)}" data-pasto="${esc(prossimo.pasto)}">Apri il pasto</button><button class="btn" data-a="home-pasto-fatto" data-k="${esc(L.chiavePasto(prossimo.data,prossimo.pasto))}" ${prossimo.data > oggi() ? 'disabled title="Puoi confermare il pasto dal giorno previsto"' : ""} aria-label="Fatto! Conferma il pasto di ${esc(nomeDi(S.chi))}">Fatto!</button></div></section>`;
+      h+=`<section class="home-card home-principale"><span class="home-etichetta">${giaFatto ? "Pasto registrato" : "Prossimo pasto"} · ${esc(L.nomeGiorno(prossimo.data,oggi()))}</span><h2>${esc(prossimo.pasto)} <small>${esc(oreLight(L.ORA[prossimo.pasto]??12))}</small></h2><p class="home-caption">Orario indicativo · dosi per ${esc(nomeDi(S.chi))}</p>${prossimo.libero?'<p>Pasto libero: puoi scrivere cosa hai mangiato anche in seguito.</p>':`<ul class="home-dosi">${dosi}</ul>`}<div class="home-azioni-pasto"><button class="btn sec" data-a="piano-apri" data-d="${esc(prossimo.data)}" data-pasto="${esc(prossimo.pasto)}">Apri il pasto</button><button class="btn" data-a="home-pasto-fatto" data-k="${esc(L.chiavePasto(prossimo.data,prossimo.pasto))}" ${giaFatto ? 'disabled title="Pasto già registrato: puoi modificarlo con Apri il pasto"' : prossimo.data > oggi() ? 'disabled title="Puoi confermare il pasto dal giorno previsto"' : ""} aria-label="Fatto! Conferma il pasto di ${esc(nomeDi(S.chi))}">Fatto!</button></div></section>`;
     } else h+='<section class="home-card home-principale"><h2>Nessun pasto in programma</h2><p>Puoi consultare il piano completo o aggiornare la dieta dalle Impostazioni.</p><button class="btn" data-a="piano-apri">Apri il piano</button></section>';
     h+=`<section class="home-card"><span class="home-etichetta">La giornata di oggi</span><h2>${registrati} <small>di ${pasti.length} pasti registrati</small></h2><p>A fine giornata i pasti rimasti vengono registrati automaticamente. Puoi correggerli nello storico.</p><button class="btn sec largo" data-a="piano-apri" data-d="${oggi()}">Piano di oggi e settimana</button></section>
       <section class="home-card"><span class="home-etichetta">La spesa della famiglia</span><h2>${daComprare} <small>voci da prendere</small></h2><p>${esc(nomePeriodoLight(lista))}</p><button class="btn sec largo" data-a="vai" data-tab="spesa">Apri la lista</button></section>
