@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 15";
+  const VERSIONE = "23.10.2026 · 16";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -64,7 +64,7 @@
     sheet: null,
     chi: LS.get("ds_chi", null),
     scan: { attivo: false, stop: null, errore: "" },
-    diarioTab: "riepilogo",
+    diarioTab: "peso",
     pesoPersona: null,
     storicoGiorni: 7,
     storicoPersona: "tutti",
@@ -998,7 +998,7 @@
   }
 
   /* ---------------- la matita: cosa ho mangiato davvero ---------------- */
-  const NOTA_STORICO = "A fine giornata i pasti non confermati vengono segnati automaticamente come fatti secondo il piano. Le registrazioni automatiche sono riconoscibili e puoi correggerle, aggiungere note o attività fisica anche nei giorni successivi.";
+  const NOTA_STORICO = "A fine giornata i pasti non confermati vengono segnati automaticamente come fatti secondo il piano. Puoi correggere i pasti, aggiungere note o attività fisica anche nei giorni successivi.";
   // Per i giorni archiviati usa sempre il contenuto salvato, anche dopo un cambio dieta.
   function pastoArchiviato(k) {
     const r = S.db.pasti.find((x) => x.id === k);
@@ -1142,57 +1142,13 @@
     let h = testa("", "Diario", "oggi");
     h += `<div class="corpo">
       <div class="segmenti">
-        <button aria-pressed="${S.diarioTab === "riepilogo"}" data-a="diario-tab" data-v="riepilogo">Settimana</button>
         <button aria-pressed="${S.diarioTab === "peso"}" data-a="diario-tab" data-v="peso">Peso</button>
         <button aria-pressed="${S.diarioTab === "storico"}" data-a="diario-tab" data-v="storico">Storico</button>
       </div>`;
-    h += S.diarioTab === "riepilogo" ? pannelloSettimana() : S.diarioTab === "storico" ? pannelloStorico() : pannelloPeso();
+    h += S.diarioTab === "storico" ? pannelloStorico() : pannelloPeso();
     return h + `</div>`;
   }
 
-
-  function datiSettimana(da, persona) {
-    const a=L.piuGiorni(da,6), rep=datiReport(da,a,persona);
-    const pasti=rep.giorni.flatMap(g=>g.pasti.filter(p=>!p.fitness).map(p=>({...p,data:g.data})));
-    const speciali=pasti.filter(p=>{
-      const r=S.db.pasti.find(x=>x.id===p.id);
-      return p.libero || p.nota || r?.contenuto?.cambiato || !!S.piano?.cambi?.[p.id];
-    });
-    const pesi=pesateDi(persona).filter(x=>x.data<=a);
-    const dentro=pesi.filter(x=>x.data>=da);
-    const precedente=pesi.filter(x=>x.data<da).pop();
-    const ultimo=dentro[dentro.length-1];
-    const base=precedente||dentro[0];
-    const variazione=ultimo&&base&&ultimo.id!==base.id ? Number(ultimo.kg)-Number(base.kg) : null;
-    return {...rep,speciali,dentro,precedente,ultimo,base,variazione,attivitaLista:rep.giorni.flatMap(g=>g.pasti.filter(p=>p.fitness).map(p=>({...p,data:g.data})))};
-  }
-  function pannelloSettimana() {
-    const famiglia=persone();
-    if(!famiglia.length)return '<p class="vuoto">Aggiungi un profilo nelle impostazioni per vedere il riepilogo.</p>';
-    if(!famiglia.some(p=>p.id===S.settimanaPersona))S.settimanaPersona=famiglia.find(p=>p.id===S.chi)?.id||famiglia[0].id;
-    const da=L.lunediDi(S.settimanaDal||oggi()), r=datiSettimana(da,S.settimanaPersona),corrente=L.lunediDi(oggi());
-    let h=`<label class="campo">Persona<select id="settimana-persona" class="input">${sel(S.settimanaPersona,famiglia.map(p=>[p.id,p.nome]))}</select></label>
-      <div class="due"><button class="btn sec piccolo" data-a="settimana-sposta" data-v="-7">← Precedente</button><button class="btn sec piccolo" data-a="settimana-sposta" data-v="7" ${da>=corrente?'disabled':''}>Successiva →</button></div>
-      <label class="campo">Settimana del lunedì<input class="input" id="settimana-data" type="date" value="${da}" max="${oggi()}"></label>
-      <p class="sotto">Dal ${esc(ddmm(da))} al ${esc(ddmm(r.a))} · ${da.slice(0,4)}${da===corrente?' · In corso':''}</p>
-      <button class="btn largo" data-a="settimana-stampa">Stampa o salva PDF</button><p class="sotto">Esporta il riepilogo di ${esc(nomeDi(S.settimanaPersona))} per questa settimana. Per il PDF scegli «Salva come PDF» nella finestra di stampa.</p>
-      <section class="card pad"><h2>Peso</h2>`;
-    if(r.ultimo){
-      h+=`<p><b>${esc(L.fmtNum(r.ultimo.kg))} kg</b> · ${esc(ddmm(r.ultimo.data))}</p>`;
-      if(r.variazione!==null)h+=`<p class="sotto">${esc(segno(r.variazione))} kg rispetto alla pesata del ${esc(ddmm(r.base.data))}.</p>`;
-      else h+='<p class="sotto">Serve una seconda pesata per mostrare la variazione.</p>';
-      const punti=[...(r.precedente?[r.precedente]:[]),...r.dentro];
-      if(punti.length>1)h+=`<div class="grafico">${graficoPeso(punti,coloreDi(S.settimanaPersona))}</div>`;
-    } else h+=`<p class="sotto">Nessuna pesata in questa settimana.${r.precedente?' Ultima disponibile: '+esc(L.fmtNum(r.precedente.kg))+' kg del '+esc(ddmm(r.precedente.data))+'.':''}</p>`;
-    h+=`<button class="link" data-a="settimana-peso">Apri le pesate</button></section>
-      <section class="card pad"><h2>Pasti e note</h2><p class="sotto">Pasti liberi, cambi al piano e note già registrate. Le note del pasto sono condivise dalla famiglia.</p>`;
-    if(!r.speciali.length)h+='<p class="sotto">Nessun pasto libero, cambio o nota registrato in questa settimana.</p>';
-    for(const p of r.speciali)h+=`<div class="riepilogo-riga"><b>${esc(ddmm(p.data))} · ${esc(p.pasto)}</b><span>${p.libero?'Pasto libero':esc(p.piatti.join(', ')||p.cibi.join(' · ')||'Pasto modificato')}</span>${p.nota?'<span class="sotto">'+esc(p.nota)+'</span>':''}<button class="link" data-a="nota-apri" data-k="${esc(p.id)}">${p.libero&&!p.nota?'Scrivi cosa hai mangiato':'Apri il pasto'}</button></div>`;
-    h+=`</section><section class="card pad"><h2>Attività fisica</h2><p><b>${r.attivita}</b> attività · <b>${esc(durata(r.minuti))}</b></p>`;
-    if(!r.attivitaLista.length)h+='<p class="sotto">Nessuna attività registrata in questa settimana.</p>';
-    for(const f of r.attivitaLista)h+=`<div class="riepilogo-riga"><b>${esc(ddmm(f.data))} · ${esc(f.stato)}</b><span>${esc(f.cibi.join(' · '))}</span></div>`;
-    return h+'</section>';
-  }
 
   function pannelloPeso() {
     if (!S.pesoPersona || !persone().some((p) => p.id === S.pesoPersona)) S.pesoPersona = S.chi || (persone()[0] || {}).id;
@@ -1307,7 +1263,7 @@
       if (!giorno) { giorno = { data: r.data, pasti: [] }; giorni.push(giorno); }
       const nota = notaDi(r.id);
       giorno.pasti.push({
-        id: r.id, automatico: r.stato === "auto",
+        id: r.id, automatico: r.stato === "auto", cambiato: !!(contenuto && contenuto.cambiato) || !!S.piano?.cambi?.[r.id],
         nota: nota ? nota.testo : "",
         pasto: r.pasto, stato: statoTesto(r.stato,r),
         piatti: contenuto ? contenuto.piatti : [], libero: !!(contenuto && contenuto.libero), cibi,
@@ -1340,21 +1296,61 @@
   }
 
   // "Tutto" = dal primo pasto o dalla prima pesata registrati: l'intero percorso
+  function aStorico() { return S.storicoIntervallo?.a || oggi(); }
   function daStorico() {
+    if(S.storicoIntervallo) return S.storicoIntervallo.da;
     if (S.storicoGiorni) return L.piuGiorni(oggi(), -(S.storicoGiorni - 1));
     const date = [...S.db.pasti.map((r) => r.data), ...S.db.pesi.map((r) => r.data), ...S.db.fitness.map((r) => r.data)].filter(Boolean).sort();
     return date[0] || oggi();
   }
 
+
+  function riepilogoReport(rep) {
+    return {
+      speciali:rep.giorni.flatMap(g=>g.pasti.filter(p=>!p.fitness&&(p.libero||p.nota||p.cambiato)).map(p=>({...p,data:g.data}))),
+      attivita:rep.giorni.flatMap(g=>g.pasti.filter(p=>p.fitness).map(p=>({...p,data:g.data}))),
+      pesi:rep.pesi.map(p=>{
+        const ultimo=p.pesate[p.pesate.length-1],base=p.prima||p.pesate[0];
+        return {...p,ultimo,base,variazione:ultimo&&base&&ultimo!==base?Number(ultimo.kg)-Number(base.kg):null};
+      })
+    };
+  }
+  function htmlRiepilogoStorico(rep, stampa=false) {
+    const r=riepilogoReport(rep),data=d=>ddmm(d)+"/"+d.slice(0,4);
+    let h='<div class="riepilogo-storico"><h2>Peso e andamento</h2>';
+    const ids=rep.persona==='tutti'?persone().map(p=>p.id):[rep.persona];
+    for(const id of ids){
+      const p=r.pesi.find(p=>p.id===id);
+      h+='<section class="riepilogo-persona"><h3>'+esc(nomeDi(id))+'</h3>';
+      if(!p||!p.pesate.length){h+='<p class="sotto">Nessuna pesata nel periodo.'+(p?.prima?' Ultima disponibile: '+esc(L.fmtNum(p.prima.kg))+' kg del '+esc(data(p.prima.data))+'.':'')+'</p>';}
+      else{
+        h+='<p>'+p.pesate.map(x=>'<b>'+esc(L.fmtNum(x.kg))+' kg</b> · '+esc(data(x.data))).join(' · ')+'</p>';
+        h+=p.variazione!==null?'<p class="sotto">Variazione: <b>'+esc(segno(p.variazione))+' kg</b> dal '+esc(data(p.base.data))+' al '+esc(data(p.ultimo.data))+'.</p>':'<p class="sotto">Serve una seconda pesata per mostrare la variazione.</p>';
+        const punti=[...(p.prima?[p.prima]:[]),...p.pesate];
+        if(punti.length>1)h+='<div class="grafico report-grafico">'+graficoPeso(punti,coloreDi(id))+'</div>';
+      }
+      h+='</section>';
+    }
+    h+='<h2>Pasti liberi, modifiche e note</h2><p class="sotto">Le note del pasto sono condivise dalla famiglia.</p>';
+    if(!r.speciali.length)h+='<p class="sotto">Nessun pasto libero, cambio o nota registrato nel periodo.</p>';
+    for(const p of r.speciali)h+='<div class="riepilogo-riga"><b>'+esc(data(p.data))+' · '+esc(p.pasto)+'</b><span>'+(p.libero?'Pasto libero':esc(p.piatti.join(', ')||p.cibi.join(' · ')||'Pasto modificato'))+'</span>'+(p.nota?'<span>'+esc(p.nota)+'</span>':'')+(!stampa?'<button class="link" data-a="nota-apri" data-k="'+esc(p.id)+'">'+(p.libero&&!p.nota?'Scrivi cosa hai mangiato':'Modifica')+'</button>':'')+'</div>';
+    h+='<h2>Attività fisica</h2><p><b>'+rep.attivita+'</b> attività · durata complessiva: <b>'+esc(durata(rep.minuti))+'</b></p>';
+    if(!r.attivita.length)h+='<p class="sotto">Nessuna attività registrata nel periodo.</p>';
+    for(const f of r.attivita)h+='<div class="riepilogo-riga"><b>'+esc(data(f.data))+' · '+esc(f.stato)+'</b><span>'+esc(f.cibi.join(' · '))+'</span></div>';
+    return h+'</div>';
+  }
+
   function pannelloStorico() {
-    const rep = datiReport(daStorico(), oggi(), S.storicoPersona);
-    let h = `<div class="segmenti">${[[7, "7 giorni"], [30, "30 giorni"], [0, "Tutto"]].map(([n, t]) => `<button aria-pressed="${S.storicoGiorni === n}" data-a="storico-giorni" data-v="${n}">${t}</button>`).join("")}</div>`;
+    const rep = datiReport(daStorico(), aStorico(), S.storicoPersona);
+    let h = `<div class="segmenti">${[[7, "7 giorni"], [30, "30 giorni"], [0, "Tutto"]].map(([n, t]) => `<button aria-pressed="${!S.storicoIntervallo && S.storicoGiorni === n}" data-a="storico-giorni" data-v="${n}">${t}</button>`).join("")}</div>`;
     if (persone().length > 1) {
       h += `<label class="campo">Di chi<select id="storico-persona" class="input">${sel(S.storicoPersona, [["tutti", "Tutti"], ...persone().map((p) => [p.id, p.nome])])}</select></label>`;
     }
-    h += `<div class="due"><button class="btn" data-a="report-stampa">Stampa o PDF</button><button class="btn sec" data-a="report-testo">File di testo</button></div>
+    h += `<details class="periodo-storico" ${S.storicoIntervallo?"open":""}><summary>Scegli un periodo preciso</summary><form data-form="storico-periodo"><div class="due"><label class="campo">Dal<input id="storico-dal" type="date" value="${rep.da}" max="${oggi()}" required></label><label class="campo">Al<input id="storico-al" type="date" value="${rep.a}" max="${oggi()}" required></label></div><button class="btn sec piccolo">Applica periodo</button></form></details>
+      <div class="due"><button class="btn" data-a="report-stampa">Stampa o salva PDF</button><button class="btn sec" data-a="report-testo">File di testo</button></div>
       <p class="avviso blu">${esc(NOTA_STORICO)}</p>
-      <p style="font-size:13px;color:var(--muted);padding:0 4px">Il report per la dietista: pasti di questi giorni${rep.pesi.length ? " e pesate" : ""}. Con «Stampa o PDF» scegli «Salva come PDF» nella finestra di stampa.</p>`;
+      <p style="font-size:13px;color:var(--muted);padding:0 4px">Il report comprende peso e andamento, pasti liberi o modificati, note, attività fisica e dettaglio dei pasti. Con «Stampa o salva PDF» scegli «Salva come PDF» nella finestra di stampa.</p>`;
+    h += `<details class="riepilogo-box" open><summary>Riepilogo del periodo · ${esc(ddmm(rep.da))}–${esc(ddmm(rep.a))}</summary>${htmlRiepilogoStorico(rep)}</details>`;
     if (!rep.giorni.length) return h + `<p class="vuoto">Nessun pasto nello storico in questi giorni. I pasti previsti vengono conservati dal giorno di inizio della dieta.</p>`;
     h += `<p style="font-size:14px;padding:0 4px"><b>${rep.fatti}</b> pasti nello storico · <b>${rep.saltati}</b> saltati${rep.attivita ? ` · <b>${rep.attivita}</b> attività fisiche (${esc(durata(rep.minuti))})` : ""} · dal ${esc(ddmm(rep.da))} al ${esc(ddmm(rep.a))}</p>`;
     for (const g of [...rep.giorni].reverse()) {
@@ -1371,7 +1367,7 @@
 
   function intestazioneReport(rep) {
     const chi = rep.persona === "tutti" ? persone().map((p) => p.nome).join(", ") : nomeDi(rep.persona);
-    return { titolo: "Diario alimentare · " + chi, periodo: `dal ${dataLunga(rep.da).toLowerCase()} al ${dataLunga(rep.a).toLowerCase()} ${rep.a.slice(0, 4)}` };
+    return { titolo: "Diario alimentare · " + chi, periodo: `dal ${dataLunga(rep.da).toLowerCase()} ${rep.da.slice(0,4)} al ${dataLunga(rep.a).toLowerCase()} ${rep.a.slice(0, 4)}` };
   }
   function righePeso(p) {
     const base = p.prima || p.pesate[0];
@@ -1386,6 +1382,11 @@
       for (const p of rep.pesi) out.push(`${p.nome}: ${righePeso(p).join(" · ") || "nessuna pesata nel periodo"}`);
       out.push("");
     }
+    const riepilogo=riepilogoReport(rep);
+    out.push("PASTI LIBERI, MODIFICHE E NOTE");
+    if(!riepilogo.speciali.length)out.push("Nessun pasto libero, cambio o nota registrato nel periodo.");
+    for(const p of riepilogo.speciali)out.push(ddmm(p.data)+" · "+p.pasto+": "+(p.libero?"Pasto libero":p.piatti.join(", ")||p.cibi.join("; "))+(p.nota?" — Nota condivisa: "+p.nota:""));
+    out.push("");
     out.push(`PASTI (${rep.fatti} da piano o confermati, ${rep.saltati} saltati)` + (rep.attivita ? ` · FITNESS: ${rep.attivita} attività, ${durata(rep.minuti)}` : ""));
     for (const g of rep.giorni) {
       out.push("", dataLunga(g.data));
@@ -1400,58 +1401,25 @@
   }
 
 
-  function htmlReportSettimana(r) {
-    const data=d=>ddmm(d)+"/"+d.slice(0,4);
-    const rigaPasto=p=>`<tr><th>${esc(data(p.data))}<br>${esc(p.pasto)}</th><td>${p.libero?'Pasto libero':esc(p.piatti.join(', '))}${!p.libero&&p.cibi.length?'<div>'+esc(p.cibi.join(' · '))+'</div>':''}${p.nota?'<div><b>Nota del pasto (condivisa):</b> '+esc(p.nota)+'</div>':''}</td></tr>`;
-    let h=`<h1>Riepilogo settimanale</h1><p><b>${esc(nomeDi(r.persona))}</b> · dal ${esc(data(r.da))} al ${esc(data(r.a))}</p>${r.a>=oggi()?'<p>Settimana in corso: il report contiene i dati già registrati.</p>':''}<h2>Peso e andamento</h2>`;
-    if(r.dentro.length){
-      h+=`<table><thead><tr><th>Data</th><th>Peso</th></tr></thead><tbody>${r.dentro.map(x=>'<tr><td>'+esc(data(x.data))+'</td><td>'+esc(L.fmtNum(x.kg))+' kg</td></tr>').join('')}</tbody></table>`;
-      if(r.variazione!==null)h+=`<p>Variazione: <b>${esc(segno(r.variazione))} kg</b>, dal ${esc(data(r.base.data))} (${esc(L.fmtNum(r.base.kg))} kg) al ${esc(data(r.ultimo.data))} (${esc(L.fmtNum(r.ultimo.kg))} kg).</p>`;
-      else h+='<p>Una sola misurazione disponibile: variazione non calcolabile.</p>';
-      const punti=[...(r.precedente?[r.precedente]:[]),...r.dentro];
-      if(punti.length>1)h+=`<div class="report-grafico">${graficoPeso(punti,coloreDi(r.persona))}</div>`;
-    } else h+=`<p>Nessuna pesata registrata nella settimana.${r.precedente?' Ultima disponibile: '+esc(L.fmtNum(r.precedente.kg))+' kg del '+esc(data(r.precedente.data))+'.':''}</p>`;
-    h+='<h2>Pasti liberi, modifiche e note</h2>';
-    h+=r.speciali.length?'<table><thead><tr><th>Giorno e pasto</th><th>Dettagli</th></tr></thead><tbody>'+r.speciali.map(rigaPasto).join('')+'</tbody></table>':'<p>Nessun pasto libero, cambio o nota registrato nella settimana.</p>';
-    h+=`<h2>Attività fisica</h2><p>${r.attivita} attività · durata complessiva: ${esc(durata(r.minuti))}.</p>`;
-    h+=r.attivitaLista.length?'<table><thead><tr><th>Data</th><th>Attività</th><th>Durata</th></tr></thead><tbody>'+r.attivitaLista.map(f=>'<tr><td>'+esc(data(f.data))+'</td><td>'+esc(f.cibi.join(' · '))+'</td><td>'+esc(f.stato)+'</td></tr>').join('')+'</tbody></table>':'<p>Nessuna attività registrata nella settimana.</p>';
-    h+='<h2>Dettaglio dei pasti registrati</h2>';
-    const giorni=r.giorni.filter(g=>g.pasti.some(p=>!p.fitness));
-    if(!giorni.length)h+='<p>Nessun pasto registrato nella settimana.</p>';
-    for(const g of giorni)h+=`<div class="giorno"><h3>${esc(dataLunga(g.data))}</h3><table><tbody>${g.pasti.filter(p=>!p.fitness).map(p=>{const x=rigaPasto({...p,data:g.data});return p.stato==='saltato'?x.replace('<td>','<td><b>Pasto saltato</b><br>'):x;}).join('')}</tbody></table></div>`;
-    return h+`<p class="report-fonte">I pasti seguono il piano salvato e le modifiche registrate. Le note del pasto sono condivise dalla famiglia. Generato da CheManca? il ${esc(new Date().toLocaleDateString('it-IT'))}.</p>`;
+  function htmlReportStorico(rep) {
+    const t=intestazioneReport(rep);
+    let h='<h1>'+esc(t.titolo)+'</h1><p>'+esc(t.periodo)+'</p>'+htmlRiepilogoStorico(rep,true)+'<h2>Dettaglio dei pasti registrati</h2>';
+    if(!rep.giorni.some(g=>g.pasti.some(p=>!p.fitness)))h+='<p>Nessun pasto registrato nel periodo.</p>';
+    for(const g of rep.giorni){
+      const pasti=g.pasti.filter(p=>!p.fitness);if(!pasti.length)continue;
+      h+='<div class="giorno"><h3>'+esc(dataLunga(g.data))+'</h3><table><tbody>'+pasti.map(p=>'<tr><th style="width:22%">'+esc(p.pasto)+(p.stato==='saltato'?'<br><small>Saltato</small>':'')+'</th><td>'+(p.piatti.length?'<b>'+esc(p.piatti.join(', '))+'</b><br>':'')+(p.libero?'Pasto libero':esc(p.cibi.join(' · '))||'—')+(p.nota?'<br><i>Nota condivisa del pasto: '+esc(p.nota)+'</i>':'')+'</td></tr>').join('')+'</tbody></table></div>';
+    }
+    return h+'<p class="report-fonte">I pasti seguono il piano salvato e le modifiche registrate. Generato da CheManca? il '+esc(new Date().toLocaleDateString('it-IT'))+'.</p>';
   }
-  function stampaSettimana() {
-    const persona=S.settimanaPersona;
-    if(!persone().some(p=>p.id===persona)){toast("Scegli una persona per il report");return;}
-    const r=datiSettimana(L.lunediDi(S.settimanaDal||oggi()),persona);
+  function stampaReport() {
+    const rep=datiReport(daStorico(),aStorico(),S.storicoPersona);
     let el=document.getElementById("stampa");
     if(!el){el=document.createElement("div");el.id="stampa";document.body.appendChild(el);}
-    el.innerHTML=htmlReportSettimana(r);window.print();
-  }
-
-  function stampaReport() {
-    const rep = datiReport(daStorico(), oggi(), S.storicoPersona);
-    const t = intestazioneReport(rep);
-    let h = `<h1>${esc(t.titolo)}</h1><p>${esc(t.periodo)} · ${rep.fatti} pasti nello storico, ${rep.saltati} saltati${rep.attivita ? ` · fitness: ${rep.attivita} attività, ${esc(durata(rep.minuti))}` : ""}</p>`;
-    if (rep.pesi.length) {
-      h += `<h2>Peso</h2><table><tbody>${rep.pesi.map((p) => `<tr><th>${esc(p.nome)}</th><td>${esc(righePeso(p).join(" · ") || "nessuna pesata nel periodo")}</td></tr>`).join("")}</tbody></table>`;
-    }
-    h += `<p>${esc(NOTA_STORICO)}</p><h2>Pasti</h2>`;
-    for (const g of rep.giorni) {
-      h += `<div class="giorno"><h3>${esc(dataLunga(g.data))}</h3><table><tbody>${g.pasti.map((p) =>
-        p.fitness ? `<tr class="fit"><th style="width:22%">Fitness<br><small>${esc(p.stato)}</small></th><td>${esc(p.cibi[0])}</td></tr>` :
-        `<tr><th style="width:22%">${esc(p.pasto)}<br><small>${esc(p.stato)}</small></th><td>${p.piatti.length ? "<b>" + esc(p.piatti.join(", ")) + "</b><br>" : ""}${p.libero ? "Pasto libero" : esc(p.cibi.join(" · ")) || "—"}${p.nota ? `<br><i>Nota: ${esc(p.nota)}</i>` : ""}</td></tr>`).join("")}</tbody></table></div>`;
-    }
-    h += `<p style="margin-top:12pt;font-size:9pt">Generato da CheManca? il ${esc(new Date().toLocaleDateString("it-IT"))}</p>`;
-    let el = document.getElementById("stampa");
-    if (!el) { el = document.createElement("div"); el.id = "stampa"; document.body.appendChild(el); }
-    el.innerHTML = h;
-    window.print();
+    el.innerHTML=htmlReportStorico(rep);window.print();
   }
 
   async function esportaTesto() {
-    const rep = datiReport(daStorico(), oggi(), S.storicoPersona);
+    const rep = datiReport(daStorico(), aStorico(), S.storicoPersona);
     const nome = `CheManca-diario-${rep.da}-${rep.a}.txt`;
     const file = new File([testoReport(rep)], nome, { type: "text/plain" });
     // sul telefono si apre "Condividi" (WhatsApp, mail…); dove non c'è, si scarica il file
@@ -1534,7 +1502,7 @@
     S.db = await A.carica();
     if (!persone().some((p) => p.id === S.chi)) S.chi = (persone()[0] || {}).id || null;
     LS.set("ds_chi", S.chi);
-    S.giornoSel = null; S.pesoPersona = null; S.storicoPersona = "tutti"; S.scelta.clear();
+    S.giornoSel = null; S.pesoPersona = null; S.storicoPersona = "tutti"; S.storicoIntervallo=null; S.scelta.clear();
     chiudiFoglio(); dopoModifica(null); toast("Backup ripristinato");
   }
 
@@ -1921,21 +1889,34 @@
     posizionaCamera();
   }
 
-  async function trovatoCodice(ean) {
+  async function cercaDatiCodice(ean) {
+    if(navigator.onLine===false)return {stato:"offline",prodotto:null};
+    const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),10000);
+    try {
+      const r=await fetch(`https://world.openfoodfacts.org/api/v2/product/${ean}.json?fields=product_name,product_name_it,generic_name_it,generic_name,brands,quantity,product_quantity,product_quantity_unit,categories_tags`,{signal:ctrl.signal});
+      const j=await r.json();
+      if(j.status===0)return {stato:"assente",prodotto:null};
+      if(!r.ok||j.status!==1||!j.product)throw Error("Risposta non valida dal servizio");
+      const p=j.product,nome=String(p.product_name_it||p.product_name||p.generic_name_it||p.generic_name||"").trim();
+      return {stato:nome?"trovato":"incompleto",prodotto:p};
+    } catch(e){return {stato:e.name==="AbortError"?"timeout":"errore",prodotto:null};}
+    finally {clearTimeout(timer);}
+  }
+  function messaggioRicercaProdotto(d) {
+    if(d.noto)return "Già visto: dati ricordati sul dispositivo";
+    const messaggi={trovato:"Dati da Open Food Facts",assente:"Codice assente da Open Food Facts: puoi inserire il nome",incompleto:"Prodotto presente in Open Food Facts, ma senza nome",offline:"Sei offline: non posso cercare il prodotto",timeout:"Open Food Facts non ha risposto in tempo",errore:"Ricerca non riuscita: problema di rete o del servizio Open Food Facts"};
+    return messaggi[d.ricerca]||(d.trovato?"Dati da Open Food Facts":"Inserisci i dati del prodotto");
+  }
+  async function trovatoCodice(ean, forzaRicerca = false) {
     ean = String(ean).replace(/\D/g, "");
     if (navigator.vibrate) navigator.vibrate(60);
     const noto = S.db.prodotti.find((p) => p.id === ean);
-    if (noto) return apriProdotto({ ean, ...daProdottoNoto(noto), noto: true });
+    if (noto && !forzaRicerca && String(noto.nome||"").trim()) return apriProdotto({ ean, ...daProdottoNoto(noto), noto: true });
     toast("Cerco il prodotto " + ean + "…");
-    let off = null;
-    try {
-      const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${ean}.json?fields=product_name,product_name_it,generic_name_it,brands,quantity,product_quantity,product_quantity_unit,categories_tags`);
-      const j = await r.json();
-      if (j.status === 1) off = j.product;
-    } catch { /* senza rete: si compila a mano */ }
+    const ricerca=await cercaDatiCodice(ean),off=ricerca.prodotto;
     nascondiToast();
     const voci = L.tutteLeVoci(S.piano || { settimane: [] });
-    const nome = off ? (off.product_name_it || off.product_name || off.generic_name_it || "").trim() : "";
+    const nome = off ? (off.product_name_it || off.product_name || off.generic_name_it || off.generic_name || "").trim() : "";
     const voce = nome ? L.indovinaVoce(nome, voci) : null;
     const unitaOff = ((off && off.product_quantity_unit) || "g").toLowerCase();
     const peso = off && off.product_quantity && /^(g|ml)$/.test(unitaOff) ? Math.round(Number(off.product_quantity)) : null;
@@ -1944,7 +1925,7 @@
     const d = {
       ean, nome, marca: off ? (off.brands || "").split(",")[0] : "",
       voce: voce || "", luogo, conf: 1, conf_qty: voce === "Uovo di gallina" ? 6 : peso || "", conf_unita: voce === "Uovo di gallina" ? "pz" : "g",
-      scadenza: "", trovato: !!off,
+      scadenza: "", trovato: !!off, ricerca:ricerca.stato,
     };
     preimpostaConfezione(d, litri);
     apriProdotto(d);
@@ -1989,14 +1970,16 @@
     return `<div style="display:flex;gap:12px;align-items:center">
         <div style="width:52px;height:52px;border-radius:14px;background:${d.luogo === "frigo" ? "var(--blue-soft)" : "var(--brown-soft)"};color:${d.luogo === "frigo" ? "var(--blue)" : "var(--brown)"};display:flex;align-items:center;justify-content:center;flex:none">${ico(d.luogo === "frigo" ? "frigo" : "dispensa", 26)}</div>
         <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><h2>${esc(d.nome || "Prodotto nuovo")}</h2>
-        <span class="sotto">${d.noto ? "Già visto: dati ricordati" : d.trovato ? "Dati da Open Food Facts" + (d.marca ? " · " + esc(d.marca) : "") : "Codice " + esc(d.ean) + " non trovato: scrivi tu il nome"}</span></div></div>
+        <span class="sotto">${esc(messaggioRicercaProdotto(d))}${d.marca ? " · " + esc(d.marca) : ""}</span></div></div>
+      <p class="sotto">Codice: ${esc(d.ean)}</p>
+      ${["offline","timeout","errore","incompleto","assente"].includes(d.ricerca) ? `<button class="link" data-a="riprova-prodotto" data-ean="${esc(d.ean)}">Riprova ricerca online</button>` : ""}
       ${usi.length ? `<div class="avviso verde">${ico("spunta", 18)}<span>Nel piano: ${esc(usi.join(", "))}.</span></div>` : ""}
       <label class="campo">Nome<input data-f="nome" value="${esc(d.nome)}" placeholder="Es. Ricotta di vacca 250 g"></label>
       <label class="campo">Conta come (voce del piano)<select data-f="voce">${sel(d.voce, opzioniVoci())}</select></label>
       <div class="campo"><span>Dove lo metti?</span>${bottoniLuogo(d.luogo, "f-luogo")}</div>
       <div class="due">
         <div class="campo"><span>Confezioni</span><div class="stepper"><button type="button" data-a="f-conf" data-v="-1" aria-label="Una in meno">−</button><span class="val">${d.conf}</span><button type="button" data-a="f-conf" data-v="1" aria-label="Una in più">+</button></div></div>
-        <label class="campo">Scadenza<input type="date" data-f="scadenza" value="${esc(d.scadenza)}"></label>
+        <label class="campo">Scadenza (facoltativa)<input type="date" data-f="scadenza" value="${esc(d.scadenza)}"></label>
       </div>
       <div class="due">
         <label class="campo">${d.conf_unita === "pz" && L.REGOLE[d.voce] ? "Pacchetti nella scatola" : d.conf_unita === "l" ? "Litri nella bottiglia" : "Ogni confezione"}<input data-f="conf_qty" inputmode="decimal" value="${esc(d.conf_qty)}" placeholder="250"></label>
@@ -2827,6 +2810,7 @@
         if (S.aggTab === "codice") { render(); avviaScanner(); } else { fermaScanner(); render(); }
         break;
       case "scan-avvia": avviaScanner(); break;
+      case "riprova-prodotto": await trovatoCodice(b.dataset.ean,true); break;
       case "prodotto-noto": {
         const p = S.db.prodotti.find((x) => x.id === b.dataset.ean);
         fermaScanner();
@@ -3007,8 +2991,6 @@
         break;
       }
       case "vai-diario": S.diarioTab = b.dataset.v; S.pesoPersona = S.chi; S.storicoPersona = S.chi || "tutti"; chiudiFoglio(); vai("diario"); break;
-      case "settimana-sposta": S.settimanaDal=L.piuGiorni(L.lunediDi(S.settimanaDal||oggi()),Number(b.dataset.v)); render(); break;
-      case "settimana-peso": S.pesoPersona=S.settimanaPersona; S.diarioTab="peso"; render(); break;
       case "diario-tab": S.diarioTab = b.dataset.v; render(); break;
       case "peso-persona": S.pesoPersona = b.dataset.v; render(); break;
       case "peso-togli": {
@@ -3017,8 +2999,7 @@
         toast("Pesata tolta", "Annulla", async () => { await salva("pesi", [r]); render(); });
         break;
       }
-      case "storico-giorni": S.storicoGiorni = Number(b.dataset.v); render(); break;
-      case "settimana-stampa": stampaSettimana(); break;
+      case "storico-giorni": S.storicoIntervallo=null; S.storicoGiorni = Number(b.dataset.v); render(); break;
       case "report-stampa": stampaReport(); break;
       case "report-testo": await esportaTesto(); break;
       case "modo":
@@ -3197,8 +3178,6 @@
       }
     }
     if (el.dataset.in) { S[el.dataset.in] = el.value; render(); }
-    if (el.id === "settimana-persona") { S.settimanaPersona=el.value; render(); }
-    if (el.id === "settimana-data") { if(/^\d{4}-\d{2}-\d{2}$/.test(el.value) && el.value<=oggi()) S.settimanaDal=L.lunediDi(el.value); render(); }
     if (el.id === "storico-persona") { S.storicoPersona = el.value; render(); }
   });
   document.addEventListener("change", eventoSicuro(async (ev) => {
@@ -3238,6 +3217,12 @@
   document.addEventListener("submit", eventoSicuro(async (ev) => {
     ev.preventDefault();
     const f = ev.target.dataset.form;
+    if (f === "storico-periodo") {
+      const da=$("#storico-dal").value,a=$("#storico-al").value;
+      const valida=d=>/^\d{4}-\d{2}-\d{2}$/.test(d)&&L.iso(L.daIso(d))===d;
+      if(!valida(da)||!valida(a)||da>a||a>oggi()){toast("Scegli un intervallo valido, fino a oggi");return;}
+      S.storicoIntervallo={da,a};render();return;
+    }
     if (f === "ean") {
       const v = $("#ean").value.replace(/\D/g, "");
       if (v.length < 8) return toast("Il codice ha almeno 8 cifre");

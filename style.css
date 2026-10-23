@@ -446,3 +446,11 @@ button:focus-visible, summary:focus-visible { outline:3px solid var(--green); ou
   #stampa td { overflow-wrap:anywhere; }
   #stampa .report-fonte { margin-top:12pt; font-size:9pt; }
 }
+
+.riepilogo-box,.periodo-storico{border:1px solid var(--line);border-radius:14px;padding:12px;margin:8px 0 16px}
+.riepilogo-box>summary,.periodo-storico>summary{font-weight:800;cursor:pointer;min-height:40px;padding:8px 0}
+.riepilogo-storico h2{font-size:19px;margin:18px 0 10px}
+.riepilogo-storico h3{font-size:16px;margin:10px 0}
+.riepilogo-storico p{line-height:1.55;margin:8px 0}
+.riepilogo-persona{border-bottom:1px solid var(--line-soft);padding-bottom:12px}
+@media print{#stampa .riepilogo-riga{break-inside:avoid;display:block;padding:7pt 0}#stampa .riepilogo-riga>span{display:block}#stampa .riepilogo-persona{break-inside:avoid}#stampa .sotto{color:#333}}
