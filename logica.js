@@ -427,7 +427,46 @@
     return [...s].sort((a, b) => a.localeCompare(b, "it"));
   }
 
+
+  // Lista Light per un periodo fisso: nessun inventario, consumo o equivalenza implicita.
+  function fabbisognoLight(piano, dal, giorni, persone) {
+    if (!piano) return [];
+    const ids = persone ? new Set(persone.map((p) => p.id)) : null;
+    const righe = new Map();
+    for (let i = 0; i < giorni; i++) {
+      const data = piuGiorni(dal, i), giorno = giornoPiano(piano, data);
+      if (!giorno) continue;
+      for (const p of giorno.pasti) {
+        if (p.libero) continue;
+        for (const v of p.voci) {
+          const q = Object.fromEntries(Object.entries(dosi(v)).filter(([id, n]) => (!ids || ids.has(id)) && Number(n) > 0).map(([id, n]) => [id, Number(n)]));
+          const totale = Object.values(q).reduce((a, b) => a + b, 0);
+          if (!totale) continue;
+          const id = JSON.stringify([v.nome, v.u]);
+          let r = righe.get(id);
+          if (!r) { r = { id, nome: v.nome, u: v.u, qty: 0, q: {}, prima: data }; righe.set(id, r); }
+          r.qty += totale;
+          for (const [persona, n] of Object.entries(q)) r.q[persona] = (r.q[persona] || 0) + n;
+        }
+      }
+    }
+    return [...righe.values()].map((r) => ({ ...r, qty: Math.round(r.qty * 10000) / 10000 })).sort((a, b) => a.nome.localeCompare(b.nome, "it") || a.u.localeCompare(b.u, "it"));
+  }
+  function righeLight(fabbisogno, coperture) {
+    const righe = new Map(fabbisogno.map((r) => [r.id, { ...r }]));
+    for (const [id, c] of Object.entries(coperture || {})) {
+      if (!righe.has(id) && (c.comprato > 0 || c.disponibile > 0)) righe.set(id, { id, nome: c.nome, u: c.u, qty: 0, q: {}, rimosso: true });
+    }
+    return [...righe.values()].map((r) => {
+      const c = (coperture || {})[r.id] || {};
+      const comprato = Math.max(0, Number(c.comprato) || 0), disponibile = Math.max(0, Number(c.disponibile) || 0);
+      const manca = Math.max(0, Math.round((r.qty - comprato - disponibile) * 10000) / 10000);
+      return { ...r, comprato, disponibile, manca, coperto: manca <= 0, aggiunta: manca > 0 && comprato + disponibile > 0 };
+    }).sort((a, b) => Number(a.coperto) - Number(b.coperto) || a.nome.localeCompare(b.nome, "it"));
+  }
+
   return {
+    fabbisognoLight, righeLight,
     PASTI, ORA, PRESENZA, GENERICHE, REGOLE, regola, fmtLitri,
     iso, daIso, piuGiorni, diffGiorni, nomeGiorno, etichettaData, GIORNI,
     giornoPiano, chiavePasto, lunediDi, inizioSettimane, pastiFinestra, quantoServe, dosi,

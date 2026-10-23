@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 3";
+  const VERSIONE = "23.10.2026 · 4";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -264,6 +264,14 @@
 
   let allineando = false;
   async function allineaSpesa() {
+    if (light()) {
+      return accodaSpesaLight(async () => {
+        await assicuraSpesaLight();
+        const stato = JSON.parse(JSON.stringify(statoSpesaLight())), p = periodoSpesaLight(stato);
+        const righe = fabbisognoPeriodoLight(p);
+        if (JSON.stringify(p.righe) !== JSON.stringify(righe)) { p.righe = righe; await salvaStatoLight(stato); }
+      });
+    }
     if (allineando || !S.calc) return;
     allineando = true;
     try {
@@ -318,7 +326,7 @@
 
   let controllando = false;
   async function controllaAvvisi() {
-    if (controllando || !S.calc || !(avvisiAttivi() || whatsappAttivo())) return;
+    if (light() || controllando || !S.calc || !(avvisiAttivi() || whatsappAttivo())) return;
     controllando = true;
     try {
       const urgenti = S.calc.mancanze.filter((m) => m.urgente);
@@ -364,7 +372,7 @@
   }
 
   function renderNav() {
-    const daPrendere = S.db.spesa.filter((s) => !s.fatto).length;
+    const daPrendere = light() ? righeListaLight().filter((r) => !r.coperto).length + periodoSpesaLight().manuali.filter((r) => !r.fatto).length : S.db.spesa.filter((s) => !s.fatto).length;
     const mancano = S.calc7 ? S.calc7.mancanze : [];
     const liv = mancano.length ? Math.min(...mancano.map((m) => livello(m.data))) : 0;
     const extra = (tab) => tab === "spesa" && daPrendere ? `<span class="badge">${daPrendere}</span>`
@@ -720,6 +728,7 @@
 
   /* ---------------- SPESA ---------------- */
   function schermoSpesa() {
+    if (light()) return schermoSpesaLight();
     const lista = [...S.db.spesa].sort((a, b) =>
       (a.fatto ? 1 : 0) - (b.fatto ? 1 : 0) ||
       ["urgente", "entro", "dopo"].indexOf(a.urgenza || "dopo") - ["urgente", "entro", "dopo"].indexOf(b.urgenza || "dopo") ||
@@ -1302,6 +1311,18 @@
         ids.add(r.id);
         if (t === "pesi" && !(typeof r.kg === "number" && Number.isFinite(r.kg) && r.kg > 0)) throw new Error("Pesata non valida");
         if (t === "piano" && r.id === "persone" && (!Array.isArray(r.dati) || r.dati.some((p) => !p || typeof p.id !== "string" || typeof p.nome !== "string") || new Set(r.dati.map((p) => p.id)).size !== r.dati.length)) throw new Error("Nominativi non validi");
+        if (t === "piano" && r.id === "spesa_light") {
+          const d = r.dati;
+          if (!d || !Array.isArray(d.periodi) || !d.periodi.length || !d.periodi.some((p) => p.id === d.attivo)) throw new Error("Liste Light non valide");
+          const listaIds = new Set();
+          for (const p of d.periodi) {
+            if (!p || typeof p.id !== "string" || listaIds.has(p.id) || !/^\d{4}-\d{2}-\d{2}$/.test(p.dal || "") || L.iso(L.daIso(p.dal)) !== p.dal || ![3,7,14].includes(p.giorni) || p.id !== p.dal + "|" + p.giorni || !Array.isArray(p.manuali) || !Array.isArray(p.righe) || !p.coperture || typeof p.coperture !== "object" || Array.isArray(p.coperture)) throw new Error("Periodo della spesa Light non valido");
+            listaIds.add(p.id);
+            if (p.manuali.some((m) => !m || typeof m.id !== "string" || typeof m.nome !== "string" || typeof m.fatto !== "boolean")) throw new Error("Voci manuali Light non valide");
+            if (p.righe.some((x) => !x || typeof x.id !== "string" || typeof x.nome !== "string" || typeof x.u !== "string" || !(typeof x.qty === "number" && Number.isFinite(x.qty) && x.qty >= 0) || !x.q || typeof x.q !== "object")) throw new Error("Quantità della lista Light non valide");
+            for (const c of Object.values(p.coperture)) if (!c || typeof c.nome !== "string" || typeof c.u !== "string" || ![c.comprato,c.disponibile].every((n) => typeof n === "number" && Number.isFinite(n) && n >= 0)) throw new Error("Acquisti Light non validi");
+          }
+        }
         if (t === "piano" && r.id === "attuale" && r.dati != null) {
           const settimane = r.dati.settimane;
           const valide = Array.isArray(settimane) && settimane.length > 0 && settimane.every((w) => Array.isArray(w) && w.length === 7 && w.every((g) => Array.isArray(g) && g.every((p) => p && typeof p.pasto === "string" && Array.isArray(p.voci))));
@@ -1355,7 +1376,7 @@
     h += `<div class="corpo">
       <section class="sezione-imp"><h2>Versione dell'app</h2>
         <div class="segmenti"><button aria-pressed="${!light()}" data-a="modo" data-v="pro">PRO</button><button aria-pressed="${light()}" data-a="modo" data-v="light">Light</button></div>
-        <p>${light() ? "<b>Light</b>: Piano, Spesa, Peso e storico, con Cambia pasto, Inverti pasti e Fitness. Spuntare un alimento in spesa vale come «comprato»." : "<b>PRO</b>: tutto, anche frigo e dispensa, codice a barre e cosa manca giorno per giorno."}</p>
+        <p>${light() ? "<b>Light</b>: Piano, Spesa, Peso e storico, con Cambia pasto, Inverti pasti e Fitness. Spesa per periodi di 3, 7 o 14 giorni, con Comprato e Ce l’ho già, senza inventario." : "<b>PRO</b>: tutto, anche frigo e dispensa, codice a barre e cosa manca giorno per giorno."}</p>
       </section>
 
       <section class="sezione-imp"><h2>Chi usa questo telefono</h2>
@@ -1501,32 +1522,98 @@
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
   }
 
-  /* ---------------- Light: la spesa senza frigo e dispensa ----------------
-     Nella Light non si gestisce la casa: quando si spunta un alimento lo si considera
-     comprato nella quantità che serve, e sparisce dalla lista. Dietro le quinte entra
-     in casa, così i pasti fatti lo consumano e torna in lista quando servirà di nuovo. */
-  async function compratoLight(s) {
-    const m = (S.calc7 ? S.calc7.mancanze : []).find((x) => x.voce === s.voce);
-    let riga = null;
-    if (m) {
-      const r = L.REGOLE[m.voce];
-      const base = { nome: m.voce, voci: [m.voce], luogo: (S.piano && L.luogoDaVoce(S.piano, m.voce)) || "dispensa", manuale: true, scadenza: null, creato_da: S.chi || "", aggiornato: new Date().toISOString() };
-      if (r && r.unita === "l") riga = { ...base, qty: 1, unita: "l", g_pz: null };
-      else if (r && r.g_pz && m.u === "g") riga = { ...base, qty: Math.ceil(m.manca / r.g_pz - 1e-9), unita: "pz", g_pz: null };
-      else if (m.u === "g") riga = { ...base, qty: Math.ceil(m.manca), unita: "g", g_pz: null };
-      else if (m.u === "n.") riga = { ...base, qty: Math.ceil(m.manca), unita: "pz", g_pz: null };
-      else if (m.u === "vasetto") riga = { ...base, qty: Math.ceil(m.manca) * 150, unita: "g", g_pz: null };
-      else riga = { ...base, qty: 1, unita: "pz", g_pz: null };
-      riga = (await salva("inventario", [riga]))[0];
+  /* ---------------- Light: liste per periodo, indipendenti dalle scorte ---------------- */
+  let codaSpesaLight = Promise.resolve();
+  function accodaSpesaLight(fn) {
+    const lavoro = codaSpesaLight.then(fn);
+    codaSpesaLight = lavoro.catch(() => {});
+    return lavoro;
+  }
+  function nuovaListaLight(dal, giorni) {
+    return { id: dal + "|" + giorni, dal, giorni, coperture: {}, manuali: [], righe: L.fabbisognoLight(S.piano, dal, giorni, persone()) };
+  }
+  function statoSpesaLight() {
+    const r = S.db.piano.find((x) => x.id === "spesa_light");
+    if (r && r.dati && Array.isArray(r.dati.periodi) && r.dati.periodi.length) return r.dati;
+    const p = nuovaListaLight(oggi(), 7);
+    // Le voci manuali precedenti vengono copiate una volta; i dati PRO restano intatti.
+    p.manuali = S.db.spesa.filter((x) => x.origine === "mano").map((x) => ({ id: x.id, nome: x.nome, fatto: !!x.fatto }));
+    return { attivo: p.id, periodi: [p] };
+  }
+  function periodoSpesaLight(stato = statoSpesaLight()) {
+    return stato.periodi.find((x) => x.id === stato.attivo) || stato.periodi[0];
+  }
+  function fabbisognoPeriodoLight(p) {
+    const fine = L.piuGiorni(p.dal, p.giorni - 1);
+    // Le liste concluse rimangono consultabili anche dopo aver caricato una nuova dieta.
+    if (fine < oggi()) return p.righe || [];
+    return L.fabbisognoLight(S.piano, p.dal, p.giorni, persone());
+  }
+  function righeListaLight(p = periodoSpesaLight()) { return L.righeLight(fabbisognoPeriodoLight(p), p.coperture); }
+  async function salvaStatoLight(stato) {
+    await salva("piano", [{ id: "spesa_light", dati: stato, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
+  }
+  async function assicuraSpesaLight() {
+    if (!S.db.piano.some((x) => x.id === "spesa_light")) await salvaStatoLight(statoSpesaLight());
+  }
+  function fmtLight(q, u) {
+    return L.fmtNum(q) + " " + (u === "n." ? "pz" : u);
+  }
+  function nomePeriodoLight(p) { return ddmm(p.dal) + " – " + ddmm(L.piuGiorni(p.dal, p.giorni - 1)) + " (" + p.giorni + " giorni)"; }
+  function schermoSpesaLight() {
+    const stato = statoSpesaLight(), p = periodoSpesaLight(stato), righe = righeListaLight(p);
+    const fine = L.piuGiorni(p.dal, p.giorni - 1), conclusa = fine < oggi();
+    const mancanti = righe.filter((r) => !r.coperto).length + p.manuali.filter((r) => !r.fatto).length;
+    let h = testa("", "Spesa") + `<div class="corpo"><section class="card pad"><h2>Spesa dal ${esc(ddmm(p.dal))} al ${esc(ddmm(fine))}</h2><p>${mancanti} voci da prendere. Comprato e «Ce l'ho già» valgono soltanto per questa lista.</p>
+      <form data-form="light-periodo" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"><div class="due"><label class="campo">Dal giorno<input type="date" id="light-dal" value="${esc(p.dal)}" required></label><label class="campo">Durata<select id="light-giorni">${sel(p.giorni, [[3,"3 giorni"],[7,"7 giorni"],[14,"14 giorni"]])}</select></label></div><button class="btn sec" type="submit">Apri questa lista</button></form>
+      ${stato.periodi.length > 1 ? `<label class="campo" style="margin-top:12px">Liste salvate<select id="light-liste">${sel(p.id, stato.periodi.map((x) => [x.id, nomePeriodoLight(x)]))}</select></label>` : ""}</section>
+      ${conclusa ? '<p class="avviso blu">Periodo concluso: la lista resta nello storico della spesa.</p>' : '<p style="font-size:13px;color:var(--muted)">Le quantità seguono il piano, senza sottrarre scorte. Se il piano cambia, gli acquisti restano e vengono indicate le eventuali aggiunte. Ogni periodo è una lista autonoma.</p>'}
+      ${!S.piano && !conclusa ? '<p class="avviso giallo">Carica un piano per generare gli alimenti. Puoi comunque aggiungere voci a mano.</p>' : ""}
+      <form data-form="spesa-nuova" style="display:flex;gap:8px"><label class="sr" for="nuova-voce">Aggiungi alla lista</label><input class="input" id="nuova-voce" placeholder="Aggiungi: caffè, detersivo…" style="flex:1" autocomplete="off"><button class="btn piccolo" style="min-height:52px" aria-label="Aggiungi">${ico("piu",20)}</button></form>`;
+    if (!righe.length && !p.manuali.length) h += '<p class="vuoto">Nessun alimento previsto per questo periodo.</p>';
+    for (const r of righe) {
+      const dettaglio = Object.entries(r.q || {}).map(([id, q]) => nomeDi(id) + " " + fmtLight(q, r.u)).join(" · ");
+      const statoRiga = r.rimosso ? "Non più previsto dal piano" : r.aggiunta ? "Piano aggiornato: aggiungi " + fmtLight(r.manca, r.u) : r.coperto ? "Completo per questa lista" : "Da comprare";
+      h += `<section class="card pad"><div class="titolo-sez"><h2 style="font-size:16px">${esc(r.nome)}</h2><b>${r.rimosso ? "" : esc(fmtLight(r.qty, r.u))}</b></div><p style="font-size:13px;color:var(--muted);margin-top:6px">${esc(dettaglio)}</p><p style="margin:8px 0;font-weight:700">${esc(statoRiga)}</p>
+        ${r.comprato > 0 ? `<p>Comprato: ${esc(fmtLight(r.comprato,r.u))}</p>` : ""}${r.disponibile > 0 ? `<p>Ce l'ho già: ${esc(fmtLight(r.disponibile,r.u))}</p>` : ""}
+        ${!conclusa && !r.coperto ? `<div class="due" style="margin-top:10px"><button class="btn piccolo" data-a="light-copri" data-id="${esc(r.id)}" data-stato="comprato">${r.aggiunta ? "Comprato il resto" : "Comprato"}</button><button class="btn piccolo sec" data-a="light-copri" data-id="${esc(r.id)}" data-stato="disponibile">Ce l'ho già</button></div>` : ""}
+        ${!conclusa && r.comprato+r.disponibile > 0 ? `<button class="link" data-a="light-copri" data-id="${esc(r.id)}" data-stato="annulla">Annulla acquisto / disponibilità</button>` : ""}</section>`;
     }
-    const copia = { ...s };
-    await elimina("spesa", s.id);
-    dopoModifica();
-    toast(`${s.nome}: comprato`, "Annulla", async () => {
-      if (riga) await elimina("inventario", riga.id);
-      await salva("spesa", [copia]);
-      dopoModifica();
-    });
+    if (p.manuali.length) h += '<h2 style="font-size:17px">Aggiunti a mano</h2>';
+    for (const m of p.manuali) h += `<div class="card pad"><span style="font-weight:700">${esc(m.nome)}</span> · ${m.fatto ? "Comprato" : "Da comprare"}${!conclusa ? `<div class="due" style="margin-top:8px"><button class="btn piccolo sec" data-a="light-manuale" data-id="${esc(m.id)}">${m.fatto ? "Da comprare" : "Comprato"}</button><button class="link" data-a="light-manuale-togli" data-id="${esc(m.id)}">Togli</button></div>` : ""}</div>`;
+    return h + '<button class="btn sec largo" data-a="whatsapp-lista">Manda su WhatsApp</button></div>';
+  }
+  function cambiaPeriodoLight(...args) { return accodaSpesaLight(() => cambiaPeriodoLightOra(...args)); }
+  async function cambiaPeriodoLightOra(dal, giorni) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dal) || L.iso(L.daIso(dal)) !== dal || ![3,7,14].includes(giorni)) throw new Error("Scegli una data valida e una durata di 3, 7 o 14 giorni");
+    const stato = JSON.parse(JSON.stringify(statoSpesaLight()));
+    const attuale = periodoSpesaLight(stato); attuale.righe = fabbisognoPeriodoLight(attuale);
+    const id = dal + "|" + giorni;
+    if (!stato.periodi.some((p) => p.id === id)) stato.periodi.push(nuovaListaLight(dal, giorni));
+    stato.attivo = id; await salvaStatoLight(stato); render();
+  }
+  function copriVoceLight(...args) { return accodaSpesaLight(() => copriVoceLightOra(...args)); }
+  async function copriVoceLightOra(id, azione) {
+    const stato = JSON.parse(JSON.stringify(statoSpesaLight())), p = periodoSpesaLight(stato);
+    if (L.piuGiorni(p.dal, p.giorni-1) < oggi()) throw new Error("Questa lista è conclusa: apri un nuovo periodo");
+    const r = righeListaLight(p).find((x) => x.id === id); if (!r) return;
+    p.righe = fabbisognoPeriodoLight(p);
+    if (azione === "annulla") delete p.coperture[id];
+    else if (["comprato", "disponibile"].includes(azione)) {
+      const c = p.coperture[id] || { nome: r.nome, u: r.u, comprato: 0, disponibile: 0 };
+      c[azione] = (Number(c[azione]) || 0) + r.manca; p.coperture[id] = c;
+    }
+    await salvaStatoLight(stato); render();
+  }
+  function manualeLight(...args) { return accodaSpesaLight(() => manualeLightOra(...args)); }
+  async function manualeLightOra(azione, id, nome) {
+    const stato = JSON.parse(JSON.stringify(statoSpesaLight())), p = periodoSpesaLight(stato);
+    if (L.piuGiorni(p.dal,p.giorni-1) < oggi()) throw new Error("Questa lista è conclusa: apri un nuovo periodo");
+    p.righe = fabbisognoPeriodoLight(p);
+    if (azione === "aggiungi") p.manuali.push({ id: uid(), nome, fatto: false });
+    if (azione === "togli") p.manuali = p.manuali.filter((m) => m.id !== id);
+    if (azione === "spunta") p.manuali = p.manuali.map((m) => m.id === id ? { ...m, fatto: !m.fatto } : m);
+    await salvaStatoLight(stato); render();
   }
 
   /* ---------------- disegno ---------------- */
@@ -2093,7 +2180,7 @@
     const g = L.giornoPiano(S.piano, data);
     const pasto = data < oggi() ? pastoArchiviato(k) : g && g.pasti.find((p) => p.pasto === nomePasto);
     const prima = [];
-    if (data >= oggi() && stato !== "saltato" && pasto && !pasto.libero) {
+    if (!light() && data >= oggi() && stato !== "saltato" && pasto && !pasto.libero) {
       const chi = stato.startsWith("solo:") ? stato.slice(5) : stato === "max" || stato === "vale" ? stato : null;
       const mosse = L.consumaPasto(S.db.inventario, pasto, chi);
       for (const m of mosse) {
@@ -2113,7 +2200,7 @@
     if (!st) return;
     // rimette in casa esattamente quello che era stato tolto
     const scalato = st.scalato || [];
-    if (scalato.length) await salva("inventario", scalato);
+    if (scalato.length && !light()) await salva("inventario", scalato);
     await elimina("pasti", k);
     dopoModifica();
   }
@@ -2219,6 +2306,13 @@
   }
 
   function condividiWhatsapp() {
+    if (light()) {
+      const p = periodoSpesaLight(), righe = righeListaLight(p).filter((r) => !r.coperto);
+      const manuali = p.manuali.filter((r) => !r.fatto);
+      if (!righe.length && !manuali.length) return toast("Non c'è altro da comprare per questa lista");
+      const testo = "Lista della spesa " + nomePeriodoLight(p) + "\n" + [...righe.map((r) => "• " + r.nome + " " + fmtLight(r.manca,r.u)), ...manuali.map((m) => "• " + m.nome)].join("\n");
+      window.open("https://wa.me/?text=" + encodeURIComponent(testo), "_blank"); return;
+    }
     const lista = S.db.spesa.filter((s) => !s.fatto);
     if (!lista.length) return toast("La lista è vuota");
     const testo = "Lista della spesa\n" + lista.map((s) => `• ${s.nome}${s.qty_txt ? " " + s.qty_txt : ""}${s.urgenza === "urgente" ? " (urgente)" : ""}`).join("\n");
@@ -2375,12 +2469,14 @@
       case "prendo": await modifica("spesa", b.dataset.id, { prende: S.chi || "max" }); render(); break;
       case "spunta": {
         const s = S.db.spesa.find((x) => x.id === b.dataset.id);
-        if (light() && !s.fatto) { await compratoLight(s); break; }
         await modifica("spesa", s.id, { fatto: !s.fatto, prende: s.prende || S.chi || null });
         render(); renderNav(); break;
       }
       case "togli-spesa": await elimina("spesa", b.dataset.id); render(); break;
       case "metti-in-casa": await mettiInCasaComprati(); break;
+      case "light-copri": await copriVoceLight(b.dataset.id, b.dataset.stato); break;
+      case "light-manuale": await manualeLight("spunta", b.dataset.id); break;
+      case "light-manuale-togli": await manualeLight("togli", b.dataset.id); break;
       case "whatsapp-lista": condividiWhatsapp(); break;
       case "avvisa-ora": {
         const html = L.testoAvviso(S.calc.mancanze, oggi(), { titolo: "CheManca? · lista aggiornata", link: CFG.APP_URL });
@@ -2477,7 +2573,8 @@
       case "modo":
         LS.set("ds_modo", b.dataset.v);
         fermaScanner();
-        renderNav(); render();
+        if (light()) await assicuraSpesaLight();
+        dopoModifica();
         toast(b.dataset.v === "light" ? "Versione Light: Piano e Spesa" : "Versione PRO: tutte le funzioni");
         break;
       case "chi": S.chi = b.dataset.v; LS.set("ds_chi", S.chi); chiudiFoglio(); render(); break;
@@ -2624,6 +2721,7 @@
   });
   document.addEventListener("change", eventoSicuro(async (ev) => {
     const el = ev.target;
+    if (el.id === "light-liste") { const p = statoSpesaLight().periodi.find((x) => x.id === el.value); if (p) await cambiaPeriodoLight(p.dal,p.giorni); return; }
     if (el.dataset.file === "backup" && el.files[0]) {
       try {
         if (el.files[0].size > 25 * 1024 * 1024) throw new Error("File troppo grande: scegli un backup di CheManca?");
@@ -2679,9 +2777,11 @@
       render(); toast(`${nomeDi(chi)}: ${L.fmtNum(kg)} kg il ${ddmm(data)}`);
       return;
     }
+    if (f === "light-periodo") { await cambiaPeriodoLight($("#light-dal").value, Number($("#light-giorni").value)); return; }
     if (f === "spesa-nuova") {
       const nome = $("#nuova-voce").value.trim();
       if (!nome) return;
+      if (light()) { await manualeLight("aggiungi", null, nome); return; }
       await salva("spesa", [{ nome, qty_txt: "", motivo: "", urgenza: "dopo", origine: "mano", fatto: false, creato_da: S.chi || "", creato: new Date().toISOString() }]);
       render(); renderNav();
       $("#nuova-voce") && $("#nuova-voce").focus();
