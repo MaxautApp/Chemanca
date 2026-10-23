@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 13";
+  const VERSIONE = "23.10.2026 · 14";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -64,7 +64,7 @@
     sheet: null,
     chi: LS.get("ds_chi", null),
     scan: { attivo: false, stop: null, errore: "" },
-    diarioTab: "peso",
+    diarioTab: "riepilogo",
     pesoPersona: null,
     storicoGiorni: 7,
     storicoPersona: "tutti",
@@ -1127,7 +1127,7 @@
   // cosa c'era nel pasto, persona per persona: resta anche se poi la dieta cambia
   function fotoPasto(p) {
     if (!p) return null;
-    return { piatti: p.piatti || [], libero: !!p.libero, voci: (p.voci || []).map((v) => ({ nome: v.nome, q: L.dosi(v), u: v.u })) };
+    return { cambiato: !!p.cambiato, piatti: p.piatti || [], libero: !!p.libero, voci: (p.voci || []).map((v) => ({ nome: v.nome, q: L.dosi(v), u: v.u })) };
   }
   function pesateDi(id) { return S.db.pesi.filter((x) => x.persona === id).sort((a, b) => a.data.localeCompare(b.data)); }
   function ultimoPesoTesto() {
@@ -1142,11 +1142,55 @@
     let h = testa("", "Diario", "oggi");
     h += `<div class="corpo">
       <div class="segmenti">
+        <button aria-pressed="${S.diarioTab === "riepilogo"}" data-a="diario-tab" data-v="riepilogo">Settimana</button>
         <button aria-pressed="${S.diarioTab === "peso"}" data-a="diario-tab" data-v="peso">Peso</button>
         <button aria-pressed="${S.diarioTab === "storico"}" data-a="diario-tab" data-v="storico">Storico</button>
       </div>`;
-    h += S.diarioTab === "storico" ? pannelloStorico() : pannelloPeso();
+    h += S.diarioTab === "riepilogo" ? pannelloSettimana() : S.diarioTab === "storico" ? pannelloStorico() : pannelloPeso();
     return h + `</div>`;
+  }
+
+
+  function datiSettimana(da, persona) {
+    const a=L.piuGiorni(da,6), rep=datiReport(da,a,persona);
+    const pasti=rep.giorni.flatMap(g=>g.pasti.filter(p=>!p.fitness).map(p=>({...p,data:g.data})));
+    const speciali=pasti.filter(p=>{
+      const r=S.db.pasti.find(x=>x.id===p.id);
+      return p.libero || p.nota || r?.contenuto?.cambiato || !!S.piano?.cambi?.[p.id];
+    });
+    const pesi=pesateDi(persona).filter(x=>x.data<=a);
+    const dentro=pesi.filter(x=>x.data>=da);
+    const precedente=pesi.filter(x=>x.data<da).pop();
+    const ultimo=dentro[dentro.length-1];
+    const base=precedente||dentro[0];
+    const variazione=ultimo&&base&&ultimo.id!==base.id ? Number(ultimo.kg)-Number(base.kg) : null;
+    return {...rep,speciali,dentro,precedente,ultimo,base,variazione,attivitaLista:rep.giorni.flatMap(g=>g.pasti.filter(p=>p.fitness).map(p=>({...p,data:g.data})))};
+  }
+  function pannelloSettimana() {
+    const famiglia=persone();
+    if(!famiglia.length)return '<p class="vuoto">Aggiungi un profilo nelle impostazioni per vedere il riepilogo.</p>';
+    if(!famiglia.some(p=>p.id===S.settimanaPersona))S.settimanaPersona=famiglia.find(p=>p.id===S.chi)?.id||famiglia[0].id;
+    const da=L.lunediDi(S.settimanaDal||oggi()), r=datiSettimana(da,S.settimanaPersona),corrente=L.lunediDi(oggi());
+    let h=`<label class="campo">Persona<select id="settimana-persona" class="input">${sel(S.settimanaPersona,famiglia.map(p=>[p.id,p.nome]))}</select></label>
+      <div class="due"><button class="btn sec piccolo" data-a="settimana-sposta" data-v="-7">← Precedente</button><button class="btn sec piccolo" data-a="settimana-sposta" data-v="7" ${da>=corrente?'disabled':''}>Successiva →</button></div>
+      <label class="campo">Settimana del lunedì<input class="input" id="settimana-data" type="date" value="${da}" max="${oggi()}"></label>
+      <p class="sotto">Dal ${esc(ddmm(da))} al ${esc(ddmm(r.a))} · ${da.slice(0,4)}${da===corrente?' · In corso':''}</p>
+      <section class="card pad"><h2>Peso</h2>`;
+    if(r.ultimo){
+      h+=`<p><b>${esc(L.fmtNum(r.ultimo.kg))} kg</b> · ${esc(ddmm(r.ultimo.data))}</p>`;
+      if(r.variazione!==null)h+=`<p class="sotto">${esc(segno(r.variazione))} kg rispetto alla pesata del ${esc(ddmm(r.base.data))}.</p>`;
+      else h+='<p class="sotto">Serve una seconda pesata per mostrare la variazione.</p>';
+      const punti=[...(r.precedente?[r.precedente]:[]),...r.dentro];
+      if(punti.length>1)h+=`<div class="grafico">${graficoPeso(punti,coloreDi(S.settimanaPersona))}</div>`;
+    } else h+=`<p class="sotto">Nessuna pesata in questa settimana.${r.precedente?' Ultima disponibile: '+esc(L.fmtNum(r.precedente.kg))+' kg del '+esc(ddmm(r.precedente.data))+'.':''}</p>`;
+    h+=`<button class="link" data-a="settimana-peso">Apri le pesate</button></section>
+      <section class="card pad"><h2>Pasti e note</h2><p class="sotto">Pasti liberi, cambi al piano e note già registrate. Le note del pasto sono condivise dalla famiglia.</p>`;
+    if(!r.speciali.length)h+='<p class="sotto">Nessun pasto libero, cambio o nota registrato in questa settimana.</p>';
+    for(const p of r.speciali)h+=`<div class="riepilogo-riga"><b>${esc(ddmm(p.data))} · ${esc(p.pasto)}</b><span>${p.libero?'Pasto libero':esc(p.piatti.join(', ')||p.cibi.join(' · ')||'Pasto modificato')}</span>${p.nota?'<span class="sotto">'+esc(p.nota)+'</span>':''}<button class="link" data-a="nota-apri" data-k="${esc(p.id)}">${p.libero&&!p.nota?'Scrivi cosa hai mangiato':'Apri il pasto'}</button></div>`;
+    h+=`</section><section class="card pad"><h2>Attività fisica</h2><p><b>${r.attivita}</b> attività · <b>${esc(durata(r.minuti))}</b></p>`;
+    if(!r.attivitaLista.length)h+='<p class="sotto">Nessuna attività registrata in questa settimana.</p>';
+    for(const f of r.attivitaLista)h+=`<div class="riepilogo-riga"><b>${esc(ddmm(f.data))} · ${esc(f.stato)}</b><span>${esc(f.cibi.join(' · '))}</span></div>`;
+    return h+'</section>';
   }
 
   function pannelloPeso() {
@@ -1222,6 +1266,7 @@
     if (r.stato !== "auto" && contenuto && Array.isArray(contenuto.confermati)) return contenuto.confermati;
     const solo = r.stato.startsWith("solo:") ? r.stato.slice(5) : r.stato === "max" || r.stato === "vale" ? r.stato : null;
     if (solo) return [solo];
+    if (contenuto && contenuto.libero) return persone().map(p=>p.id);
     return [...new Set((contenuto ? contenuto.voci : []).flatMap((v) => Object.keys(v.q || {}).filter((id) => Number(v.q[id]) > 0)))];
   }
   function statoTesto(st, r) {
@@ -2930,6 +2975,8 @@
         break;
       }
       case "vai-diario": S.diarioTab = b.dataset.v; S.pesoPersona = S.chi; S.storicoPersona = S.chi || "tutti"; chiudiFoglio(); vai("diario"); break;
+      case "settimana-sposta": S.settimanaDal=L.piuGiorni(L.lunediDi(S.settimanaDal||oggi()),Number(b.dataset.v)); render(); break;
+      case "settimana-peso": S.pesoPersona=S.settimanaPersona; S.diarioTab="peso"; render(); break;
       case "diario-tab": S.diarioTab = b.dataset.v; render(); break;
       case "peso-persona": S.pesoPersona = b.dataset.v; render(); break;
       case "peso-togli": {
@@ -3117,6 +3164,8 @@
       }
     }
     if (el.dataset.in) { S[el.dataset.in] = el.value; render(); }
+    if (el.id === "settimana-persona") { S.settimanaPersona=el.value; render(); }
+    if (el.id === "settimana-data") { if(/^\d{4}-\d{2}-\d{2}$/.test(el.value) && el.value<=oggi()) S.settimanaDal=L.lunediDi(el.value); render(); }
     if (el.id === "storico-persona") { S.storicoPersona = el.value; render(); }
   });
   document.addEventListener("change", eventoSicuro(async (ev) => {
