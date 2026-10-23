@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 14";
+  const VERSIONE = "23.10.2026 · 15";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -1175,6 +1175,7 @@
       <div class="due"><button class="btn sec piccolo" data-a="settimana-sposta" data-v="-7">← Precedente</button><button class="btn sec piccolo" data-a="settimana-sposta" data-v="7" ${da>=corrente?'disabled':''}>Successiva →</button></div>
       <label class="campo">Settimana del lunedì<input class="input" id="settimana-data" type="date" value="${da}" max="${oggi()}"></label>
       <p class="sotto">Dal ${esc(ddmm(da))} al ${esc(ddmm(r.a))} · ${da.slice(0,4)}${da===corrente?' · In corso':''}</p>
+      <button class="btn largo" data-a="settimana-stampa">Stampa o salva PDF</button><p class="sotto">Esporta il riepilogo di ${esc(nomeDi(S.settimanaPersona))} per questa settimana. Per il PDF scegli «Salva come PDF» nella finestra di stampa.</p>
       <section class="card pad"><h2>Peso</h2>`;
     if(r.ultimo){
       h+=`<p><b>${esc(L.fmtNum(r.ultimo.kg))} kg</b> · ${esc(ddmm(r.ultimo.data))}</p>`;
@@ -1396,6 +1397,37 @@
     }
     out.push("", "Generato da CheManca? il " + new Date().toLocaleDateString("it-IT"));
     return out.join("\n");
+  }
+
+
+  function htmlReportSettimana(r) {
+    const data=d=>ddmm(d)+"/"+d.slice(0,4);
+    const rigaPasto=p=>`<tr><th>${esc(data(p.data))}<br>${esc(p.pasto)}</th><td>${p.libero?'Pasto libero':esc(p.piatti.join(', '))}${!p.libero&&p.cibi.length?'<div>'+esc(p.cibi.join(' · '))+'</div>':''}${p.nota?'<div><b>Nota del pasto (condivisa):</b> '+esc(p.nota)+'</div>':''}</td></tr>`;
+    let h=`<h1>Riepilogo settimanale</h1><p><b>${esc(nomeDi(r.persona))}</b> · dal ${esc(data(r.da))} al ${esc(data(r.a))}</p>${r.a>=oggi()?'<p>Settimana in corso: il report contiene i dati già registrati.</p>':''}<h2>Peso e andamento</h2>`;
+    if(r.dentro.length){
+      h+=`<table><thead><tr><th>Data</th><th>Peso</th></tr></thead><tbody>${r.dentro.map(x=>'<tr><td>'+esc(data(x.data))+'</td><td>'+esc(L.fmtNum(x.kg))+' kg</td></tr>').join('')}</tbody></table>`;
+      if(r.variazione!==null)h+=`<p>Variazione: <b>${esc(segno(r.variazione))} kg</b>, dal ${esc(data(r.base.data))} (${esc(L.fmtNum(r.base.kg))} kg) al ${esc(data(r.ultimo.data))} (${esc(L.fmtNum(r.ultimo.kg))} kg).</p>`;
+      else h+='<p>Una sola misurazione disponibile: variazione non calcolabile.</p>';
+      const punti=[...(r.precedente?[r.precedente]:[]),...r.dentro];
+      if(punti.length>1)h+=`<div class="report-grafico">${graficoPeso(punti,coloreDi(r.persona))}</div>`;
+    } else h+=`<p>Nessuna pesata registrata nella settimana.${r.precedente?' Ultima disponibile: '+esc(L.fmtNum(r.precedente.kg))+' kg del '+esc(data(r.precedente.data))+'.':''}</p>`;
+    h+='<h2>Pasti liberi, modifiche e note</h2>';
+    h+=r.speciali.length?'<table><thead><tr><th>Giorno e pasto</th><th>Dettagli</th></tr></thead><tbody>'+r.speciali.map(rigaPasto).join('')+'</tbody></table>':'<p>Nessun pasto libero, cambio o nota registrato nella settimana.</p>';
+    h+=`<h2>Attività fisica</h2><p>${r.attivita} attività · durata complessiva: ${esc(durata(r.minuti))}.</p>`;
+    h+=r.attivitaLista.length?'<table><thead><tr><th>Data</th><th>Attività</th><th>Durata</th></tr></thead><tbody>'+r.attivitaLista.map(f=>'<tr><td>'+esc(data(f.data))+'</td><td>'+esc(f.cibi.join(' · '))+'</td><td>'+esc(f.stato)+'</td></tr>').join('')+'</tbody></table>':'<p>Nessuna attività registrata nella settimana.</p>';
+    h+='<h2>Dettaglio dei pasti registrati</h2>';
+    const giorni=r.giorni.filter(g=>g.pasti.some(p=>!p.fitness));
+    if(!giorni.length)h+='<p>Nessun pasto registrato nella settimana.</p>';
+    for(const g of giorni)h+=`<div class="giorno"><h3>${esc(dataLunga(g.data))}</h3><table><tbody>${g.pasti.filter(p=>!p.fitness).map(p=>{const x=rigaPasto({...p,data:g.data});return p.stato==='saltato'?x.replace('<td>','<td><b>Pasto saltato</b><br>'):x;}).join('')}</tbody></table></div>`;
+    return h+`<p class="report-fonte">I pasti seguono il piano salvato e le modifiche registrate. Le note del pasto sono condivise dalla famiglia. Generato da CheManca? il ${esc(new Date().toLocaleDateString('it-IT'))}.</p>`;
+  }
+  function stampaSettimana() {
+    const persona=S.settimanaPersona;
+    if(!persone().some(p=>p.id===persona)){toast("Scegli una persona per il report");return;}
+    const r=datiSettimana(L.lunediDi(S.settimanaDal||oggi()),persona);
+    let el=document.getElementById("stampa");
+    if(!el){el=document.createElement("div");el.id="stampa";document.body.appendChild(el);}
+    el.innerHTML=htmlReportSettimana(r);window.print();
   }
 
   function stampaReport() {
@@ -2986,6 +3018,7 @@
         break;
       }
       case "storico-giorni": S.storicoGiorni = Number(b.dataset.v); render(); break;
+      case "settimana-stampa": stampaSettimana(); break;
       case "report-stampa": stampaReport(); break;
       case "report-testo": await esportaTesto(); break;
       case "modo":

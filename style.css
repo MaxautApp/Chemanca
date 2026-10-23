@@ -437,3 +437,12 @@ button:focus-visible, summary:focus-visible { outline:3px solid var(--green); ou
 /* Riepilogo settimanale del diario */
 .riepilogo-riga{display:flex;flex-direction:column;gap:6px;padding:14px 0;border-top:1px solid var(--line-soft)}
 .riepilogo-riga .link{align-self:flex-start}
+
+@media print {
+  #stampa .report-grafico { width:100%; max-width:100mm; break-inside:avoid; }
+  #stampa .report-grafico svg { width:100%; height:auto; }
+  #stampa tr { break-inside:avoid; }
+  #stampa thead { display:table-header-group; }
+  #stampa td { overflow-wrap:anywhere; }
+  #stampa .report-fonte { margin-top:12pt; font-size:9pt; }
+}
