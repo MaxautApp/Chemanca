@@ -507,3 +507,5 @@ button:focus-visible, summary:focus-visible { outline:3px solid var(--green); ou
 }
 
 @media print { html, body, #stampa { background:#fff !important; color:#000; } }
+
+.collegamento{display:flex;flex-direction:column;gap:16px;margin-top:12px}.collegamento p{font-size:14px;line-height:1.6}.collegamento input{font-size:13px}.sezione-imp code{overflow-wrap:anywhere}

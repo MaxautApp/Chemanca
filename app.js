@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "24.10.2026 · 20";
+  const VERSIONE = "24.10.2026 · 21";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -142,52 +142,23 @@
     };
   }
 
-  function archivioSupabase(url, anon) {
-    const sb = window.supabase.createClient(url, anon);
-    return {
-      tipo: "supabase",
-      async carica() {
-        const out = {};
-        await Promise.all(TABELLE.map(async (t) => {
-          const { data, error } = await sb.from(t).select("*");
-          if (error) throw error;
-          out[t] = data;
-        }));
-        return out;
-      },
-      async scrivi(t, righe) {
-        const { error } = await sb.from(t).upsert(righe);
-        if (error) throw error;
-      },
-      async nuovo(t, riga) {
-        const { error } = await sb.from(t).insert(riga);
-        if (!error) return true;
-        if (error.code === "23505") return false;   // c'è già: l'ha preso l'altro telefono
-        throw error;
-      },
-      async modifica(t, id, patch) {
-        const { error } = await sb.from(t).update(patch).eq("id", id);
-        if (error) throw error;
-      },
-      async elimina(t, ids) {
-        if (!ids.length) return;
-        const { error } = await sb.from(t).delete().in("id", ids);
-        if (error) throw error;
-      },
-      ascolta(cb) {
-        const ch = sb.channel("dispensa");
-        for (const t of TABELLE) ch.on("postgres_changes", { event: "*", schema: "public", table: t }, cb);
-        ch.subscribe((stato) => { S.online = stato === "SUBSCRIBED"; renderTesta(); });
-      },
-      async azzera() {
-        for (const t of TABELLE) await sb.from(t).delete().neq("id", "");
-      },
-    };
+  const sbUrl = CFG.SUPABASE_URL || LS.get("ds_sb_url", "");
+  const sbAnon = CFG.SUPABASE_PUBLISHABLE_KEY || CFG.SUPABASE_ANON || LS.get("ds_sb_anon", "");
+  // Se il modulo cloud non si carica, blocca l'accesso: nessun ripiego implicito sul locale.
+  const condiviso = !!CFG.CONDIVISIONE;
+  let cloudAvviato=false, eventiAvvioRegistrati=false;
+  function archivioSupabase(url,key){
+    if(!window.supabase || !window.CheMancaCloud || !url || !key)return {tipo:"supabase",stato:()=>({fase:"errore",messaggio:"Modulo di condivisione non disponibile: controlla la connessione e aggiorna l’app"}),inizializza:async()=>false};
+    const sb=window.supabase.createClient(url,key,{auth:{storageKey:"cm-auth-"+new URL(url).hostname,persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+    return window.CheMancaCloud.crea({client:sb,storage:localStorage,uuid:uid,progetto:new URL(url).hostname,tabelle:TABELLE,
+      online:()=>navigator.onLine!==false,
+      valida:d=>validaBackup({formato:"chemanca-backup",versione:1,dati:d}),
+      onStato:st=>{S.cloud=st;S.online=st.online;if(st.fase!=="pronto")render();else renderTesta();},
+      onConflitto:()=>{S.scelta.clear();S.sheet=null;$("#sheet")?.classList.remove("on");$("#sheet").innerHTML="";},
+      onRecupero:()=>{S.scelta.clear();S.sheet=null;$("#sheet")?.classList.remove("on");toast("Salvataggio precedente verificato. Le quantità sono state aggiornate.");},
+      onRevoca:()=>{S.db=vuoto();S.piano=null;S.calc=null;S.calc7=null;S.scelta.clear();S.sheet=null;fermaScanner();$("#sheet")?.classList.remove("on");$("#sheet").innerHTML="";},
+    });
   }
-
-  const sbUrl = LS.get("ds_sb_url", "") || CFG.SUPABASE_URL;
-  const sbAnon = LS.get("ds_sb_anon", "") || CFG.SUPABASE_ANON;
-  const condiviso = !!(CFG.CONDIVISIONE && sbUrl && sbAnon && window.supabase);
   const esterni = !!CFG.AVVISI_ESTERNI;
   const A = condiviso ? archivioSupabase(sbUrl, sbAnon) : archivioLocale();
 
@@ -201,20 +172,21 @@
   async function salva(t, righe) {
     righe = [].concat(righe).map((r) => ({ id: r.id || uid(), ...r }));
     try { await A.scrivi(t, righe); } catch (e) { erroreArchivio(e); throw e; }
-    inMemoria(t, righe);
+    if(condiviso){S.db=A.istantanea();S.erroreSalvataggio="";}else inMemoria(t, righe);
     return righe;
   }
   async function modifica(t, id, patch) {
     try { await A.modifica(t, id, patch); } catch (e) { erroreArchivio(e); throw e; }
-    inMemoria(t, [{ id, ...patch }]);
+    if(condiviso){S.db=A.istantanea();S.erroreSalvataggio="";}else inMemoria(t, [{ id, ...patch }]);
   }
   async function elimina(t, ids) {
     ids = [].concat(ids);
     try { await A.elimina(t, ids); } catch (e) { erroreArchivio(e); throw e; }
-    S.db[t] = S.db[t].filter((x) => !ids.includes(x.id));
+    if(condiviso){S.db=A.istantanea();S.erroreSalvataggio="";}else S.db[t] = S.db[t].filter((x) => !ids.includes(x.id));
   }
   function erroreArchivio(e) {
     console.error(e);
+    if(condiviso && A.istantanea?.()) {S.db=A.istantanea();ricalcola();render();}
     S.erroreSalvataggio = e.message || String(e);
     toast(S.erroreSalvataggio);
     renderTesta();
@@ -224,7 +196,8 @@
   async function ricarica() {
     try {
       S.db = await A.carica();
-      dopoModifica(false);
+      if(condiviso && S.sheet?._cloudRevisione!=null && S.sheet._cloudRevisione!==A.stato().revisione){S.sheet=null;$("#sheet").classList.remove("on");$("#sheet").innerHTML="";toast("Famiglia aggiornata dall’altro telefono. Riapri il pannello per modificarla.");}
+      S.erroreSalvataggio="";dopoModifica(false);
     } catch (e) {
       console.error(e);
       toast("Database non raggiungibile: " + (e.message || e));
@@ -261,7 +234,7 @@
   function scegliPiano() {
     const r = S.db.piano.find((x) => x.id === "attuale");
     // piano.json pubblicato vale solo per chi lo usava già (Max e Vale): le famiglie nuove caricano il loro PDF
-    S.piano = r ? r.dati || null : LS.get("ds_usa_pianofile", false) ? S.pianoFile : null;
+    S.piano = r ? r.dati || null : !condiviso && LS.get("ds_usa_pianofile", false) ? S.pianoFile : null;
     if (S.piano && S.pianoFile && !Object.keys(S.piano.categorie || {}).length) S.piano.categorie = S.pianoFile.categorie;
   }
 
@@ -304,7 +277,7 @@
   function dopoModifica(scrivi = true) {
     ricalcola();
     render();
-    if (scrivi !== null) {
+    if (scrivi !== null && scrivi !== false) {
       allineaSpesa().then(() => { renderNav(); if (S.tab === "spesa") render(); }).catch(erroreArchivio);
       controllaAvvisi();
     }
@@ -376,7 +349,7 @@
         </div>
       </div>
       <div class="top-dx">
-        ${condiviso ? `<span class="stato-rete on" id="stato-rete">${S.online ? "Condiviso" : "Condiviso…"}</span>` : ""}
+        ${condiviso ? `<span class="stato-rete on" id="stato-rete">${navigator.onLine===false ? "Senza rete" : S.cloud?.fase!=="pronto" ? "Da collegare" : S.online ? "Condiviso" : "Sincronizzazione…"}</span>` : ""}
         ${conIndietro ? "" : `<button class="icona-btn" data-a="vai" data-tab="imp" aria-label="Impostazioni">${ico("ingranaggio")}</button>`}
       </div>
     </header><div id="errore-salvataggio" class="avviso rosso" role="alert" style="margin:0 16px 14px;${S.erroreSalvataggio ? "" : "display:none"}" ${S.erroreSalvataggio ? "" : "hidden"}>${esc(S.erroreSalvataggio || "")}</div>`;
@@ -385,10 +358,11 @@
     const el = $("#stato-rete");
     const errore = document.getElementById("errore-salvataggio");
     if (errore) { errore.textContent = S.erroreSalvataggio || ""; errore.hidden = !S.erroreSalvataggio; errore.style.display = S.erroreSalvataggio ? "" : "none"; }
-    if (el) el.textContent = condiviso ? (S.online ? "Condiviso" : "Condiviso…") : "Solo qui";
+    if (el) el.textContent = condiviso ? (navigator.onLine===false ? "Senza rete" : S.online ? "Condiviso" : "Sincronizzazione…") : "Solo qui";
   }
 
   function renderNav() {
+    if(condiviso && A.stato().fase!=="pronto"){$("#nav").innerHTML="";return;}
     const daPrendere = light() ? righeListaLight().filter((r) => !r.coperto).length + periodoSpesaLight().manuali.filter((r) => !r.fatto).length : S.db.spesa.filter((s) => !s.fatto).length;
     const mancano = S.calc7 ? S.calc7.mancanze : [];
     const liv = mancano.length ? Math.min(...mancano.map((m) => livello(m.data))) : 0;
@@ -485,7 +459,9 @@
     const confermati = [...new Set([...precedenti,S.chi])].filter((id)=>partecipanti.includes(id));
     const stato = partecipanti.every((id)=>confermati.includes(id)) ? "fatto" : confermati.length===1 ? "solo:"+confermati[0] : "parziale";
     const contenuto = { ...(r && r.contenuto || fotoPasto(p)), confermati };
-    await salva("pasti", [{ id:k, data, pasto:nome, stato, chi:S.chi, quando:new Date().toISOString(), scalato:r && r.scalato || [], contenuto }]);
+    if(condiviso) {
+      await operazionePasti(db=>{const corrente=db.pasti.find(x=>x.id===k);if(registratoPerPersona(corrente,S.chi))return;const ids=[...new Set([...(corrente?chiHaMangiato(corrente,corrente.contenuto):[]),S.chi])].filter(id=>partecipanti.includes(id));const nuovoStato=partecipanti.every(id=>ids.includes(id))?"fatto":ids.length===1?"solo:"+ids[0]:"parziale";scriviRigaDb(db,"pasti",{id:k,data,pasto:nome,stato:nuovoStato,chi:S.chi,quando:new Date().toISOString(),scalato:corrente?.scalato||[],contenuto:{...(corrente?.contenuto||fotoPasto(p)),confermati:ids}});});
+    } else await salva("pasti", [{ id:k, data, pasto:nome, stato, chi:S.chi, quando:new Date().toISOString(), scalato:r && r.scalato || [], contenuto }]);
     dopoModifica(); toast("Pasto di " + nomeDi(S.chi) + " registrato");
   }
 
@@ -1507,11 +1483,11 @@
     return `<h2>Ripristina il backup</h2><p class="sotto">${esc(d.nome)}${d.creato ? " · " + esc(d.creato) : ""}</p>
       <p>Famiglia: ${esc(profili ? profili.dati.map((p) => p.nome).join(", ") : "non specificata")}</p>
       <p>${d.dati.pasti.length} pasti · ${d.dati.pesi.length} pesate · ${d.dati.note.length} note · ${d.dati.fitness.length} attività</p>
-      <p class="avviso giallo">Il ripristino sostituisce i dati di questo browser. Una copia dei dati attuali viene conservata prima della sostituzione. Il file di backup originale resta sul tuo dispositivo.</p>
+      <p class="avviso giallo">${condiviso ? "Il ripristino sostituisce i dati della famiglia per entrambi i telefoni. Prima verrà scaricato un backup dei dati attuali." : "Il ripristino sostituisce i dati di questo browser. Una copia dei dati attuali viene conservata prima della sostituzione."} Il file di backup originale resta sul tuo dispositivo.</p>
       <button class="btn largo" data-a="backup-conferma">Sostituisci i dati con questo backup</button><button class="link" data-a="chiudi">Annulla</button>`;
   }
   async function ripristinaBackup(dati) {
-    if (A.tipo !== "locale") throw new Error("Il ripristino è disponibile solo in modalità locale");
+    if(condiviso)await esportaBackup();
     await A.ripristina(dati);
     S.db = await A.carica();
     if (!persone().some((p) => p.id === S.chi)) S.chi = (persone()[0] || {}).id || null;
@@ -1571,12 +1547,7 @@
       </section>
 
 
-      ${condiviso || CFG.CONDIVISIONE ? `<section class="sezione-imp"><h2>Dati condivisi</h2>
-        <p>${condiviso ? "I dati stanno su Supabase: tutti i telefoni di casa vedono le stesse cose in tempo reale." : "Adesso i dati restano <b>solo su questo telefono</b>. Per condividerli con l'altro telefono incolla i due valori di Supabase (README, passo 2)."}</p>
-        <label class="campo">Project URL<input id="sb-url" value="${esc(LS.get("ds_sb_url", "") || CFG.SUPABASE_URL || "")}" placeholder="https://xxxx.supabase.co" autocomplete="off"></label>
-        <label class="campo">Anon key<input id="sb-anon" value="${esc(LS.get("ds_sb_anon", "") || CFG.SUPABASE_ANON || "")}" placeholder="eyJ…" autocomplete="off"></label>
-        <button class="btn sec" data-a="salva-sb">Salva e ricarica</button>
-      </section>` : ""}
+      ${condiviso ? `<section class="sezione-imp"><h2>Famiglia condivisa</h2><p>Questo telefono è autorizzato. I dati della famiglia sono condivisi con gli altri telefoni collegati. Non servono PIN o password.</p><button class="btn sec largo" data-a="cloud-aggiorna">Aggiorna famiglia</button><details><summary>Identificativo e recupero dell’accesso</summary><p>Telefono: <code>${esc(A.stato().userId)}</code></p><p>Famiglia: <code>${esc(A.stato().famigliaId)}</code></p><button class="link" data-a="cloud-copia">Copia identificativo telefono</button><p>Se cambi telefono o cancelli i dati del browser servirà autorizzare il nuovo identificativo da Supabase.</p><button class="btn rosso" data-a="cloud-esci">Esci da questo telefono</button></details></section>` : ""}
       ${esterni ? `
       <section class="sezione-imp"><h2>Avvisi su Telegram</h2>
         <p>Il bot scrive nel gruppo della famiglia. Il token resta solo su questo telefono, non va nel codice.</p>
@@ -1595,7 +1566,7 @@
         <div class="due"><label class="campo">Numero Vale<input id="wa-vale-tel" value="${esc(w.vale.tel)}" placeholder="+39…" inputmode="tel"></label><label class="campo">Chiave Vale<input id="wa-vale-key" value="${esc(w.vale.key)}" autocomplete="off"></label></div>
         <div class="due"><button class="btn sec" data-a="wa-prova">Messaggio di prova</button><button class="btn" data-a="wa-salva">Salva WhatsApp</button></div>
       </section>` : `<section class="sezione-imp"><h2>Avvisi</h2>
-        <p>I dati restano <b>su questo telefono</b>. Per vederli su due telefoni servirà la condivisione (Supabase).</p>
+        <p>${condiviso ? "Archivio familiare condiviso. Gli avvisi esterni automatici non sono attivi." : "I dati restano su questo telefono."}</p>
       </section>`}
 
 
@@ -1603,11 +1574,11 @@
       <section class="sezione-imp"><h2>Backup e ripristino</h2>
         <p>Salva una copia completa di famiglia, piani importati, pasti, note, pesate, fitness, spesa e scorte. Puoi conservarla oppure trasferirla su un altro dispositivo. Non è una sincronizzazione automatica.</p>
         <button class="btn sec largo" data-a="backup-esporta">Scarica il backup completo</button>
-        ${A.tipo === "locale" ? `<label class="btn sec carica-pdf"><span>Ripristina da un backup</span><input type="file" accept="application/json,.json" data-file="backup" class="sr"></label><button class="link" data-a="backup-precedente">Recupera i dati precedenti all'ultimo ripristino</button>` : ""}
+        <label class="btn sec carica-pdf"><span>Ripristina da un backup</span><input type="file" accept="application/json,.json" data-file="backup" class="sr"></label>${A.tipo === "locale" ? `<button class="link" data-a="backup-precedente">Recupera i dati precedenti all'ultimo ripristino</button>` : ""}
         <p>Il backup contiene dati personali: conservalo in un posto riservato. Credenziali e token degli avvisi non sono inclusi.</p>
       </section>
       <section class="sezione-imp"><h2>Dati</h2>
-        <p>Cancella frigo, dispensa, spesa, pasti segnati, pesate e note di questo telefono.</p>
+        <p>${condiviso ? "Cancella l’archivio condiviso per entrambi i telefoni della famiglia." : "Cancella frigo, dispensa, spesa, pasti segnati, pesate e note di questo telefono."}</p>
         <button class="btn rosso" data-a="svuota">Cancella tutto</button>
       </section>
 
@@ -1806,6 +1777,7 @@
   /* ---------------- disegno ---------------- */
   function render() {
     const app = $("#app");
+    if(condiviso && A.stato().fase!=="pronto"){app.innerHTML=schermoCollegamento();$("#nav").innerHTML="";document.body.classList.remove("home-light","con-scelta");return;}
     document.body.classList.toggle("home-light", light() && S.tab === "oggi");
     const att = document.activeElement;
     const fuoco = att && att.id && app.contains(att) ? { id: att.id, pos: att.selectionStart } : null;
@@ -1964,7 +1936,7 @@
   }
 
   /* ---------------- fogli (finestre dal basso) ---------------- */
-  function apriFoglio(sheet) { S.sheet = sheet; renderFoglio(); }
+  function apriFoglio(sheet) { if(condiviso)sheet._cloudRevisione=A.stato().revisione; S.sheet = sheet; renderFoglio(); }
   function chiudiFoglio() {
     S.sheet = null;
     const el = $("#sheet"); el.classList.remove("on"); el.innerHTML = "";
@@ -2019,12 +1991,14 @@
     return c ? {nome:c.nome, unita:c.unita, qty:qtyPerMancanza(c,m), luogo:c.luogo||"frigo"} : null;
   }
   async function segnaAcquistoPro(id, quantita=null) {
+    const annulla=!!S.db.spesa.find(x=>x.id===id)?.fatto && quantita==null;
     await operazionePasti(db=>{
       const s=db.spesa.find(x=>x.id===id);if(!s)return;
       const a=datiAcquistoPro(s);
       let r=db.piano.find(x=>x.id==="quantita_acquisti");
       if(!r){r={id:"quantita_acquisti",dati:{}};db.piano.push(r);}
-      if(s.fatto && quantita==null){s.fatto=false;delete r.dati[id];return;}
+      if(annulla){s.fatto=false;delete r.dati[id];return;}
+      if(s.fatto && quantita==null)return;
       if(a){a.qty=quantita==null?a.qty:Number(quantita);if(!Number.isFinite(a.qty)||a.qty<=0)throw Error("Inserisci una quantità maggiore di zero");a.testo=L.conteggioPezzi(s.voce,a.qty,a.unita)?L.fmtScorta({...a,voci:[s.voce]}):fmtLight(a.qty,a.unita);r.dati[id]=a;}
       s.fatto=true;s.prende=s.prende||S.chi||null;
     });render();renderNav();
@@ -2210,8 +2184,7 @@
     // Archivia il vecchio piano prima di aggiornare le assegnazioni, come nel cambio dieta.
     if (S.piano) await storicoArretrato(S.piano, S.piano.inizio);
     const nuovo = ricostruisciPdf(base, docs);
-    await A.scrivi("piano", [{ id: "attuale", dati: nuovo, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
-    inMemoria("piano", [{ id: "attuale", dati: nuovo }]);
+    await salva("piano", [{ id: "attuale", dati: nuovo, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
     chiudiFoglio(); dopoModifica(); toast("PDF collegati alle persone; storico precedente conservato");
   }
 
@@ -2563,6 +2536,7 @@
      quello che c'è in casa adesso è già il risultato di quei giorni. */
   async function storicoArretrato(piano, da) {
     if (!da || da >= oggi()) return 0;
+    if(condiviso)return operazionePasti(db=>{let n=0;for(let data=da;data<oggi();data=L.piuGiorni(data,1)){const g=L.giornoPiano(piano,data);if(!g)continue;for(const p of g.pasti){const k=L.chiavePasto(data,p.pasto),r=db.pasti.find(x=>x.id===k);if(r){if(!r.contenuto)r.contenuto=fotoPasto(p);continue;}db.pasti.push({id:k,data,pasto:p.pasto,stato:"automatico",chi:"",quando:new Date().toISOString(),scalato:[],contenuto:{...fotoPasto(p),automatico:true}});n++;}}return n;});
     const stati = statiPasti();
     let n = 0;
     for (let g = da; g < oggi(); g = L.piuGiorni(g, 1)) {
@@ -2576,7 +2550,7 @@
           continue;
         }
         const riga = { id: k, data: g, pasto: p.pasto, stato: "automatico", chi: "", quando: new Date().toISOString(), scalato: [], contenuto: { ...fotoPasto(p), automatico:true } };
-        if (await A.nuovo("pasti", riga)) { inMemoria("pasti", [riga]); n++; }
+        if (await A.nuovo("pasti", riga)) { if(condiviso)S.db=A.istantanea();else inMemoria("pasti", [riga]); n++; }
       }
     }
     LS.set("ds_auto_da", oggi());
@@ -2587,9 +2561,10 @@
   let codaPasti=Promise.resolve();
   function scriviRigaDb(db,t,r) { const i=db[t].findIndex((x)=>x.id===r.id); if(i<0)db[t].push(r);else db[t][i]={...db[t][i],...r}; }
   function operazionePasti(fn) {
-    const lavoro=codaPasti.then(()=>{
+    const pianoAtteso=JSON.stringify(S.db.piano.find(x=>x.id==="attuale")?.dati||null);
+    const lavoro=codaPasti.then(async()=>{
       if(!A.transazione) throw new Error("Le nuove operazioni protette sui pasti richiedono l'archivio locale; la versione condivisa verrà configurata con il database");
-      const r=A.transazione(fn);S.db=r.db;return r.risultato;
+      const r=await A.transazione(db=>{if(condiviso && JSON.stringify(db.piano.find(x=>x.id==="attuale")?.dati||null)!==pianoAtteso)throw Error("Il piano è cambiato sull’altro telefono. Aggiorna prima di registrare.");return fn(db);});S.db=r.db;S.erroreSalvataggio="";return r.risultato;
     });
     codaPasti=lavoro.catch(()=>{});return lavoro;
   }
@@ -2670,6 +2645,7 @@
       let n=0;
       for(const [nome,s] of S.scelta){
         const c=cat.get(nome);if(!c||s.qty<=0)continue;
+        if(condiviso && s.spesaIds?.some(id=>!db.spesa.some(x=>x.id===id&&x.fatto)))throw Error("Acquisto già trasferito o modificato dall’altro telefono. Aggiorna la spesa.");
         const esiste=db.inventario.find(i=>i.nome===nome&&i.luogo===s.luogo&&i.unita===c.unita&&Number(i.qty)>0);
         if(esiste){esiste.qty=Number(esiste.qty)+s.qty;esiste.aggiornato=new Date().toISOString();}
         else db.inventario.push({id:uid(),nome,voci:c.voci||[],luogo:s.luogo,qty:s.qty,unita:c.unita,g_pz:c.g_pz||null,manuale:true,scadenza:null,creato_da:S.chi||"",aggiornato:new Date().toISOString()});
@@ -2819,8 +2795,13 @@
     const b = ev.target.closest("[data-a]");
     if (!b) return;
     const a = b.dataset.a;
+    if(condiviso && A.stato().fase!=="pronto" && !a.startsWith("cloud-"))return;
     const d = S.sheet && S.sheet.d;
     switch (a) {
+      case "cloud-identifica": await collegaTelefono(true); break;
+      case "cloud-aggiorna": await collegaTelefono(false); break;
+      case "cloud-copia": if(navigator.clipboard) {await navigator.clipboard.writeText(A.stato().userId||"");toast("Identificativo copiato");} else toast("Seleziona e copia l’identificativo mostrato"); break;
+      case "cloud-esci": if(confirm("Uscire da questo telefono? Per accedere nuovamente servirà un nuovo collegamento da Supabase.")){await A.esci();cloudAvviato=false;render();} break;
       case "piano-apri": {
         S.giornoSel = b.dataset.d || oggi(); vai("piano");
         if (b.dataset.pasto) document.getElementById("pasto-" + L.chiavePasto(S.giornoSel,b.dataset.pasto))?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -3212,6 +3193,7 @@
   });
   document.addEventListener("change", eventoSicuro(async (ev) => {
     const el = ev.target;
+    if(condiviso && A.stato().fase!=="pronto")return;
     if (el.id === "home-persona") { S.chi = el.value; LS.set("ds_chi",S.chi); render(); return; }
     if (el.id === "home-mostra-peso") { LS.set("ds_home_peso",el.checked); toast("Preferenza della Home salvata"); return; }
     if (el.id === "pro-spesa-giorni") {
@@ -3246,6 +3228,7 @@
   }));
   document.addEventListener("submit", eventoSicuro(async (ev) => {
     ev.preventDefault();
+    if(condiviso && A.stato().fase!=="pronto")return;
     const f = ev.target.dataset.form;
     if (f === "storico-periodo") {
       const da=$("#storico-dal").value,a=$("#storico-al").value;
@@ -3309,7 +3292,22 @@
   function nascondiToast() { $("#toast").classList.remove("on"); }
 
   /* ---------------- avvio ---------------- */
-  async function avvio() {
+  function schermoCollegamento() {
+    const st=A.stato();
+    return testa("Famiglia condivisa","CheManca?")+`<div class="corpo"><section class="card pad collegamento"><h2>${st.fase==="iniziale"?"Collegamento in corso":st.userId?"Autorizza questo telefono":"Accesso senza PIN"}</h2><p>Un solo collegamento iniziale, poi l’app si apre automaticamente. Non servono email, password o PIN.</p>${st.userId?`<label class="campo">Identificativo di questo telefono<input readonly value="${esc(st.userId)}" aria-label="Identificativo telefono"></label><button class="btn sec" data-a="cloud-copia">Copia identificativo</button><p>Collega questo identificativo alla famiglia dal SQL Editor di Supabase. Dopo la conferma premi Controlla collegamento.</p>`:""}${st.messaggio?`<p class="avviso blu" role="status">${esc(st.messaggio)}</p>`:""}<button class="btn largo" data-a="${st.userId?"cloud-aggiorna":"cloud-identifica"}" ${st.fase==="iniziale"||S.collegando?"disabled":""}>${st.userId?"Controlla collegamento":"Collega questo telefono"}</button><p class="sotto">I dati già presenti nell’archivio locale restano sul dispositivo e non vengono caricati automaticamente.</p></section></div>`;
+  }
+  async function collegaTelefono(crea=false){
+    if(S.collegando)return;S.collegando=true;render();
+    try {const pronto=crea?await A.identifica():await A.inizializza();if(pronto){S.db=A.istantanea();if(!cloudAvviato){cloudAvviato=true;await avvioDati();}else{dopoModifica(false);A.ascolta(ricaricaPresto);}}else render();}
+    catch(e){toast(e.message||"Collegamento non riuscito");render();}
+    finally{S.collegando=false;render();}
+  }
+  async function avvio(){
+    if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+    if(condiviso){render();await collegaTelefono(false);return;}
+    await avvioDati();
+  }
+  async function avvioDati() {
     // la Light si apre sulla Home di oggi
     if (light()) S.tab = "oggi";
     try { S.pianoFile = await (await fetch("piano.json", { cache: "no-cache" })).json(); }
@@ -3322,7 +3320,7 @@
     A.ascolta(ricaricaPresto);
     dopoModifica();
     if (!persone().length) {
-      if (S.chi === "max" || S.chi === "vale") {
+      if (!condiviso && (S.chi === "max" || S.chi === "vale")) {
         // chi usava già la versione per Max e Vale: stesse persone, stesso piano pubblicato
         await salvaPersone([{ id: "max", nome: "Max" }, { id: "vale", nome: "Vale" }]);
         LS.set("ds_usa_pianofile", true);
@@ -3331,20 +3329,22 @@
     } else if (!S.chi || !persone().some((p) => p.id === S.chi)) apriFoglio({ tipo: "chi" });
     if (S.tab === "aggiungi" && S.aggTab === "codice") avviaScanner();
     // al ritorno sull'app (dal frigo al telefono) si riallinea: il giorno può essere cambiato
+    if(!eventiAvvioRegistrati){eventiAvvioRegistrati=true;
     document.addEventListener("visibilitychange", async () => {
-      if (document.hidden) return;
+      if (document.hidden || (condiviso && A.stato().fase!=="pronto")) return;
       await ricarica();
       scegliPiano();
       await chiudiGiorniPassati();
       dopoModifica();
     });
-    if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
     setInterval(eventoSicuro(async()=>{
-      if(document.hidden)return;
+      if(document.hidden || (condiviso && A.stato().fase!=="pronto"))return;
       const r=S.db.piano.find((x)=>x.id==="chiusura_giorni");
       if(S.piano && (!r || r.dati.dal!==oggi())) { await chiudiGiorniPassati();dopoModifica(); }
       aggiornaHomeAutomatica();
     }),30000);
+    if(condiviso){window.addEventListener("online",()=>A.notificaRete());window.addEventListener("offline",()=>{A.notificaRete();render();});}
+    }
     await apriCondivisi();
   }
 

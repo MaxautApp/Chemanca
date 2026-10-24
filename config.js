@@ -1,14 +1,8 @@
-/* CONFIGURAZIONE — i due valori di Supabase (vedi README, passo 2).
-   Lasciati vuoti l'app funziona lo stesso, ma i dati restano solo sul telefono
-   che li ha inseriti (modalità prova). Si possono anche incollare da Impostazioni.
-   La chiave "anon" è pubblica per natura: NON mettere qui il token di Telegram. */
+/* CheManca? - collegamento pubblico al progetto. Nessuna chiave segreta nel frontend. */
 window.CONFIG = {
-  SUPABASE_URL: "",
-  SUPABASE_ANON: "",
-  // indirizzo dell'app su GitHub Pages: va nei messaggi come link
-  APP_URL: "",
-  // per ora l'app lavora da sola: dati sul telefono, avvisi solo dentro l'app.
-  // Mettere true quando si attivano Supabase (dati condivisi) e Telegram/WhatsApp.
-  CONDIVISIONE: false,
+  SUPABASE_URL: "https://sguuanwrvybpqiljjirm.supabase.co",
+  SUPABASE_PUBLISHABLE_KEY: "sb_publishable_6cX31JI7THOccwZkjqJ6ww_seThPY9E",
+  APP_URL: "https://maxautapp.github.io/Chemanca/",
+  CONDIVISIONE: true,
   AVVISI_ESTERNI: false,
 };
