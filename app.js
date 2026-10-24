@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "23.10.2026 · 19";
+  const VERSIONE = "24.10.2026 · 20";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -687,7 +687,7 @@
         else cat.push({ ...base, unita: "pz", passo: 1, g_pz: null });
       }
     }
-    return cat;
+    return cat.map(c=>{const r=L.conteggioPezzi((c.voci||[])[0]||c.nome,1,"pz");return r?{...c,unita:"pz",passo:1,g_pz:r.g_pz}:c;});
   }
   // il prodotto a tap che copre una voce del piano: prima quello che "è" la voce, poi chi la conta
   // le voci generiche non sono un prodotto: si sceglie tu quale frutta o verdura
@@ -700,6 +700,8 @@
   // quanto prendere per coprire quello che manca
   function qtyPerMancanza(c, m) {
     const passo = c.passo || 1;
+    const pezzi=m&&L.conteggioPezzi(m.voce,m.manca,m.u);
+    if(pezzi)return Math.max(1,Math.ceil(pezzi.qty-1e-9));
     if (!m || m.presenza) return passo;
     if (c.unita === "g" && m.u === "g") return Math.max(passo, Math.ceil(m.manca / passo) * passo);
     if (c.unita === "g") return passo;
@@ -722,6 +724,7 @@
   function fmtScelta(c, qty) {
     if (c.unita === "g") return qty >= 1000 ? L.fmtNum(qty / 1000) + " kg" : qty + " g";
     if (c.unita === "l") return L.fmtLitri(qty);
+    if(L.conteggioPezzi((c.voci||[])[0]||c.nome,qty,c.unita))return L.fmtScorta({...c,qty});
     return "×" + qty;
   }
   // la quantità nel riepilogo: "2 pz", "3 pacchetti", "1 l", "400 g"
@@ -1955,6 +1958,8 @@
     d.conf_qty = r.unita === "l" ? (litri || 1) : r.conf;
   }
   function daProdottoNoto(p) {
+    const voce=(p.voci||[])[0]||p.nome, c=L.conteggioPezzi(voce,p.conf_qty||1,p.conf_unita||"g");
+    if(c)return {nome:p.nome,marca:p.marca||"",voce,luogo:p.luogo,conf:1,conf_qty:c.qty,conf_unita:"pz",scadenza:"",trovato:true};
     return { nome: p.nome, marca: p.marca || "", voce: (p.voci || [])[0] || "", luogo: p.luogo, conf: 1, conf_qty: p.conf_qty || "", conf_unita: p.conf_unita || "g", scadenza: "", trovato: true };
   }
 
@@ -1999,8 +2004,8 @@
         <label class="campo">Scadenza (facoltativa)<input type="date" data-f="scadenza" value="${esc(d.scadenza)}"></label>
       </div>
       <div class="due">
-        <label class="campo">${d.conf_unita === "pz" && L.REGOLE[d.voce] ? "Pacchetti nella scatola" : d.conf_unita === "l" ? "Litri nella bottiglia" : "Ogni confezione"}<input data-f="conf_qty" inputmode="decimal" value="${esc(d.conf_qty)}" placeholder="250"></label>
-        <label class="campo">Unità<select data-f="conf_unita">${sel(d.conf_unita, [["g", "grammi"], ["pz", L.REGOLE[d.voce] && L.REGOLE[d.voce].etichetta ? "pacchetti" : "pezzi"], ["l", "litri"]])}</select></label>
+        <label class="campo">${d.conf_unita === "pz" && d.voce === "Crackers non salati" ? "Pacchetti nella scatola" : d.conf_unita === "pz" && d.voce === "Avocado" ? "Avocado per confezione" : d.conf_unita === "l" ? "Litri nella bottiglia" : "Ogni confezione"}<input data-f="conf_qty" inputmode="decimal" value="${esc(d.conf_qty)}" placeholder="250"></label>
+        <label class="campo">Unità<select data-f="conf_unita">${sel(d.conf_unita, [["g", "grammi"], ["pz", d.voce === "Crackers non salati" ? "pacchetti" : "pezzi"], ["l", "litri"]])}</select></label>
       </div>
       <button class="btn largo" data-a="salva-prodotto">Aggiungi ${d.luogo === "frigo" ? "al frigo" : "alla dispensa"}</button>
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
@@ -2020,7 +2025,7 @@
       let r=db.piano.find(x=>x.id==="quantita_acquisti");
       if(!r){r={id:"quantita_acquisti",dati:{}};db.piano.push(r);}
       if(s.fatto && quantita==null){s.fatto=false;delete r.dati[id];return;}
-      if(a){a.qty=quantita==null?a.qty:Number(quantita);if(!Number.isFinite(a.qty)||a.qty<=0)throw Error("Inserisci una quantità maggiore di zero");a.testo=fmtLight(a.qty,a.unita);r.dati[id]=a;}
+      if(a){a.qty=quantita==null?a.qty:Number(quantita);if(!Number.isFinite(a.qty)||a.qty<=0)throw Error("Inserisci una quantità maggiore di zero");a.testo=L.conteggioPezzi(s.voce,a.qty,a.unita)?L.fmtScorta({...a,voci:[s.voce]}):fmtLight(a.qty,a.unita);r.dati[id]=a;}
       s.fatto=true;s.prende=s.prende||S.chi||null;
     });render();renderNav();
   }
@@ -2031,7 +2036,7 @@
     } else {
       const s=S.db.spesa.find(x=>x.id===id);if(!s)return;
       const a=datiAcquistoPro(s);if(!a){toast("Per questo alimento scegli prima un prodotto nel catalogo");return;}
-      apriFoglio({tipo:"quantitaSpesa",d:{id,light:false,...a}});
+      apriFoglio({tipo:"quantitaSpesa",d:{id,light:false,...a,unita:a.unita==="pz"&&s.voce==="Crackers non salati"?"pacchetti":a.unita}});
     }
   }
   function foglioQuantitaSpesa() {
@@ -2064,7 +2069,7 @@
       <label class="campo">Nome<input data-f="nome" value="${esc(d.nome)}"></label>
       <div class="due">
         <label class="campo">Quantità<input data-f="qty" inputmode="decimal" value="${esc(d.qty)}"></label>
-        <label class="campo">Unità<select data-f="unita">${sel(d.unita, [["g", "grammi"], ["pz", L.REGOLE[d.voce] && L.REGOLE[d.voce].etichetta ? "pacchetti" : "pezzi"], ["l", "litri"]])}</select></label>
+        <label class="campo">Unità<select data-f="unita">${sel(d.unita, [["g", "grammi"], ["pz", d.voce === "Crackers non salati" ? "pacchetti" : "pezzi"], ["l", "litri"]])}</select></label>
       </div>
       <div class="campo"><span>Dove sta</span>${bottoniLuogo(d.luogo, "f-luogo")}</div>
       <label class="campo">Conta come (voce del piano)<select data-f="voce">${sel(d.voce, opzioniVoci())}</select></label>
@@ -2703,7 +2708,10 @@
     const it = S.db.inventario.find((i) => i.id === d.id);
     const altre = (it.voci || []).filter((v) => v !== d.voce && v !== (it.voci || [])[0]);
     const voci = d.voce ? [d.voce, ...altre] : [];
-    await modifica("inventario", d.id, { nome: d.nome.trim() || it.nome, qty: Number(String(d.qty).replace(",", ".")) || 0, unita: d.unita, luogo: d.luogo, voci, scadenza: d.scadenza || null, aggiornato: new Date().toISOString() });
+    let qty=Number(String(d.qty).replace(",", "."))||0,unita=d.unita;
+    const pezzi=L.conteggioPezzi(d.voce,qty,unita);
+    if(pezzi && it.unita==="g" && (it.voci||[]).includes(d.voce)){qty=pezzi.qty*pezzi.g_pz;unita="g";}
+    await modifica("inventario", d.id, { nome: d.nome.trim() || it.nome, qty, unita, luogo: d.luogo, voci, scadenza: d.scadenza || null, aggiornato: new Date().toISOString() });
     chiudiFoglio();
     dopoModifica();
   }
@@ -2729,7 +2737,7 @@
         const m = (S.calcSpesa ? S.calcSpesa.mancanze : []).find((x) => x.voce === s.voce);
         const a=acquistoPro(s), precedente=S.scelta.get(c.nome);
         if(precedente?.spesaIds?.includes(s.id)) continue;
-        S.scelta.set(c.nome, { qty: (precedente?.qty||0)+(a?.qty ?? qtyPerMancanza(c, m)), luogo: a?.luogo || c.luogo || "frigo", spesaIds:[...(precedente?.spesaIds||[]),s.id] });
+        S.scelta.set(c.nome, { qty: (precedente?.qty||0)+(a ? (L.conteggioPezzi(s.voce,a.qty,a.unita)?.qty ?? a.qty) : qtyPerMancanza(c, m)), luogo: a?.luogo || c.luogo || "frigo", spesaIds:[...(precedente?.spesaIds||[]),s.id] });
       } else senza.push(s.nome);
     }
     // La lista viene aggiornata solo dopo il salvataggio effettivo delle scorte.
@@ -2784,7 +2792,7 @@
       it("Zucchine", ["Zucchine", "Verdura di stagione", "Misto verdure crude"], "frigo", 6, "pz", { g_pz: 200, manuale: true }),
       it("Insalata mista", ["Misto verdure crude", "Verdura di stagione"], "frigo", 500, "g", { scadenza: tra(3) }),
       it("Mele", ["Frutta di stagione"], "dispensa", 4, "pz", { g_pz: 180, manuale: true }),
-      it("Avocado", ["Avocado"], "dispensa", 1, "pz", { g_pz: 200, manuale: true }),
+      it("Avocado", ["Avocado"], "dispensa", 1, "pz", { g_pz: 100, manuale: true }),
       it("Mirtilli", ["Mirtilli", "Frutta di stagione"], "frigo", 125, "g", { manuale: true }),
       it("Prosciutto crudo", ["Prosciutto crudo magro"], "frigo", 80, "g", { scadenza: tra(5) }),
       it("Tonno all'olio", ["Tonno sott'olio"], "dispensa", 320, "g"),
@@ -2856,7 +2864,8 @@
       case "salva-prodotto": await salvaProdotto(); break;
       case "modifica-item": {
         const it = S.db.inventario.find((i) => i.id === b.dataset.id);
-        apriFoglio({ tipo: "item", d: { id: it.id, nome: it.nome, qty: it.qty, unita: it.unita, luogo: it.luogo, voce: (it.voci || [])[0] || "", scadenza: it.scadenza || "" } });
+        const vis=L.normalizzaPezzi(it);
+        apriFoglio({ tipo: "item", d: { id: it.id, nome: it.nome, qty: vis.qty, unita: vis.unita, luogo: it.luogo, voce: (it.voci || [])[0] || "", scadenza: it.scadenza || "" } });
         break;
       }
       case "salva-item": await salvaItem(); break;

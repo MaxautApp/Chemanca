@@ -24,8 +24,20 @@
     "Crackers non salati": { unita: "pz", etichetta: ["pacchetto", "pacchetti"], g_pz: 30, intero: true, conf: 10 },
     "Olio extra vergine di oliva": { unita: "l", conf: 1 },
     // un avocado si divide a metà fra due persone: 50 g a testa = mezzo avocado
-    "Avocado": { unita: "pz", etichetta: ["avocado", "avocado"], g_pz: 100 },
+    "Avocado": { unita: "pz", etichetta: ["avocado", "avocado"], g_pz: 100, conf: 1 },
   };
+  // Conteggi domestici richiesti: nessuna conversione per gli altri alimenti.
+  function conteggioPezzi(voce, qty, unita) {
+    if(!["Avocado","Crackers non salati"].includes(voce))return null;
+    if(!["g","pz","n."].includes(unita))return null;
+    const r=REGOLE[voce],q=Number(qty);
+    return {qty:unita==="g"?q/r.g_pz:q,unita:"pz",g_pz:r.g_pz};
+  }
+  function normalizzaPezzi(item) {
+    const voce=(item.voci||[]).find(v=>["Avocado","Crackers non salati"].includes(v))||item.nome;
+    const c=conteggioPezzi(voce,item.qty,item.unita);
+    return c?{...item,...c}:item;
+  }
   function regola(item) { return REGOLE[(Array.isArray(item.voci) && item.voci[0]) || item.nome] || null; }
   const GIORNI = ["domenica", "lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato"];
   const GIORNI_BREVI = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
@@ -320,6 +332,7 @@
   }
   function fmtLitri(q) { return String(Math.round(q * 100) / 100).replace(".", ",") + " l"; }
   function fmtScorta(item) {
+    item=normalizzaPezzi(item);
     const q = Number(item.qty) || 0;
     if (item.unita === "g") return q >= 1000 ? fmtNum(q / 1000) + " kg" : Math.round(q) + " g";
     if (item.unita === "l") return fmtLitri(q);
@@ -545,7 +558,7 @@
   }
 
   return {
-    confrontaPiani,
+    conteggioPezzi, normalizzaPezzi, confrontaPiani,
     fabbisognoLight, righeLight, istanteLocale,
     PASTI, ORA, PRESENZA, GENERICHE, REGOLE, regola, fmtLitri,
     iso, daIso, piuGiorni, diffGiorni, nomeGiorno, etichettaData, GIORNI,
