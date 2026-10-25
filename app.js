@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "25.10.2026 · 30";
+  const VERSIONE = "25.10.2026 · 32";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -802,6 +802,19 @@
   }
 
   /* ---------------- SPESA ---------------- */
+  function dettaglioPastiSpesa(pasti,u) {
+    const gruppi=new Map();
+    for(const p of pasti||[]){
+      const k=p.data+"|"+p.pasto;
+      if(!gruppi.has(k))gruppi.set(k,{data:p.data,pasto:p.pasto,q:{},u:p.u||u});
+      const g=gruppi.get(k);
+      for(const [id,q] of Object.entries(p.q||{}))if(Number(q)>0)g.q[id]=(g.q[id]||0)+Number(q);
+    }
+    return [...gruppi.values()].sort((a,b)=>a.data.localeCompare(b.data)||(L.ORA[a.pasto]??24)-(L.ORA[b.pasto]??24)).map(p=>{
+      const dosi=Object.entries(p.q).map(([id,q])=>esc(nomeDi(id))+" "+esc(fmtLight(q,p.u||u||""))).join(" · ");
+      return `<span class="spesa-pasto"><b>${esc(p.pasto)} del ${esc(ddmm(p.data))}</b>${dosi?`<span class="spesa-dosi"> - ${dosi}</span>`:""}</span>`;
+    }).join("");
+  }
   function schermoSpesa() {
     if (light()) return schermoSpesaLight();
     const lista = [...S.db.spesa].sort((a, b) =>
@@ -814,6 +827,7 @@
     let h = testa("", "Spesa");
     h += `<div class="corpo">
       <p style="font-size:14px;color:var(--muted);padding:0 4px;margin-top:-6px">${daPrendere} da prendere · ${giorniSpesaPro() === 1 ? "prossime 24 ore" : "prossimi " + giorniSpesaPro() + " giorni"}, sottraendo le scorte disponibili</p>`;
+    h += `<p class="sotto">Sotto ogni pasto trovi le dosi del piano per persona. La quantità da acquistare tiene conto delle scorte disponibili.</p>`;
     h += `<label class="campo">Periodo della spesa<select id="pro-spesa-giorni">${sel(giorniSpesaPro(), [[1,"1 giorno · prossime 24 ore"],[3,"3 giorni"],[7,"7 giorni"],[14,"14 giorni"]])}</select></label>`;
     if (!esterni) {
       // avvisi solo dentro l'app per ora
@@ -833,6 +847,8 @@
     let mostratiExtra = false;
     for (const s of lista) {
       if(s.origine !== "piano" && !mostratiExtra) { h += '<h2 style="font-size:17px">Altri acquisti</h2>';mostratiExtra=true; }
+      const bisogno=(S.calcSpesa||S.calc)?.mancanze?.find(m=>m.voce===s.voce);
+      const dettagli=s.origine==="piano"?dettaglioPastiSpesa(s.fatto?s.pasti||bisogno?.pasti:bisogno?.pasti||s.pasti,s.u||bisogno?.u):"";
       const tag = s.data_serve && s.origine === "piano"
         ? `<span class="pill liv-${livello(s.data_serve)}">Serve ${esc(L.nomeGiorno(s.data_serve, oggi()))}</span>`
         : `<span class="pill dopo">Quando capita</span>`;
@@ -841,7 +857,7 @@
       h += `<div class="voce-spesa ${s.fatto ? "fatto" : ""}">
         <button class="spunta" role="checkbox" aria-checked="${!!s.fatto}" aria-label="Preso: ${esc(s.nome)}" data-a="spunta" data-id="${esc(s.id)}"><span>${s.fatto ? ico("spunta", 16, 'stroke="#fff" stroke-width="3"') : ""}</span></button>
         <div class="testo"><span class="nome">${esc(s.nome)}</span>
-          <span class="perche">${esc(s.origine === "piano" ? s.motivo : "Aggiunto a mano" + (s.creato_da ? " da " + nomeDi(s.creato_da) : ""))}</span>
+          <span class="perche">${dettagli || esc(s.origine === "piano" ? s.motivo : "Aggiunto a mano" + (s.creato_da ? " da " + nomeDi(s.creato_da) : ""))}</span>
           <span class="tags">${tag}${s.fatto ? "" : chi}${s.origine !== "piano" ? `<button class="mini-link" data-a="togli-spesa" data-id="${esc(s.id)}" style="color:var(--muted)">Togli</button>` : ""}</span></div>
         <span class="q">${esc(acquistoPro(s)?.testo || s.qty_txt || "")}</span></div>${s.origine === "piano" && !s.fatto ? `<div class="due" style="margin:0 0 14px"><button class="btn piccolo" data-a="spunta" data-id="${esc(s.id)}">Comprato</button><button class="btn piccolo sec" data-a="quantita-spesa" data-id="${esc(s.id)}">Usa quantità diversa</button></div>` : ""}`;
     }
@@ -1812,8 +1828,9 @@
     if (!righe.length && !p.manuali.length) h += '<p class="vuoto">Nessun alimento previsto per questo periodo.</p>';
     for (const r of righe) {
       const dettaglio = Object.entries(r.q || {}).map(([id, q]) => nomeDi(id) + " " + fmtLight(q, r.u)).join(" · ");
+      const dettagliPasti=dettaglioPastiSpesa(r.pasti,r.u);
       const statoRiga = r.rimosso ? "Non più previsto dal piano" : r.aggiunta ? "Ancora da prendere: " + fmtLight(r.manca, r.u) : r.coperto ? "Completo per questa lista" : "Da comprare";
-      h += `<section class="card pad"><div class="titolo-sez"><h2 style="font-size:16px">${esc(r.nome)}</h2><b>${r.rimosso ? "" : esc(fmtLight(r.qty, r.u))}</b></div><p style="font-size:13px;color:var(--muted);margin-top:6px">${esc(dettaglio)}</p><p style="margin:8px 0;font-weight:700">${esc(statoRiga)}</p>
+      h += `<section class="card pad"><div class="titolo-sez"><h2 style="font-size:16px">${esc(r.nome)}</h2><b>${r.rimosso ? "" : esc(fmtLight(r.qty, r.u))}</b></div><p style="font-size:13px;color:var(--muted);margin-top:6px">${dettagliPasti || esc(dettaglio)}</p><p style="margin:8px 0;font-weight:700">${esc(statoRiga)}</p>
         ${r.comprato > 0 ? `<p>Comprato: ${esc(fmtLight(r.comprato,r.u))}</p>` : ""}${r.disponibile > 0 ? `<p>Ce l'ho già: ${esc(fmtLight(r.disponibile,r.u))}</p>` : ""}
         ${!conclusa && !r.coperto ? `<div class="due" style="margin-top:10px"><button class="btn piccolo" data-a="light-copri" data-id="${esc(r.id)}" data-stato="comprato">Comprato</button><button class="btn piccolo sec" data-a="light-copri" data-id="${esc(r.id)}" data-stato="disponibile">Ce l'ho già</button></div><button class="link" data-a="quantita-spesa" data-id="${esc(r.id)}">Usa quantità diversa</button>` : ""}
         ${!conclusa && r.comprato+r.disponibile > 0 ? `<button class="link" data-a="light-copri" data-id="${esc(r.id)}" data-stato="annulla">Annulla acquisto / disponibilità</button>` : ""}</section>`;

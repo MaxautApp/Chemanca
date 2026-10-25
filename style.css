@@ -541,3 +541,8 @@ button:focus-visible, summary:focus-visible { outline:3px solid var(--green); ou
 /* Consenso al ricordo del codice: checkbox compatta accanto all’etichetta. */
 .ricorda-codice > span { display:flex; align-items:center; gap:10px; }
 #cloud-ricorda { width:20px; height:20px; min-height:20px; margin:0; padding:0; flex:none; accent-color:var(--green); }
+
+/* Provenienza degli alimenti: pasto e data precedono le dosi personali. */
+.spesa-pasto { display:block; margin:3px 0; font-size:13px; line-height:1.45; }
+.spesa-pasto b { display:inline; color:var(--ink); font-weight:700; }
+.spesa-dosi { display:inline; color:var(--muted); }

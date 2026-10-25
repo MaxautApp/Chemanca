@@ -412,14 +412,14 @@
     for (const m of mancanze) {
       const riga = {
         nome: m.voce, voce: m.voce, qty_txt: quantitaSpesa(m), motivo: motivo(m, oggi),
-        urgenza: m.urgente ? "urgente" : "entro", data_serve: m.data,
+        urgenza: m.urgente ? "urgente" : "entro", data_serve: m.data, u:m.u, pasti:m.pasti,
       };
       const s = auto.get(m.voce);
       if (!s) ops.inserisci.push({ ...riga, origine: "piano", fatto: false });
       else {
         auto.delete(m.voce);
         if (s.fatto) continue;
-        const cambia = ["qty_txt", "motivo", "urgenza", "data_serve"].some((k) => s[k] !== riga[k]);
+        const cambia = ["qty_txt", "motivo", "urgenza", "data_serve", "u"].some((k) => s[k] !== riga[k]) || JSON.stringify(s.pasti||[])!==JSON.stringify(riga.pasti||[]);
         if (cambia) ops.aggiorna.push({ id: s.id, ...riga });
       }
     }
@@ -486,7 +486,8 @@
           if (!totale) continue;
           const id = JSON.stringify([v.nome, v.u]);
           let r = righe.get(id);
-          if (!r) { r = { id, nome: v.nome, u: v.u, qty: 0, q: {}, prima: data }; righe.set(id, r); }
+          if (!r) { r = { id, nome: v.nome, u: v.u, qty: 0, q: {}, prima: data, pasti:[] }; righe.set(id, r); }
+          r.pasti.push({data,pasto:p.pasto,q,u:v.u});
           r.qty += totale;
           for (const [persona, n] of Object.entries(q)) r.q[persona] = (r.q[persona] || 0) + n;
         }
