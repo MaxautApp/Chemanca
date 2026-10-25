@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "25.10.2026 · 33";
+  const VERSIONE = "25.10.2026 · 36";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -218,6 +218,27 @@
     const r = S.db.piano.find((x) => x.id === "persone");
     return r && Array.isArray(r.dati) ? r.dati : [];
   }
+  function impostaProfiloAttivo(id) {
+    const p=persone().find(p=>p.id===id);
+    if(!p)throw Error("Scegli uno dei profili della famiglia");
+    S.chi=p.id;LS.set("ds_chi",p.id);
+    LS.set("ds_profilo_attivo",{id:p.id,nome:p.nome,famiglia:S.cloud?.famigliaId||null});
+  }
+  function verificaProfiloAttivo() {
+    const lista=persone();if(!lista.length)return false;
+    const salvato=LS.get("ds_profilo_attivo",null),famiglia=S.cloud?.famigliaId||null;
+    if(salvato?.famiglia && famiglia && salvato.famiglia!==famiglia){S.chi=null;return false;}
+    if(lista.some(p=>p.id===S.chi)){impostaProfiloAttivo(S.chi);return true;}
+    const stessoId=salvato && lista.find(p=>p.id===salvato.id);
+    const nome=String(salvato?.nome||"").trim().toLowerCase();
+    const stessiNomi=nome?lista.filter(p=>String(p.nome).trim().toLowerCase()===nome):[];
+    const ripristinato=stessoId || (stessiNomi.length===1?stessiNomi[0]:null);
+    if(ripristinato){impostaProfiloAttivo(ripristinato.id);return true;}
+    S.chi=null;return false;
+  }
+  function richiestaProfiloHome() {
+    return testa("Profilo del telefono","Chi usa l’app?")+`<div class="corpo"><section class="card pad"><h2>Scegli il tuo profilo</h2><p>Seleziona chi sta usando questo telefono per vedere e confermare i suoi pasti.</p><div class="due">${persone().map(p=>`<button class="btn" data-a="chi" data-v="${esc(p.id)}">${esc(p.nome)}</button>`).join("")}</div><p class="sotto">La scelta viene ricordata soltanto su questo dispositivo.</p></section></div>`;
+  }
   function nomeDi(id) {
     const p = persone().find((x) => x.id === id);
     return p ? p.nome : id ? id.charAt(0).toUpperCase() + id.slice(1) : "";
@@ -243,6 +264,7 @@
     return r && r.dati && [1,3,7,14].includes(r.dati.giorni) ? r.dati.giorni : 3;
   }
   function ricalcola() {
+    verificaProfiloAttivo();
     scegliPiano();
     if (!S.piano) { S.calc = { mancanze: [], totaleVoci: 0, pronte: 0, pasti: [] }; S.calc7 = S.calc; S.calcSpesa = S.calc; return; }
     const inv = S.db.inventario;
@@ -437,14 +459,15 @@
     return r.stato === "solo:" + id || r.stato === id;
   }
   function prossimoPastoHome() {
-    if (!S.piano) return null;
-    const stati = statiPasti();
-    for (let i=0;i<8;i++) {
-      const data=L.piuGiorni(oggi(),i),g=L.giornoPiano(S.piano,data); if(!g) continue;
-      const pasti=[...g.pasti].filter((p)=>p.pasto!=="Fuori pasto" && pastoPerPersona(p,S.chi)).sort((a,b)=>(L.ORA[a.pasto]??12)-(L.ORA[b.pasto]??12));
-      for (const p of pasti) if (!registratoPerPersona(stati[L.chiavePasto(data,p.pasto)],S.chi)) return { ...p, data };
-    }
-    return null;
+    if(!S.piano || !persone().some(p=>p.id===S.chi))return null;
+    const data=oggi(),g=L.giornoPiano(S.piano,data);if(!g)return null;
+    const stati=statiPasti();
+    const pasti=[...g.pasti].filter(p=>p.pasto!=="Fuori pasto" && pastoPerPersona(p,S.chi)).sort((a,b)=>(L.ORA[a.pasto]??12)-(L.ORA[b.pasto]??12));
+    const prossimo=pasti.find(p=>!registratoPerPersona(stati[L.chiavePasto(data,p.pasto)],S.chi));
+    if(prossimo)return {...prossimo,data};
+    // La giornata rimane visibile fino alla mezzanotte locale, anche quando è completata.
+    const ultimo=pasti.find(p=>p.pasto==="Cena")||pasti[pasti.length-1];
+    return ultimo?{...ultimo,data,giornataCompletata:true}:null;
   }
 
   function firmaPastoHome(p) { return [oggi(), S.chi, p && p.data, p && p.pasto].join("|"); }
@@ -473,6 +496,7 @@
   }
 
   function schermoHomeLight() {
+    if(persone().length && !verificaProfiloAttivo())return richiestaProfiloHome();
     const g=S.piano && L.giornoPiano(S.piano,oggi()),stati=statiPasti();
     const pasti=g?g.pasti.filter((p)=>p.pasto!=="Fuori pasto" && pastoPerPersona(p,S.chi)):[];
     const registrati=pasti.filter((p)=>registratoPerPersona(stati[L.chiavePasto(oggi(),p.pasto)],S.chi)).length;
@@ -483,8 +507,8 @@
     else if(prossimo) {
       const giaFatto=registratoPerPersona(stati[L.chiavePasto(prossimo.data,prossimo.pasto)],S.chi);
       const dosi=(prossimo.voci||[]).filter((v)=>Number(L.dosi(v)[S.chi])>0).map((v)=>`<li><span>${esc(v.nome)}</span><b>${esc(fmtLight(L.dosi(v)[S.chi],v.u))}</b></li>`).join("");
-      h+=`<section class="home-card home-principale"><span class="home-etichetta">${giaFatto ? "Pasto registrato" : "Prossimo pasto"} · ${esc(L.nomeGiorno(prossimo.data,oggi()))}</span><h2>${esc(prossimo.pasto)} <small>${esc(oreLight(L.ORA[prossimo.pasto]??12))}</small></h2><p class="home-caption">Orario indicativo · dosi per ${esc(nomeDi(S.chi))}</p>${prossimo.libero?'<p>Pasto libero: puoi scrivere cosa hai mangiato anche in seguito.</p>':`<ul class="home-dosi">${dosi}</ul>`}<div class="home-azioni-pasto"><button class="btn sec" data-a="piano-apri" data-d="${esc(prossimo.data)}" data-pasto="${esc(prossimo.pasto)}">Apri il pasto</button><button class="btn" data-a="home-pasto-fatto" data-k="${esc(L.chiavePasto(prossimo.data,prossimo.pasto))}" ${giaFatto ? 'disabled title="Pasto già registrato: puoi modificarlo con Apri il pasto"' : prossimo.data > oggi() ? 'disabled title="Puoi confermare il pasto dal giorno previsto"' : ""} aria-label="Fatto! Conferma il pasto di ${esc(nomeDi(S.chi))}">Fatto!</button></div></section>`;
-    } else h+='<section class="home-card home-principale"><h2>Nessun pasto in programma</h2><p>Puoi consultare il piano completo o aggiornare la dieta dalle Impostazioni.</p><button class="btn" data-a="piano-apri">Apri il piano</button></section>';
+      h+=`<section class="home-card home-principale"><span class="home-etichetta">${giaFatto ? "Pasto registrato" : "Prossimo pasto"} · ${esc(L.nomeGiorno(prossimo.data,oggi()))}</span><h2>${esc(prossimo.pasto)} <small>${esc(oreLight(L.ORA[prossimo.pasto]??12))}</small></h2><p class="home-caption">${prossimo.giornataCompletata?"I pasti di oggi risultano già registrati. Puoi rivederli nel Piano.":"Orario indicativo · dosi per "+esc(nomeDi(S.chi))}</p>${prossimo.libero?'<p>Pasto libero: puoi scrivere cosa hai mangiato anche in seguito.</p>':`<ul class="home-dosi">${dosi}</ul>`}<div class="home-azioni-pasto"><button class="btn sec" data-a="piano-apri" data-d="${esc(prossimo.data)}" data-pasto="${esc(prossimo.pasto)}">Apri il pasto</button><button class="btn" data-a="home-pasto-fatto" data-k="${esc(L.chiavePasto(prossimo.data,prossimo.pasto))}" ${giaFatto ? 'disabled title="Pasto già registrato: puoi modificarlo con Apri il pasto"' : prossimo.data > oggi() ? 'disabled title="Puoi confermare il pasto dal giorno previsto"' : ""} aria-label="Fatto! Conferma il pasto di ${esc(nomeDi(S.chi))}">Fatto!</button></div></section>`;
+    } else h+=`<section class="home-card home-principale"><h2>${g && g.pasti.length?"Nessun pasto associato al profilo per oggi":"Nessun pasto in programma per oggi"}</h2><p>${g && g.pasti.length?"Apri il Piano e controlla le dosi di "+esc(nomeDi(S.chi))+" e l’abbinamento del PDF al profilo.":"Puoi consultare il piano completo o verificare la data di inizio nelle Impostazioni."}</p><button class="btn" data-a="piano-apri" data-d="${oggi()}">Apri il piano di oggi</button></section>`;
     h+=`<section class="home-card"><span class="home-etichetta">La giornata di oggi</span><h2>${registrati} <small>di ${pasti.length} pasti registrati</small></h2><p>A fine giornata i pasti rimasti vengono registrati automaticamente. Puoi correggerli nello storico.</p><button class="btn sec largo" data-a="piano-apri" data-d="${oggi()}">Piano di oggi e settimana</button></section>
       <section class="home-card"><span class="home-etichetta">La spesa della famiglia</span><h2>${daComprare} <small>voci da prendere</small></h2><p>${esc(nomePeriodoLight(lista))}</p><button class="btn sec largo" data-a="vai" data-tab="spesa">Apri la lista</button></section>
       <section class="home-card"><span class="home-etichetta">Il tuo diario</span>${LS.get("ds_home_peso",true)?`<h2>${esc(ultimoPesoTesto())}</h2>`:"<h2>Il tuo percorso</h2>"}<p>Pasti, pesate e attività fisica, con il report per la dietista.</p><div class="due"><button class="btn piccolo sec" data-a="vai-diario" data-v="peso">Peso</button><button class="btn piccolo sec" data-a="vai-diario" data-v="storico">Storico</button></div></section></div></div>`;
@@ -492,6 +516,7 @@
   }
 
   function schermoOggi() {
+    if(persone().length && !verificaProfiloAttivo())return richiestaProfiloHome();
     if (light()) return schermoHomeLight();
     const d = L.daIso(oggi());
     const sopra = cap(L.GIORNI[d.getDay()]) + " " + d.getDate() + " " + MESI[d.getMonth()];
@@ -916,7 +941,9 @@
       const nota = notaDi(k);
       const notaHtml = nota ? `<button class="nota-pasto" data-a="nota-apri" data-k="${esc(k)}">${ico("matita", 14)}<span>${esc(notaLiberaTesto(nota))}</span></button>` : "";
       if (p.libero) {
-        h += `<div class="piatto">Pasto libero</div>${notaHtml || `<button class="nota-pasto vuota" data-a="nota-apri" data-k="${esc(k)}">${ico("matita", 14)}<span>Scrivi cosa hai mangiato</span></button>`}</section>`;
+        const confermato=light()?registratoPerPersona(st,S.chi):!!st && !["auto","da_correggere"].includes(st.stato);
+        const conferma=sel<=oggi()?`<div class="azioni"><button class="btn piccolo" data-a="${light() && sel===oggi()?"home-pasto-fatto":"pasto"}" data-k="${esc(k)}" data-stato="fatto" ${confermato?'disabled title="Pasto già registrato"':""}>Fatto!</button></div>`:"";
+        h += `<div class="piatto">Pasto libero</div>${notaHtml || `<button class="nota-pasto vuota" data-a="nota-apri" data-k="${esc(k)}">${ico("matita", 14)}<span>Scrivi cosa hai mangiato</span></button>`}${conferma}</section>`;
         h += schedeFitness(sel, p.pasto);
         continue;
       }
@@ -1590,8 +1617,7 @@
     if(condiviso)await esportaBackup();
     await A.ripristina(dati);
     S.db = await A.carica();
-    if (!persone().some((p) => p.id === S.chi)) S.chi = (persone()[0] || {}).id || null;
-    LS.set("ds_chi", S.chi);
+    verificaProfiloAttivo();
     S.giornoSel = null; S.pesoPersona = null; S.storicoPersona = "tutti"; S.storicoIntervallo=null; S.scelta.clear();
     chiudiFoglio(); dopoModifica(null); toast("Backup ripristinato");
   }
@@ -1881,6 +1907,7 @@
   function render() {
     const app = $("#app");
     if(condiviso && A.stato().fase!=="pronto"){app.innerHTML=schermoCollegamento();$("#nav").innerHTML="";document.body.classList.remove("home-light","con-scelta");return;}
+    verificaProfiloAttivo();
     document.body.classList.toggle("home-light", light() && S.tab === "oggi");
     const att = document.activeElement;
     const fuoco = att && att.id && app.contains(att) ? { id: att.id, pos: att.selectionStart } : null;
@@ -2906,7 +2933,7 @@
       case "cloud-dimentica-codice": A.dimenticaCodice();render();toast("Codice dimenticato. La sessione attuale resta collegata");break;
       case "cloud-aggiorna": await collegaTelefono(false); break;
       case "cloud-copia": if(navigator.clipboard) {await navigator.clipboard.writeText(A.stato().userId||"");toast("Identificativo copiato");} else toast("Seleziona e copia l’identificativo mostrato"); break;
-      case "cloud-esci": if(confirm("Uscire da questo telefono? Per accedere nuovamente servirà un nuovo collegamento da Supabase.")){await A.esci();cloudAvviato=false;render();} break;
+      case "cloud-esci": if(confirm("Uscire da questo telefono? Potrai accedere nuovamente con il codice familiare.")){await A.esci();cloudAvviato=false;render();} break;
       case "piano-apri": {
         S.giornoSel = b.dataset.d || oggi(); vai("piano");
         if (b.dataset.pasto) document.getElementById("pasto-" + L.chiavePasto(S.giornoSel,b.dataset.pasto))?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -3136,18 +3163,18 @@
         dopoModifica();
         toast(b.dataset.v === "light" ? "Versione Light: Piano e Spesa" : "Versione PRO: tutte le funzioni");
         break;
-      case "chi": S.chi = b.dataset.v; LS.set("ds_chi", S.chi); chiudiFoglio(); render(); break;
+      case "chi": impostaProfiloAttivo(b.dataset.v); chiudiFoglio(); render(); break;
       case "benv-aggiungi": d.nomi.push(""); renderFoglio(); { const ult = document.getElementById("benv-" + (d.nomi.length - 1)); if (ult) ult.focus(); } break;
       case "benv-togli": d.nomi.splice(Number(b.dataset.i), 1); renderFoglio(); break;
       case "benv-avanti": {
         const nomi = d.nomi.map((n) => n.trim()).filter(Boolean);
         if (!nomi.length) { toast("Scrivi almeno un nome"); break; }
         await salvaPersone(nomi.map((n, i) => ({ id: "p" + (i + 1), nome: n })));
-        if (nomi.length === 1) { S.chi = "p1"; LS.set("ds_chi", "p1"); d.passo = 3; } else d.passo = 2;
+        if (nomi.length === 1) { impostaProfiloAttivo("p1"); d.passo = 3; } else d.passo = 2;
         renderFoglio(); render();
         break;
       }
-      case "benv-chi": S.chi = b.dataset.v; LS.set("ds_chi", S.chi); d.passo = 3; renderFoglio(); render(); break;
+      case "benv-chi": impostaProfiloAttivo(b.dataset.v); d.passo = 3; renderFoglio(); render(); break;
       case "persona-aggiungi": {
         const lista = persone();
         let n = lista.length + 1;
@@ -3310,7 +3337,7 @@
   document.addEventListener("change", eventoSicuro(async (ev) => {
     const el = ev.target;
     if(condiviso && A.stato().fase!=="pronto")return;
-    if (el.id === "home-persona") { S.chi = el.value; LS.set("ds_chi",S.chi); render(); return; }
+    if (el.id === "home-persona") { impostaProfiloAttivo(el.value); render(); return; }
     if (el.id === "home-mostra-peso") { LS.set("ds_home_peso",el.checked); toast("Preferenza della Home salvata"); return; }
     if (el.id === "pro-spesa-giorni") {
       const giorni = Number(el.value);
