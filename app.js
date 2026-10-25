@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "25.10.2026 · 27";
+  const VERSIONE = "25.10.2026 · 28";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -1642,9 +1642,7 @@
         <div class="due"><label class="campo">Numero Max<input id="wa-max-tel" value="${esc(w.max.tel)}" placeholder="+39…" inputmode="tel"></label><label class="campo">Chiave Max<input id="wa-max-key" value="${esc(w.max.key)}" autocomplete="off"></label></div>
         <div class="due"><label class="campo">Numero Vale<input id="wa-vale-tel" value="${esc(w.vale.tel)}" placeholder="+39…" inputmode="tel"></label><label class="campo">Chiave Vale<input id="wa-vale-key" value="${esc(w.vale.key)}" autocomplete="off"></label></div>
         <div class="due"><button class="btn sec" data-a="wa-prova">Messaggio di prova</button><button class="btn" data-a="wa-salva">Salva WhatsApp</button></div>
-      </section>` : `<section class="sezione-imp"><h2>Avvisi</h2>
-        <p>${condiviso ? "Archivio familiare condiviso. Gli avvisi esterni automatici non sono attivi." : "I dati restano su questo telefono."}</p>
-      </section>`}
+      </section>` : ""}
 
 
       ${pannelloMovimentiScorte()}
