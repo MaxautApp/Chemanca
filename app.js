@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "25.10.2026 · 26";
+  const VERSIONE = "25.10.2026 · 27";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -1245,13 +1245,22 @@
 
   // la curva del peso: una scala sola per punti, griglia ed etichette
   function graficoPeso(lista, colore) {
-    const W = 340, H = 190, sx = 40, dx = 16, su = 18, giu = 26;
+    const W = 340, sx = 40, dx = 20, su = 18;
     const tempi = lista.map((x) => L.daIso(x.data).getTime());
     const t0 = Math.min(...tempi), t1 = Math.max(...tempi);
     const kg = lista.map((x) => Number(x.kg));
     const margine = Math.max(0.5, (Math.max(...kg) - Math.min(...kg)) * 0.15);
     const lo = Math.min(...kg) - margine, hi = Math.max(...kg) + margine;
     const X = (tm) => (t1 === t0 ? sx + (W - sx - dx) / 2 : sx + ((tm - t0) / (t1 - t0)) * (W - sx - dx));
+    // Una data per ogni giorno di pesata. Le date vicine usano righe alternate.
+    const etichette=[],fineRiga=[];
+    for(let i=0;i<lista.length;i++){
+      if(etichette.some(e=>e.data===lista[i].data))continue;
+      const x=X(tempi[i]);let riga=fineRiga.findIndex(fine=>x-fine>=34);
+      if(riga<0)riga=fineRiga.length;
+      fineRiga[riga]=x;etichette.push({data:lista[i].data,x,riga});
+    }
+    const extra=Math.max(0,fineRiga.length-1)*15,H=190+extra,giu=26+extra;
     const Y = (k) => su + ((hi - k) / (hi - lo)) * (H - su - giu);
     const grezzo = (hi - lo) / 3;
     const p10 = Math.pow(10, Math.floor(Math.log10(grezzo)));
@@ -1269,10 +1278,9 @@
       ${g}
       <path d="${area}" fill="${colore}" fill-opacity="0.12"/>
       <path d="${linea}" fill="none" stroke="${colore}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-      ${pts.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${i === pts.length - 1 ? 5 : 3.5}" fill="${colore}" stroke="var(--card)" stroke-width="1.5"/>`).join("")}
+      ${pts.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${i === pts.length - 1 ? 5 : 3.5}" fill="${colore}" stroke="var(--card)" stroke-width="1.5"><title>${esc(dataLunga(lista[i].data))}: ${L.fmtNum(kg[i])} kg</title></circle>`).join("")}
       <text x="${Math.min(ult[0], W - dx - 4).toFixed(1)}" y="${(ult[1] - 10).toFixed(1)}" text-anchor="end" font-size="12" font-weight="800" fill="var(--ink)">${L.fmtNum(kg[kg.length - 1])} kg</text>
-      <text x="${pts[0][0].toFixed(1)}" y="${H - 8}" text-anchor="start" font-size="10" fill="var(--muted)">${ddmm(lista[0].data)}</text>
-      <text x="${(W - dx).toFixed(1)}" y="${H - 8}" text-anchor="end" font-size="10" fill="var(--muted)">${ddmm(lista[lista.length - 1].data)}</text>
+      ${etichette.map(e=>`<line x1="${e.x.toFixed(1)}" x2="${e.x.toFixed(1)}" y1="${H-giu+2}" y2="${H-giu+6+e.riga*15}" stroke="var(--line)"/><text class="data-pesata" x="${e.x.toFixed(1)}" y="${H-giu+18+e.riga*15}" text-anchor="middle" font-size="10" fill="var(--muted)">${ddmm(e.data)}</text>`).join("")}
     </svg>`;
   }
 
