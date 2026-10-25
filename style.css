@@ -509,3 +509,8 @@ button:focus-visible, summary:focus-visible { outline:3px solid var(--green); ou
 @media print { html, body, #stampa { background:#fff !important; color:#000; } }
 
 .collegamento{display:flex;flex-direction:column;gap:16px;margin-top:12px}.collegamento p{font-size:14px;line-height:1.6}.collegamento input{font-size:13px}.sezione-imp code{overflow-wrap:anywhere}
+
+/* Sezione corrente: icona più scura e area riconoscibile anche senza colore. */
+#nav button[aria-current="page"]:not(.centro) { color:var(--green-dark); background:var(--green-soft); border-radius:14px; }
+#nav button[aria-current="page"] svg { stroke-width:2.8; }
+:root[data-tema="scuro"] #nav button[aria-current="page"]:not(.centro) { color:#FFFFFF; background:#19573A; }

@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "24.10.2026 · 21";
+  const VERSIONE = "25.10.2026 · 22";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -402,15 +402,16 @@
   }
 
   /* ---------------- OGGI ---------------- */
-  // solo i pasti di oggi, man mano che arriva la loro ora (dalla colazione in poi)
+  // Il primo pasto di oggi ancora da registrare, senza limiti orari.
   function daConfermare() {
     if (!S.piano) return [];
     const g = L.giornoPiano(S.piano, oggi());
     if (!g) return [];
     const stati = statiPasti();
-    const adesso = oraAdesso();
     return g.pasti
-      .filter((p) => !p.libero && p.pasto !== "Fuori pasto" && L.ORA[p.pasto] <= adesso && !stati[L.chiavePasto(oggi(), p.pasto)])
+      .filter((p) => !p.libero && p.pasto !== "Fuori pasto" && !stati[L.chiavePasto(oggi(), p.pasto)])
+      .sort((a,b)=>(L.ORA[a.pasto]??12)-(L.ORA[b.pasto]??12))
+      .slice(0,1)
       .map((p) => ({ ...p, data: oggi(), chiave: L.chiavePasto(oggi(), p.pasto) }));
   }
 
@@ -428,14 +429,13 @@
     if (r.stato === "parziale") return (r.contenuto && r.contenuto.confermati || []).includes(id);
     return r.stato === "solo:" + id || r.stato === id;
   }
-  const FINE_PASTO_HOME = { Colazione: 9.5, "Metà mattina": 11.5, Pranzo: 14, Merenda: 17.5, Cena: 24 };
   function prossimoPastoHome() {
     if (!S.piano) return null;
     const stati = statiPasti();
     for (let i=0;i<8;i++) {
       const data=L.piuGiorni(oggi(),i),g=L.giornoPiano(S.piano,data); if(!g) continue;
       const pasti=[...g.pasti].filter((p)=>p.pasto!=="Fuori pasto" && pastoPerPersona(p,S.chi)).sort((a,b)=>(L.ORA[a.pasto]??12)-(L.ORA[b.pasto]??12));
-      for (const p of pasti) if ((i>0 || oraAdesso() <= (FINE_PASTO_HOME[p.pasto] ?? 24)) && ((i===0 && p.pasto==="Cena") || !registratoPerPersona(stati[L.chiavePasto(data,p.pasto)],S.chi))) return { ...p, data };
+      for (const p of pasti) if (!registratoPerPersona(stati[L.chiavePasto(data,p.pasto)],S.chi)) return { ...p, data };
     }
     return null;
   }
