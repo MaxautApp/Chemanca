@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "25.10.2026 · 28";
+  const VERSIONE = "25.10.2026 · 29";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -1624,7 +1624,7 @@
       </section>
 
 
-      ${condiviso ? `<section class="sezione-imp"><h2>Famiglia condivisa</h2><p>Questo telefono è autorizzato. I dati della famiglia sono condivisi con gli altri telefoni collegati. Non servono PIN o password.</p><button class="btn sec largo" data-a="cloud-aggiorna">Aggiorna famiglia</button><details><summary>Identificativo e recupero dell’accesso</summary><p>Telefono: <code>${esc(A.stato().userId)}</code></p><p>Famiglia: <code>${esc(A.stato().famigliaId)}</code></p><button class="link" data-a="cloud-copia">Copia identificativo telefono</button><p>Se cambi telefono o cancelli i dati del browser servirà autorizzare il nuovo identificativo da Supabase.</p><button class="btn rosso" data-a="cloud-esci">Esci da questo telefono</button></details></section>` : ""}
+      ${condiviso ? `<section class="sezione-imp"><h2>Famiglia condivisa</h2><p>Questo telefono è autorizzato. I dati della famiglia sono condivisi con gli altri telefoni collegati. Il codice familiare serve solo per collegare o recuperare un dispositivo.</p><button class="btn sec largo" data-a="cloud-aggiorna">Aggiorna famiglia</button><details><summary>Accesso con codice e recupero</summary><label class="campo">Codice familiare<input id="cloud-codice-impostazioni" type="password" autocomplete="current-password" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX"></label><button class="btn sec" data-a="cloud-ricorda-codice">Verifica e ricorda su questo dispositivo</button>${A.codiceRicordato()?`<p>Codice ricordato su questo dispositivo.</p><button class="link" data-a="cloud-dimentica-codice">Dimentica il codice salvato</button>`:""}<p>Telefono: <code>${esc(A.stato().userId)}</code></p><p>Famiglia: <code>${esc(A.stato().famigliaId)}</code></p><button class="link" data-a="cloud-copia">Copia identificativo telefono</button><p>Se perdi la sessione puoi ricollegarti con il codice familiare, anche senza l’altro telefono.</p><button class="btn rosso" data-a="cloud-esci">Esci da questo telefono</button></details></section>` : ""}
       ${esterni ? `
       <section class="sezione-imp"><h2>Avvisi su Telegram</h2>
         <p>Il bot scrive nel gruppo della famiglia. Il token resta solo su questo telefono, non va nel codice.</p>
@@ -2873,7 +2873,9 @@
     if(condiviso && A.stato().fase!=="pronto" && !a.startsWith("cloud-"))return;
     const d = S.sheet && S.sheet.d;
     switch (a) {
-      case "cloud-identifica": await collegaTelefono(true); break;
+      case "cloud-identifica": await collegaTelefono(false); break;
+      case "cloud-ricorda-codice": {const codice=$("#cloud-codice-impostazioni").value;await A.accediConCodice(codice,true);S.db=A.istantanea();render();toast("Codice verificato e ricordato su questo dispositivo");break;}
+      case "cloud-dimentica-codice": A.dimenticaCodice();render();toast("Codice dimenticato. La sessione attuale resta collegata");break;
       case "cloud-aggiorna": await collegaTelefono(false); break;
       case "cloud-copia": if(navigator.clipboard) {await navigator.clipboard.writeText(A.stato().userId||"");toast("Identificativo copiato");} else toast("Seleziona e copia l’identificativo mostrato"); break;
       case "cloud-esci": if(confirm("Uscire da questo telefono? Per accedere nuovamente servirà un nuovo collegamento da Supabase.")){await A.esci();cloudAvviato=false;render();} break;
@@ -3313,6 +3315,8 @@
     }
   }));
   document.addEventListener("submit", eventoSicuro(async (ev) => {
+    if(ev.target.id==="cloud-accesso"){ev.preventDefault();const codice=$("#cloud-codice").value,ricorda=$("#cloud-ricorda").checked;await collegaTelefono(false,codice,ricorda);return;}
+
     ev.preventDefault();
     if(condiviso && A.stato().fase!=="pronto")return;
     const f = ev.target.dataset.form;
@@ -3379,13 +3383,18 @@
 
   /* ---------------- avvio ---------------- */
   function schermoCollegamento() {
-    const st=A.stato();
-    return testa("Famiglia condivisa","CheManca?")+`<div class="corpo"><section class="card pad collegamento"><h2>${st.fase==="iniziale"?"Collegamento in corso":st.userId?"Autorizza questo telefono":"Accesso senza PIN"}</h2><p>Un solo collegamento iniziale, poi l’app si apre automaticamente. Non servono email, password o PIN.</p>${st.userId?`<label class="campo">Identificativo di questo telefono<input readonly value="${esc(st.userId)}" aria-label="Identificativo telefono"></label><button class="btn sec" data-a="cloud-copia">Copia identificativo</button><p>Collega questo identificativo alla famiglia dal SQL Editor di Supabase. Dopo la conferma premi Controlla collegamento.</p>`:""}${st.messaggio?`<p class="avviso blu" role="status">${esc(st.messaggio)}</p>`:""}<button class="btn largo" data-a="${st.userId?"cloud-aggiorna":"cloud-identifica"}" ${st.fase==="iniziale"||S.collegando?"disabled":""}>${st.userId?"Controlla collegamento":"Collega questo telefono"}</button><p class="sotto">I dati già presenti nell’archivio locale restano sul dispositivo e non vengono caricati automaticamente.</p></section></div>`;
+    const st={...A.stato()};if(S.erroreCodice)st.messaggio=S.erroreCodice;const codice=S.codiceIngresso??A.codiceRicordato?.()??"";
+    return testa("Famiglia condivisa","CheManca?")+`<div class="corpo"><section class="card pad collegamento"><h2>Accedi con il codice familiare</h2><p>Usa lo stesso codice per collegare Max e Vale alla famiglia e ritrovare i dati già salvati.</p><form id="cloud-accesso"><input type="text" name="username" value="Famiglia CheManca" autocomplete="username" hidden><label class="campo">Codice familiare<input id="cloud-codice" name="password" type="password" autocomplete="current-password" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" value="${esc(codice)}" ${S.collegando?"disabled":""}></label><label class="campo ricorda-codice"><span><input id="cloud-ricorda" type="checkbox" ${S.ricordaCodice!==false?"checked":""}> Ricorda su questo dispositivo</span></label><p class="sotto">Il codice resta nel browser di questo dispositivo: chi lo usa può accedere alla famiglia. Anche il gestore password del browser può proporre di salvarlo.</p>${st.messaggio?`<p class="avviso blu" role="status">${esc(st.messaggio)}</p>`:""}<button type="submit" class="btn largo" ${S.collegando?"disabled":""}>${S.collegando?"Collegamento in corso…":"Collega dispositivo"}</button></form><button class="link" data-a="cloud-aggiorna" ${S.collegando?"disabled":""}>Riprova con la sessione esistente</button><p class="sotto">Il collegamento recupera la famiglia esistente. Non crea un nuovo piano e non importa automaticamente i vecchi dati locali.</p></section></div>`;
   }
-  async function collegaTelefono(crea=false){
-    if(S.collegando)return;S.collegando=true;render();
-    try {const pronto=crea?await A.identifica():await A.inizializza();if(pronto){S.db=A.istantanea();if(!cloudAvviato){cloudAvviato=true;await avvioDati();}else{dopoModifica(false);A.ascolta(ricaricaPresto);}}else render();}
-    catch(e){toast(e.message||"Collegamento non riuscito");render();}
+  async function collegaTelefono(crea=false,codice=null,ricorda=true){
+    if(S.collegando)return;
+    if(codice!==null){S.codiceIngresso=codice;S.ricordaCodice=ricorda;}
+    S.erroreCodice="";S.collegando=true;render();
+    try {
+      let pronto=codice!==null?await A.accediConCodice(codice,ricorda):await A.inizializza();
+      if(!pronto && codice===null && A.recuperoAutomatico?.())pronto=await A.accediConCodice(A.codiceRicordato(),true);
+      if(pronto){S.codiceIngresso=null;S.db=A.istantanea();if(!cloudAvviato){cloudAvviato=true;await avvioDati();}else{dopoModifica(false);A.ascolta(ricaricaPresto);}}else render();
+    }catch(e){toast(e.message||"Collegamento non riuscito");S.erroreCodice=e.message;render();}
     finally{S.collegando=false;render();}
   }
   async function avvio(){

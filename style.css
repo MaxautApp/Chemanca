@@ -537,3 +537,7 @@ button:focus-visible, summary:focus-visible { outline:3px solid var(--green); ou
 :root[data-tema="scuro"] .nome-fitness.fit-viola,:root[data-tema="scuro"] .fit-persona.fit-viola:not(.scelto) { color:#D0B7FF; }
 :root[data-tema="scuro"] .scheda-fitness.fit-misto { background:linear-gradient(110deg,#142C43,#281E3C); border-color:#645183; }
 :root[data-tema="scuro"] .scheda-fitness.fit-neutro { background:var(--chip); border-color:var(--line); color:var(--ink); }
+
+/* Consenso al ricordo del codice: checkbox compatta accanto all’etichetta. */
+.ricorda-codice > span { display:flex; align-items:center; gap:10px; }
+#cloud-ricorda { width:20px; height:20px; min-height:20px; margin:0; padding:0; flex:none; accent-color:var(--green); }

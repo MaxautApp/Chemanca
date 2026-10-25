@@ -10,6 +10,9 @@
     const notifica=()=>o.onStato?.({...stato,userId:user?.id||null,famigliaId:famiglia});
     const fase=(f,m='')=>{stato={...stato,fase:f,messaggio:m,online:online()};notifica();};
     const accoda=fn=>{const r=coda.then(fn);coda=r.catch(()=>{});return r;};
+    const chiaveCodice='cm_codice_famiglia:'+o.progetto;
+    const chiaveStop=chiaveCodice+':verifica';
+    const codiceRicordato=()=>{try{return storage.getItem(chiaveCodice)||'';}catch{return '';}};
     const chiave=()=>`cm_pendente:${o.progetto}:${user.id}:${famiglia}`;
     function connesso(){if(!online())throw Error('Serve la connessione per aggiornare i dati condivisi. Nessuna modifica salvata offline.');if(!user||!famiglia||!db)throw Error('Collega prima questo telefono alla famiglia');}
     function controllo(g){if(g!==generazione)throw Error('Accesso cambiato: riapri la famiglia');}
@@ -88,10 +91,31 @@
           }catch(e){fase('errore',e.message||'Collegamento non riuscito');return false;}
         });
       },
-      async identifica(){
+      codiceRicordato,
+      recuperoAutomatico:()=>!!codiceRicordato() && storage.getItem(chiaveStop)!=='1',
+      dimenticaCodice(){storage.removeItem(chiaveCodice);storage.removeItem(chiaveStop);},
+      async accediConCodice(codice,ricorda=false){
+        const normalizzato=String(codice||'').toUpperCase().replace(/[-\s]/g,'');
+        if(!/^[0-9A-F]{20}$/.test(normalizzato))throw Error('Inserisci il codice familiare completo: 5 gruppi di 4 caratteri.');
+        if(!online())throw Error('Collegati a Internet per verificare il codice.');
+        await api.identifica(true);
+        const {data,error}=await sb.rpc('cm_collega_con_codice',{p_codice:normalizzato});
+        if(error){const e=Error(error.code==='PGRST202'?'Accesso con codice da attivare su Supabase: esegui prima le query 05 e 06.':error.message||'Verifica del codice non riuscita');throw e;}
+        if(!data?.ok){storage.setItem(chiaveStop,'1');throw Error(data?.messaggio||'Codice non valido');}
+        if(ricorda){storage.setItem(chiaveCodice,normalizzato);storage.removeItem(chiaveStop);}else api.dimenticaCodice();
+        return api.inizializza();
+      },
+      async identifica(recupera=false){
         // Verifica prima che la sessione possa essere conservata nel browser.
         storage.setItem('cm_verifica_storage','1');storage.removeItem('cm_verifica_storage');
-        const {data:esistente}=await sb.auth.getSession();
+        let {data:esistente,error:erroreSessione}=await sb.auth.getSession();
+        if(erroreSessione){
+          const scaduta=['refresh_token_not_found','refresh_token_already_used','session_not_found','session_expired'].includes(erroreSessione.code)||erroreSessione.name==='AuthSessionMissingError'||erroreSessione.status===401;
+          if(!recupera||!scaduta)throw erroreSessione;
+          const {error:uscita}=await sb.auth.signOut({scope:'local'});
+          if(uscita && ![401,403,404].includes(uscita.status) && uscita.name!=='AuthSessionMissingError')throw uscita;
+          esistente={session:null};
+        }
         if(!esistente.session){const {error}=await sb.auth.signInAnonymously();if(error)throw Error('Non riesco a collegare il telefono. Verifica che Anonymous Sign-Ins sia attivo in Supabase. '+error.message);}
         return api.inizializza();
       },
@@ -110,6 +134,7 @@
       async esci(){
         await coda;const k=user&&famiglia?chiave():null;
         if(k&&storage.getItem(k))throw Error('Prima verifica il salvataggio in sospeso: usa Aggiorna famiglia');
+        api.dimenticaCodice();
         const {error}=await sb.auth.signOut({scope:'local'});if(error)throw error;
         user=null;revoca('Telefono scollegato. Al prossimo accesso occorrerà una nuova autorizzazione.');fase('senza_sessione');
       },
