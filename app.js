@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "25.10.2026 · 32";
+  const VERSIONE = "25.10.2026 · 33";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -1830,13 +1830,13 @@
       const dettaglio = Object.entries(r.q || {}).map(([id, q]) => nomeDi(id) + " " + fmtLight(q, r.u)).join(" · ");
       const dettagliPasti=dettaglioPastiSpesa(r.pasti,r.u);
       const statoRiga = r.rimosso ? "Non più previsto dal piano" : r.aggiunta ? "Ancora da prendere: " + fmtLight(r.manca, r.u) : r.coperto ? "Completo per questa lista" : "Da comprare";
-      h += `<section class="card pad"><div class="titolo-sez"><h2 style="font-size:16px">${esc(r.nome)}</h2><b>${r.rimosso ? "" : esc(fmtLight(r.qty, r.u))}</b></div><p style="font-size:13px;color:var(--muted);margin-top:6px">${dettagliPasti || esc(dettaglio)}</p><p style="margin:8px 0;font-weight:700">${esc(statoRiga)}</p>
+      h += `<section class="card pad"><div class="titolo-sez"><h2 style="font-size:16px">${esc(r.nome)}</h2><b>${r.rimosso ? "" : esc(fmtLight(r.qty, r.u))}</b></div><p style="font-size:13px;color:var(--muted);margin-top:6px">${dettagliPasti || esc(dettaglio)}</p><p style="margin:8px 0;font-weight:700">${statoRiga==="Da comprare"?"&nbsp;":esc(statoRiga)}</p>
         ${r.comprato > 0 ? `<p>Comprato: ${esc(fmtLight(r.comprato,r.u))}</p>` : ""}${r.disponibile > 0 ? `<p>Ce l'ho già: ${esc(fmtLight(r.disponibile,r.u))}</p>` : ""}
         ${!conclusa && !r.coperto ? `<div class="due" style="margin-top:10px"><button class="btn piccolo" data-a="light-copri" data-id="${esc(r.id)}" data-stato="comprato">Comprato</button><button class="btn piccolo sec" data-a="light-copri" data-id="${esc(r.id)}" data-stato="disponibile">Ce l'ho già</button></div><button class="link" data-a="quantita-spesa" data-id="${esc(r.id)}">Usa quantità diversa</button>` : ""}
         ${!conclusa && r.comprato+r.disponibile > 0 ? `<button class="link" data-a="light-copri" data-id="${esc(r.id)}" data-stato="annulla">Annulla acquisto / disponibilità</button>` : ""}</section>`;
     }
     if (p.manuali.length) h += '<h2 style="font-size:17px">Altri acquisti</h2>';
-    for(const m of p.manuali) h+=`<section class="card pad"><div class="titolo-sez"><h2 style="font-size:16px">${esc(m.nome)}</h2></div><p style="font-size:13px;color:var(--muted);margin-top:6px">Aggiunto a mano</p><p style="margin:8px 0;font-weight:700">${m.fatto?(m.stato==="disponibile"?"Ce l'ho già":"Comprato"):"Da comprare"}</p>
+    for(const m of p.manuali) h+=`<section class="card pad"><div class="titolo-sez"><h2 style="font-size:16px">${esc(m.nome)}</h2></div><p style="font-size:13px;color:var(--muted);margin-top:6px">Aggiunto a mano</p><p style="margin:8px 0;font-weight:700">${m.fatto?(m.stato==="disponibile"?"Ce l'ho già":"Comprato"):"&nbsp;"}</p>
       ${!conclusa && !m.fatto?`<div class="due" style="margin-top:10px"><button class="btn piccolo" data-a="light-manuale" data-id="${esc(m.id)}">Comprato</button><button class="btn piccolo sec" data-a="light-manuale-disponibile" data-id="${esc(m.id)}">Ce l'ho già</button></div>`:""}
       ${!conclusa?`<div class="azioni">${m.fatto?`<button class="link" data-a="light-manuale" data-id="${esc(m.id)}">Annulla acquisto / disponibilità</button>`:""}<button class="link" data-a="light-manuale-togli" data-id="${esc(m.id)}">Togli</button></div>`:""}</section>`;
     return h + '<button class="btn sec largo" data-a="whatsapp-lista">Manda su WhatsApp</button></div>';
