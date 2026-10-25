@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "25.10.2026 · 24";
+  const VERSIONE = "25.10.2026 · 25";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -1029,19 +1029,50 @@
     return g && g.pasti.find((p) => p.pasto === nome);
   }
   function notaDi(k) { return S.db.note.find((n) => n.id === k && n.testo); }
+  function testiPastoLibero(nota) {
+    if(nota && nota.perPersona)return {...nota.perPersona};
+    return nota && nota.testo?Object.fromEntries(persone().map(p=>[p.id,nota.testo])):{};
+  }
+  function preparaNotaLibera(d,p,nota) {
+    if(!p?.libero)return;
+    if(!d.destinatari)d.destinatari=[persone().some(p=>p.id===S.chi)?S.chi:persone()[0]?.id].filter(Boolean);
+    if(d.testoLibero===undefined){const testi=testiPastoLibero(nota);d.testoLibero=testi[d.destinatari[0]]||"";}
+  }
+  function notaLiberaTesto(nota,persona="tutti") {
+    if(!nota)return "";
+    if(!nota.perPersona)return nota.testo||"";
+    const ids=persona==="tutti"?Object.keys(nota.perPersona):[persona];
+    return ids.filter(id=>nota.perPersona[id]).map(id=>nomeDi(id)+": "+nota.perPersona[id]).join(" · ");
+  }
+  async function salvaNotaLibera(d,testo) {
+    const ids=(d.destinatari||[]).filter(id=>persone().some(p=>p.id===id));
+    if(!ids.length)throw Error("Seleziona almeno una persona");
+    const [data,pasto]=d.k.split("|"),p=pastoArchiviato(d.k);
+    await operazionePasti(db=>{
+      const precedente=db.note.find(n=>n.id===d.k),perPersona=testiPastoLibero(precedente);
+      for(const id of ids){if(testo)perPersona[id]=testo;else delete perPersona[id];}
+      const nota={id:d.k,data,pasto,perPersona,chi:S.chi||"",quando:new Date().toISOString()};
+      nota.testo=notaLiberaTesto(nota);
+      if(nota.testo)scriviRigaDb(db,"note",nota);else db.note=db.note.filter(n=>n.id!==d.k);
+      if(testo && data<=oggi() && p && !db.pasti.some(r=>r.id===d.k))scriviRigaDb(db,"pasti",{id:d.k,data,pasto,stato:"auto",chi:S.chi||"",quando:nota.quando,scalato:[],contenuto:fotoPasto(p)});
+    });
+  }
   function foglioNota() {
     const d = S.sheet.d;
     const [data, pasto] = d.k.split("|");
     const p = pastoArchiviato(d.k);
     const registrato = S.db.pasti.find((r) => r.id === d.k);
     const nota = notaDi(d.k);
+    preparaNotaLibera(d,p,nota);
     return `<h2>${esc(pasto)} di ${esc(L.nomeGiorno(data, oggi()))}</h2>
       <p class="sotto">${p && p.libero ? "Pasto libero: scrivi cosa avete mangiato, la dietista lo vedrà nello storico." : "Scrivi cosa avete mangiato di diverso o in più rispetto al piano. Resta nello storico e nel report per la dietista."}</p>
-      <label class="campo">Cosa ho mangiato<textarea id="nota-testo" rows="5" class="input area" placeholder="${p && p.libero ? "Es. pizza margherita e insalata; Vale: sushi" : "Es. aggiunto un frutto; al posto della pasta 2 fette di pane"}">${esc(nota ? nota.testo : "")}</textarea></label>
+      ${p && p.libero ? `<div class="campo"><span>Per chi vale questo pasto?</span><div class="chips"><button type="button" class="chip ${d.destinatari.length===persone().length?"scelto":""}" data-a="nota-tutti" aria-pressed="${d.destinatari.length===persone().length}">Stesso pasto per tutti</button>${persone().map(x=>`<button type="button" class="chip ${d.destinatari.includes(x.id)?"scelto":""}" data-a="nota-persona" data-id="${esc(x.id)}" aria-pressed="${d.destinatari.includes(x.id)}">${esc(x.nome)}</button>`).join("")}</div><p class="sotto">Il testo viene salvato solo per le persone selezionate. Per pasti diversi, salva il primo e poi riapri la nota per l’altra persona.</p></div>` : ""}
+      <label class="campo">Cosa ho mangiato<textarea id="nota-testo" rows="5" class="input area" placeholder="${p && p.libero ? "Es. pizza margherita e insalata; Vale: sushi" : "Es. aggiunto un frutto; al posto della pasta 2 fette di pane"}">${esc(p && p.libero ? d.testoLibero : nota ? nota.testo : "")}</textarea></label>
+      ${p && p.libero && nota ? `<div class="sotto">Già registrato: ${esc(notaLiberaTesto(nota))}</div><div class="chips">${persone().filter(x=>testiPastoLibero(nota)[x.id]).map(x=>`<button type="button" class="chip" data-a="nota-modifica-persona" data-id="${esc(x.id)}">Modifica ${esc(x.nome)}</button>`).join("")}</div>` : ""}
       <button class="btn largo" data-a="nota-salva">Salva</button>
       ${registrato && registrato.stato === "da_correggere" ? `<button class="btn sec largo" data-a="pasto" data-k="${esc(d.k)}" data-stato="fatto">Fatto secondo il piano</button>` : ""}
       ${data < oggi() ? `<button class="btn sec largo" data-a="storico-stato" data-k="${esc(d.k)}" data-stato="${registrato && registrato.stato === "saltato" ? "auto" : "saltato"}">${registrato && registrato.stato === "saltato" ? "Ripristina il pasto previsto" : "Segna come saltato"}</button>` : ""}
-      ${nota ? `<button class="btn rosso largo" data-a="nota-togli">Cancella la nota</button>` : ""}
+      ${nota ? `<button class="btn rosso largo" data-a="nota-togli">${p && p.libero?"Cancella per le persone selezionate":"Cancella la nota"}</button>` : ""}
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
   }
 
@@ -1285,7 +1316,7 @@
       const nota = notaDi(r.id);
       giorno.pasti.push({
         id: r.id, automatico: r.stato === "auto", cambiato: !!(contenuto && contenuto.cambiato) || !!S.piano?.cambi?.[r.id],
-        nota: nota ? nota.testo : "",
+        nota: notaLiberaTesto(nota,persona),
         pasto: r.pasto, stato: statoTesto(r.stato,r),
         piatti: contenuto ? contenuto.piatti : [], libero: !!(contenuto && contenuto.libero), cibi,
       });
@@ -2973,9 +3004,20 @@
         chiudiFoglio(); dopoModifica(); toast(light()?"Storico aggiornato":"Storico e scorte aggiornati");
         break;
       }
+      case "nota-tutti":
+      case "nota-persona": {
+        d.testoLibero=$("#nota-testo").value;
+        if(a==="nota-tutti")d.destinatari=persone().map(x=>x.id);
+        else d.destinatari=d.destinatari.includes(b.dataset.id)?d.destinatari.filter(id=>id!==b.dataset.id):[...d.destinatari,b.dataset.id];
+        renderFoglio();break;
+      }
+      case "nota-modifica-persona": {
+        d.destinatari=[b.dataset.id];d.testoLibero=testiPastoLibero(notaDi(d.k))[b.dataset.id]||"";renderFoglio();break;
+      }
       case "nota-salva": {
         const testo = ($("#nota-testo").value || "").trim();
         const [data, pasto] = d.k.split("|");
+        if(pastoArchiviato(d.k)?.libero){await salvaNotaLibera(d,testo);chiudiFoglio();render();toast("Pasto libero aggiornato per le persone selezionate");break;}
         if (!testo) { await elimina("note", d.k); }
         else await salva("note", [{ id: d.k, data, pasto, testo, chi: S.chi || "", quando: new Date().toISOString() }]);
         if (testo && data <= oggi() && !S.db.pasti.some((r) => r.id === d.k)) {
@@ -2985,7 +3027,7 @@
         chiudiFoglio(); render(); toast(testo ? "Nota salvata nello storico" : "Nota tolta");
         break;
       }
-      case "nota-togli": await elimina("note", d.k); chiudiFoglio(); render(); toast("Nota tolta"); break;
+      case "nota-togli": if(pastoArchiviato(d.k)?.libero)await salvaNotaLibera(d,"");else await elimina("note", d.k); chiudiFoglio(); render(); toast("Nota tolta per le persone selezionate"); break;
       case "inverti-apri": {
         const data = b.dataset.d;
         const liberi = PASTI_SCAMBIABILI.filter((ps) => scambiabile(data, ps));
