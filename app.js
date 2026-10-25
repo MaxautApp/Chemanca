@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "25.10.2026 · 29";
+  const VERSIONE = "25.10.2026 · 30";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -281,6 +281,13 @@
       allineaSpesa().then(() => { renderNav(); if (S.tab === "spesa") render(); }).catch(erroreArchivio);
       controllaAvvisi();
     }
+  }
+
+  // Il messaggio di conferma del cambio arriva solo dopo l'allineamento della spesa.
+  async function dopoCambioPiano() {
+    ricalcola();
+    await allineaSpesa();
+    ricalcola();render();renderNav();
   }
 
   /* ---------------- avvisi: Telegram e WhatsApp ---------------- */
@@ -1133,7 +1140,7 @@
     await salva("piano", [{ id: "attuale", dati: pp, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
     chiudiFoglio();
     S.giornoSel = d.dataA;
-    dopoModifica();
+    await dopoCambioPiano();
     toast(`Invertiti: ${d.pastoA.toLowerCase()} di ${L.nomeGiorno(d.dataA, oggi())} e ${d.pastoB.toLowerCase()} di ${L.nomeGiorno(d.dataB, oggi())}`);
   }
 
@@ -1178,7 +1185,7 @@
     pp.cambi = { ...(pp.cambi || {}), [d.k]: { pasto: d.pasto, libero: false, piatti: nuovo.piatti, voci: nuovo.voci } };
     await salva("piano", [{ id: "attuale", dati: pp, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
     chiudiFoglio();
-    dopoModifica();
+    await dopoCambioPiano();
     toast(`${d.pasto} di ${L.nomeGiorno(d.data, oggi())} cambiato`);
   }
 
@@ -1741,9 +1748,13 @@
     codaSpesaLight = lavoro.catch(() => {});
     return lavoro;
   }
+  function pianoPerSpesaLight() {
+    const attuale=S.db.piano.find(x=>x.id==="attuale");
+    return attuale?attuale.dati||null:condiviso?null:S.piano;
+  }
   function nuovaListaLight(dal, giorni) {
     const oraInizio = giorni === 1 && dal === oggi() ? Math.floor(oraAdesso() * 60) / 60 : 0;
-    return { id: dal + "|" + giorni, dal, giorni, oraInizio, coperture: {}, manuali: [], righe: L.fabbisognoLight(S.piano, dal, giorni, persone(), oraInizio) };
+    return { id: dal + "|" + giorni, dal, giorni, oraInizio, coperture: {}, manuali: [], righe: L.fabbisognoLight(pianoPerSpesaLight(), dal, giorni, persone(), oraInizio) };
   }
   function finePeriodoLight(p) { return p.giorni === 1 ? L.iso(new Date(L.istanteLocale(p.dal, p.oraInizio || 0) + 86400000)) : L.piuGiorni(p.dal, p.giorni - 1); }
   function conclusaListaLight(p) { return p.giorni === 1 ? L.istanteLocale(oggi(),oraAdesso()) >= L.istanteLocale(p.dal,p.oraInizio || 0) + 86400000 : finePeriodoLight(p) < oggi(); }
@@ -1763,7 +1774,7 @@
     const fine = finePeriodoLight(p);
     // Le liste concluse rimangono consultabili anche dopo aver caricato una nuova dieta.
     if (conclusaListaLight(p)) return p.righe || [];
-    return L.fabbisognoLight(S.piano, p.dal, p.giorni, persone(), p.oraInizio || 0);
+    return L.fabbisognoLight(pianoPerSpesaLight(), p.dal, p.giorni, persone(), p.oraInizio || 0);
   }
   function righeListaLight(p = periodoSpesaLight()) { return L.righeLight(fabbisognoPeriodoLight(p), p.coperture); }
   async function salvaStatoLight(stato) {
@@ -3082,7 +3093,7 @@
         if (p.cambi) delete p.cambi[b.dataset.k];
         if (S.piano) await storicoArretrato(S.piano, S.piano.inizio);
     await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
-        dopoModifica(); toast(c && c.coppia ? "Tutti e due i pasti tornano al loro posto" : "Torna il pasto del piano");
+        await dopoCambioPiano(); toast(c && c.coppia ? "Tutti e due i pasti tornano al loro posto" : "Torna il pasto del piano");
         break;
       }
       case "vai-diario": S.diarioTab = b.dataset.v; S.pesoPersona = S.chi; S.storicoPersona = S.chi || "tutti"; chiudiFoglio(); vai("diario"); break;
@@ -3207,7 +3218,7 @@
         if (S.piano) await storicoArretrato(S.piano, S.piano.inizio);
     await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
         const quando = nomeSettimana(d.inizioSett);
-        chiudiFoglio(); dopoModifica();
+        chiudiFoglio(); await dopoCambioPiano();
         toast("Settimana alternativa " + quando);
         break;
       }
@@ -3216,7 +3227,7 @@
         if (p.fissate) delete p.fissate[b.dataset.d];
         if (S.piano) await storicoArretrato(S.piano, S.piano.inizio);
     await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
-        dopoModifica(); toast("Torna la settimana tipo");
+        await dopoCambioPiano(); toast("Torna la settimana tipo");
         break;
       }
       case "demo":
