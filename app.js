@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "25.10.2026 · 22";
+  const VERSIONE = "25.10.2026 · 24";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -846,6 +846,16 @@
   }
 
   /* ---------------- PIANO ---------------- */
+  // Categorie di presentazione: la chiave originale resta invariata per storico e scorte.
+  function gruppiIndicazioni(p) {
+    if(p.pasto!=="Fuori pasto" && p.pasto!=="Condimenti")return null;
+    const condimenti=(p.voci||[]).filter(v=>/^olio\b/i.test(String(v.nome||"").trim()));
+    const fuori=(p.voci||[]).filter(v=>!condimenti.includes(v));
+    const gruppi=[];
+    if(condimenti.length)gruppi.push({nome:"Condimenti",voci:condimenti});
+    if(fuori.length)gruppi.push({nome:"Fuori pasto",voci:fuori});
+    return gruppi.length?gruppi:null;
+  }
   function schermoPiano() {
     if (!S.piano) return testa("", "Piano dieta") + `<div class="corpo"><p class="vuoto">Nessun piano caricato.</p><button class="btn" data-a="vai" data-tab="imp">Carica il tuo piano</button></div>`;
     const sel = S.giornoSel || oggi();
@@ -870,11 +880,13 @@
     };
     h += schedeFitness(sel, "inizio");
     for (const p of g.pasti) {
+      const gruppi=gruppiIndicazioni(p);
+      const titoloPasto=gruppi?gruppi.map(x=>x.nome).join(" e "):p.pasto;
       const k = L.chiavePasto(sel, p.pasto);
       const st = stati[k];
       const buchi = new Map(mancanze.flatMap((m) => m.pasti.filter((x) => x.data === sel && x.pasto === p.pasto).map(() => [m.voce, m.tipo])));
       const etich = p.spostato ? `Spostato da ${esc(L.etichettaData(p.spostato.split("|")[0]))} · ${esc(p.spostato.split("|")[1].toLowerCase())}` : "Cambiato";
-      h += `<section class="pasto" id="pasto-${esc(k)}"><div class="testa"><h2>${esc(p.pasto)}${p.cambiato ? ` <span class="pill cambiato">${etich}</span>` : ""}</h2>`;
+      h += `<section class="pasto" id="pasto-${esc(k)}"><div class="testa"><h2>${esc(titoloPasto)}${p.cambiato ? ` <span class="pill cambiato">${etich}</span>` : ""}</h2>`;
       if (st && st.stato !== "auto") h += `<span class="pill ${st.stato === "saltato" ? "grigio" : "ok"}">${esc(st.stato === "saltato" ? "Saltato" : st.stato === "fatto" || st.stato === "auto" ? "Fatto" : ["parziale","automatico","da_correggere"].includes(st.stato) ? cap(statoTesto(st.stato,st)) : "Solo " + nomeDi(st.stato.replace(/^solo:/, "")))}</span>`;
       else if (buchi.size && !light()) h += `<span style="font-size:12px;font-weight:800;color:var(--red)">${buchi.size === 1 ? "1 ingrediente manca" : buchi.size + " mancano"}</span>`;
       h += `<button class="icona-btn matita" data-a="nota-apri" data-k="${esc(k)}" aria-label="Scrivi cosa hai mangiato a ${esc(p.pasto.toLowerCase())}">${ico("matita", 18)}</button></div>`;
@@ -885,10 +897,13 @@
         h += schedeFitness(sel, p.pasto);
         continue;
       }
-      if (p.piatti && p.piatti.length) h += `<div class="piatto">${esc(p.piatti.join(" · "))}</div>`;
+      if (!gruppi && p.piatti && p.piatti.length) h += `<div class="piatto">${esc(p.piatti.join(" · "))}</div>`;
       const conPill = !st && !light();
       h += `<div class="voce intest" aria-hidden="true"><span class="n"></span><span class="dosi">${persone().map((x) => `<span class="dose" style="color:${coloreDi(x.id)}">${esc(x.nome)}</span>`).join("")}</span>${conPill ? '<span class="pill vuota"></span>' : ""}</div>`;
-      for (const v of p.voci) {
+      const vociOrdinate=gruppi?gruppi.flatMap(g=>g.voci):p.voci;
+      for (const v of vociOrdinate) {
+        const gruppo=gruppi && gruppi.find(g=>g.voci[0]===v);
+        if(gruppo && gruppi.length>1)h+=`<h3 class="categoria-indicazioni">${esc(gruppo.nome)}</h3>`;
         const b = buchi.get(v.nome);
         const f = (x) => (x == null ? "–" : L.PRESENZA.has(v.u) ? x + " " + v.u.replace("cucchiaini", "cucch.").replace("cucchiaino", "cucch.").replace("tazzina", "tazz.") : L.fmtQ(x, v.u));
         let pill;
@@ -913,6 +928,7 @@
       }
       if (!st && p.cambiato && sel >= oggi()) secondarie.push(`<button class="btn piccolo sec" data-a="cambia-ripristina" data-k="${esc(k)}">${p.spostato ? "Rimetti a posto" : "Ripristina"}</button>`);
       h += notaHtml;
+      if(gruppi && gruppi.length>1)h+=`<p class="nota-indicazioni">La conferma registra insieme condimenti e fuori pasto della giornata.</p>`;
       if (azioni.length) h += `<div class="azioni">${azioni.join("")}</div>`;
       if (secondarie.length) h += `<details class="azioni-secondarie"><summary>Altre azioni</summary><div class="azioni">${secondarie.join("")}</div></details>`;
       h += `</section>`;
@@ -944,14 +960,29 @@
     const n = POSTI_FITNESS[i + 1];
     return n ? n[0].toLowerCase() : null;
   }
+  function primaPastoFitness(pasto) {
+    const etichette={colazione:"prima della colazione","metà mattina":"prima di metà mattina",pranzo:"prima del pranzo",merenda:"prima della merenda",cena:"prima della cena"};
+    return etichette[pasto] || (pasto?"prima di "+pasto:"dopo la cena");
+  }
+  // Riconoscimento locale dei nomi comuni; i nomi non riconosciuti restano neutri.
+  function coloreFitness(id) {
+    const nome=String(nomeDi(id)||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").split(/\s+/)[0];
+    const donne=new Set("vale valeria valentina anna maria giulia francesca chiara sara sarah laura elena elisa silvia paola alessandra federica martina giorgia alice sofia emma lucia antonella roberta monica cristina simona michela daniela gabriella patrizia stefania beatrice nicole irene vittoria aurora adele clara carla rosa teresa margherita luisa raffaella angela antonia".split(" "));
+    const uomini=new Set("max massimo massimiliano marco luca andrea giuseppe giovanni francesco alessandro matteo mattia lorenzo davide daniele paolo roberto stefano michele antonio luigi carlo pietro federico fabio simone riccardo tommaso leonardo emanuele gabriele valerio filippo enrico giorgio alberto nicola salvatore vincenzo christian cristian diego edoardo".split(" "));
+    return donne.has(nome)?"viola":uomini.has(nome)?"blu":"neutro";
+  }
+  function stileFitness(f) {
+    const colori=[...new Set((f.persone||[]).map(coloreFitness))];
+    return colori.length===1?colori[0]:colori.includes("blu")&&colori.includes("viola")?"misto":"neutro";
+  }
   function schedeFitness(data, dopo) {
     return fitnessDel(data).filter((f) => (f.dopo || "inizio") === dopo).map((f) => {
-      const chi = (f.persone || []).map(nomeDi).join(", ");
+      const chi = (f.persone || []).map(id=>`<span class="nome-fitness fit-${coloreFitness(id)}">${esc(nomeDi(id))}</span>`).join(", ");
       const prima = prossimoPasto(f.dopo || "inizio");
-      return `<button class="scheda-fitness" data-a="fitness-apri" data-id="${esc(f.id)}">
+      return `<button class="scheda-fitness fit-${stileFitness(f)}" data-a="fitness-apri" data-id="${esc(f.id)}">
         <span class="icona-fit">${ico("fitness", 20)}</span>
-        <span class="testo"><b>${esc(f.tipo)}</b><span>${esc(f.dalle)}–${esc(f.alle)} · ${esc(durata(minutiFitness(f)))}${chi ? " · " + esc(chi) : ""}</span></span>
-        <small>${prima ? "prima " + (prima === "metà mattina" ? "di metà mattina" : "della " + prima) : "dopo la cena"}</small></button>`;
+        <span class="testo"><b>${esc(f.tipo)}</b><span>${esc(f.dalle)}–${esc(f.alle)} · ${esc(durata(minutiFitness(f)))}${chi ? " · " + chi : ""}</span></span>
+        <small>${esc(primaPastoFitness(prima))}</small></button>`;
     }).join("");
   }
   function foglioFitness() {
@@ -969,8 +1000,8 @@
         <label class="campo">Alle ore<input type="time" class="input" data-f="alle" value="${esc(d.alle)}"></label>
       </div>
       <label class="campo">Nella giornata<select class="input" data-f="dopo">${sel(d.dopo, POSTI_FITNESS)}</select>
-        <span class="aiuto">${d.dopoManuale ? "Scelto a mano." : "Scelto in base all'orario."}${prossimoPasto(d.dopo) ? " Va prima " + (prossimoPasto(d.dopo) === "metà mattina" ? "di metà mattina" : "della " + prossimoPasto(d.dopo)) + "." : ""}</span></label>
-      ${persone().length > 1 ? `<div class="campo"><span>Chi l'ha fatta</span><div class="chips">${persone().map((p) => `<button type="button" class="chip ${d.persone.includes(p.id) ? "scelto" : ""}" data-a="fit-chi" data-v="${esc(p.id)}">${esc(p.nome)}</button>`).join("")}</div></div>` : ""}
+        <span class="aiuto">${d.dopoManuale ? "Scelto a mano." : "Scelto in base all'orario."}${prossimoPasto(d.dopo) ? " Va " + esc(primaPastoFitness(prossimoPasto(d.dopo))) + "." : ""}</span></label>
+      ${persone().length > 1 ? `<div class="campo"><span>Chi l'ha fatta</span><div class="chips">${persone().map((p) => `<button type="button" class="chip fit-persona fit-${coloreFitness(p.id)} ${d.persone.includes(p.id) ? "scelto" : ""}" data-a="fit-chi" data-v="${esc(p.id)}">${esc(p.nome)}</button>`).join("")}</div></div>` : ""}
       <button class="btn largo" data-a="fit-salva">${d.id ? "Salva" : "Aggiungi l'attività"}</button>
       ${d.id ? `<button class="btn rosso largo" data-a="fit-togli">Togli l'attività</button>` : ""}
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;

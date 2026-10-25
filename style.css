@@ -514,3 +514,26 @@ button:focus-visible, summary:focus-visible { outline:3px solid var(--green); ou
 #nav button[aria-current="page"]:not(.centro) { color:var(--green-dark); background:var(--green-soft); border-radius:14px; }
 #nav button[aria-current="page"] svg { stroke-width:2.8; }
 :root[data-tema="scuro"] #nav button[aria-current="page"]:not(.centro) { color:#FFFFFF; background:#19573A; }
+
+.categoria-indicazioni { font-size:16px; margin:18px 16px 4px; font-weight:800; }
+.nota-indicazioni { font-size:12px; color:var(--muted); margin:12px 16px; }
+
+/* Fitness: colori dei partecipanti, separati dai colori del piano dieta. */
+.scheda-fitness.fit-blu { background:#E6F0FA; border-color:#AAC9E7; color:#153E68; }
+.scheda-fitness.fit-blu .icona-fit { background:#1D5A8A; }
+.scheda-fitness.fit-blu small { color:#1D5A8A; }
+.scheda-fitness.fit-misto { background:linear-gradient(110deg,#E6F0FA,#EEE9FA); border-color:#B8BCE2; }
+.scheda-fitness.fit-misto .icona-fit { background:linear-gradient(110deg,#1D5A8A 50%,#5B3FA6 50%); }
+.scheda-fitness.fit-neutro { background:var(--chip); border-color:var(--line); color:var(--ink); }
+.scheda-fitness.fit-neutro .icona-fit { background:#55605A; }
+.scheda-fitness.fit-neutro small { color:var(--muted); }
+.nome-fitness.fit-blu,.fit-persona.fit-blu { color:#1D5A8A; }
+.nome-fitness.fit-viola,.fit-persona.fit-viola { color:#5B3FA6; }
+.scheda-fitness .testo .nome-fitness { display:inline; font-weight:800; }
+.fit-persona.fit-blu.scelto { background:#1D5A8A; border-color:#1D5A8A; color:#fff; }
+.fit-persona.fit-viola.scelto { background:#5B3FA6; border-color:#5B3FA6; color:#fff; }
+:root[data-tema="scuro"] .scheda-fitness.fit-blu { background:#142C43; border-color:#476E94; color:#D5E9FF; }
+:root[data-tema="scuro"] .scheda-fitness.fit-blu small,:root[data-tema="scuro"] .nome-fitness.fit-blu,:root[data-tema="scuro"] .fit-persona.fit-blu:not(.scelto) { color:#9ECFFF; }
+:root[data-tema="scuro"] .nome-fitness.fit-viola,:root[data-tema="scuro"] .fit-persona.fit-viola:not(.scelto) { color:#D0B7FF; }
+:root[data-tema="scuro"] .scheda-fitness.fit-misto { background:linear-gradient(110deg,#142C43,#281E3C); border-color:#645183; }
+:root[data-tema="scuro"] .scheda-fitness.fit-neutro { background:var(--chip); border-color:var(--line); color:var(--ink); }
