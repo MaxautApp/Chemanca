@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "25.10.2026 · 25";
+  const VERSIONE = "25.10.2026 · 26";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -891,7 +891,7 @@
       else if (buchi.size && !light()) h += `<span style="font-size:12px;font-weight:800;color:var(--red)">${buchi.size === 1 ? "1 ingrediente manca" : buchi.size + " mancano"}</span>`;
       h += `<button class="icona-btn matita" data-a="nota-apri" data-k="${esc(k)}" aria-label="Scrivi cosa hai mangiato a ${esc(p.pasto.toLowerCase())}">${ico("matita", 18)}</button></div>`;
       const nota = notaDi(k);
-      const notaHtml = nota ? `<button class="nota-pasto" data-a="nota-apri" data-k="${esc(k)}">${ico("matita", 14)}<span>${esc(nota.testo)}</span></button>` : "";
+      const notaHtml = nota ? `<button class="nota-pasto" data-a="nota-apri" data-k="${esc(k)}">${ico("matita", 14)}<span>${esc(notaLiberaTesto(nota))}</span></button>` : "";
       if (p.libero) {
         h += `<div class="piatto">Pasto libero</div>${notaHtml || `<button class="nota-pasto vuota" data-a="nota-apri" data-k="${esc(k)}">${ico("matita", 14)}<span>Scrivi cosa hai mangiato</span></button>`}</section>`;
         h += schedeFitness(sel, p.pasto);
@@ -1035,13 +1035,20 @@
   }
   function preparaNotaLibera(d,p,nota) {
     if(!p?.libero)return;
-    if(!d.destinatari)d.destinatari=[persone().some(p=>p.id===S.chi)?S.chi:persone()[0]?.id].filter(Boolean);
+    if(!d.destinatari){
+      const ids=persone().map(p=>p.id),testi=testiPastoLibero(nota);
+      const condiviso=ids.length && ids.every(id=>testi[id] && testi[id]===testi[ids[0]]);
+      d.destinatari=!nota || condiviso?ids:[persone().some(p=>p.id===S.chi)?S.chi:ids[0]].filter(Boolean);
+    }
     if(d.testoLibero===undefined){const testi=testiPastoLibero(nota);d.testoLibero=testi[d.destinatari[0]]||"";}
   }
   function notaLiberaTesto(nota,persona="tutti") {
     if(!nota)return "";
     if(!nota.perPersona)return nota.testo||"";
-    const ids=persona==="tutti"?Object.keys(nota.perPersona):[persona];
+    const famiglia=persone().map(p=>p.id),testi=nota.perPersona;
+    const condiviso=famiglia.length && famiglia.every(id=>testi[id] && testi[id]===testi[famiglia[0]]) && Object.keys(testi).every(id=>!testi[id] || testi[id]===testi[famiglia[0]]);
+    if(condiviso && (persona==="tutti" || famiglia.includes(persona)))return testi[famiglia[0]];
+    const ids=persona==="tutti"?Object.keys(testi):[persona];
     return ids.filter(id=>nota.perPersona[id]).map(id=>nomeDi(id)+": "+nota.perPersona[id]).join(" · ");
   }
   async function salvaNotaLibera(d,testo) {
@@ -1067,7 +1074,7 @@
     return `<h2>${esc(pasto)} di ${esc(L.nomeGiorno(data, oggi()))}</h2>
       <p class="sotto">${p && p.libero ? "Pasto libero: scrivi cosa avete mangiato, la dietista lo vedrà nello storico." : "Scrivi cosa avete mangiato di diverso o in più rispetto al piano. Resta nello storico e nel report per la dietista."}</p>
       ${p && p.libero ? `<div class="campo"><span>Per chi vale questo pasto?</span><div class="chips"><button type="button" class="chip ${d.destinatari.length===persone().length?"scelto":""}" data-a="nota-tutti" aria-pressed="${d.destinatari.length===persone().length}">Stesso pasto per tutti</button>${persone().map(x=>`<button type="button" class="chip ${d.destinatari.includes(x.id)?"scelto":""}" data-a="nota-persona" data-id="${esc(x.id)}" aria-pressed="${d.destinatari.includes(x.id)}">${esc(x.nome)}</button>`).join("")}</div><p class="sotto">Il testo viene salvato solo per le persone selezionate. Per pasti diversi, salva il primo e poi riapri la nota per l’altra persona.</p></div>` : ""}
-      <label class="campo">Cosa ho mangiato<textarea id="nota-testo" rows="5" class="input area" placeholder="${p && p.libero ? "Es. pizza margherita e insalata; Vale: sushi" : "Es. aggiunto un frutto; al posto della pasta 2 fette di pane"}">${esc(p && p.libero ? d.testoLibero : nota ? nota.testo : "")}</textarea></label>
+      <label class="campo">Cosa ho mangiato<textarea id="nota-testo" rows="5" class="input area" placeholder="${p && p.libero ? "Es. pizza margherita e insalata" : "Es. aggiunto un frutto; al posto della pasta 2 fette di pane"}">${esc(p && p.libero ? d.testoLibero : nota ? nota.testo : "")}</textarea></label>
       ${p && p.libero && nota ? `<div class="sotto">Già registrato: ${esc(notaLiberaTesto(nota))}</div><div class="chips">${persone().filter(x=>testiPastoLibero(nota)[x.id]).map(x=>`<button type="button" class="chip" data-a="nota-modifica-persona" data-id="${esc(x.id)}">Modifica ${esc(x.nome)}</button>`).join("")}</div>` : ""}
       <button class="btn largo" data-a="nota-salva">Salva</button>
       ${registrato && registrato.stato === "da_correggere" ? `<button class="btn sec largo" data-a="pasto" data-k="${esc(d.k)}" data-stato="fatto">Fatto secondo il piano</button>` : ""}
