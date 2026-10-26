@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "25.10.2026 · 36";
+  const VERSIONE = "26.10.2026 · 37";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -82,8 +82,8 @@
   };
   const OGGI_FORZATO = new URLSearchParams(location.search).get("oggi");
   // ?modo=light o ?modo=pro nel link imposta la versione (utile per far provare la Light)
-  { const m = new URLSearchParams(location.search).get("modo"); if (m === "light" || m === "pro") LS.set("ds_modo", m); }
-  const light = () => LS.get("ds_modo", "pro") === "light";
+  { const m = new URLSearchParams(location.search).get("modo"); LS.set("ds_modo", m === "pro" ? "pro" : "light"); }
+  const light = () => LS.get("ds_modo", "light") === "light";
   const SCHERMI_LIGHT = ["oggi", "piano", "spesa", "imp", "diario"];
   const oggi = () => OGGI_FORZATO || L.iso(new Date());
   const oraAdesso = () => { const d = new Date(); return OGGI_FORZATO ? Number(new URLSearchParams(location.search).get("ora") || 7) : d.getHours() + d.getMinutes() / 60; };
@@ -509,7 +509,7 @@
       const dosi=(prossimo.voci||[]).filter((v)=>Number(L.dosi(v)[S.chi])>0).map((v)=>`<li><span>${esc(v.nome)}</span><b>${esc(fmtLight(L.dosi(v)[S.chi],v.u))}</b></li>`).join("");
       h+=`<section class="home-card home-principale"><span class="home-etichetta">${giaFatto ? "Pasto registrato" : "Prossimo pasto"} · ${esc(L.nomeGiorno(prossimo.data,oggi()))}</span><h2>${esc(prossimo.pasto)} <small>${esc(oreLight(L.ORA[prossimo.pasto]??12))}</small></h2><p class="home-caption">${prossimo.giornataCompletata?"I pasti di oggi risultano già registrati. Puoi rivederli nel Piano.":"Orario indicativo · dosi per "+esc(nomeDi(S.chi))}</p>${prossimo.libero?'<p>Pasto libero: puoi scrivere cosa hai mangiato anche in seguito.</p>':`<ul class="home-dosi">${dosi}</ul>`}<div class="home-azioni-pasto"><button class="btn sec" data-a="piano-apri" data-d="${esc(prossimo.data)}" data-pasto="${esc(prossimo.pasto)}">Apri il pasto</button><button class="btn" data-a="home-pasto-fatto" data-k="${esc(L.chiavePasto(prossimo.data,prossimo.pasto))}" ${giaFatto ? 'disabled title="Pasto già registrato: puoi modificarlo con Apri il pasto"' : prossimo.data > oggi() ? 'disabled title="Puoi confermare il pasto dal giorno previsto"' : ""} aria-label="Fatto! Conferma il pasto di ${esc(nomeDi(S.chi))}">Fatto!</button></div></section>`;
     } else h+=`<section class="home-card home-principale"><h2>${g && g.pasti.length?"Nessun pasto associato al profilo per oggi":"Nessun pasto in programma per oggi"}</h2><p>${g && g.pasti.length?"Apri il Piano e controlla le dosi di "+esc(nomeDi(S.chi))+" e l’abbinamento del PDF al profilo.":"Puoi consultare il piano completo o verificare la data di inizio nelle Impostazioni."}</p><button class="btn" data-a="piano-apri" data-d="${oggi()}">Apri il piano di oggi</button></section>`;
-    h+=`<section class="home-card"><span class="home-etichetta">La giornata di oggi</span><h2>${registrati} <small>di ${pasti.length} pasti registrati</small></h2><p>A fine giornata i pasti rimasti vengono registrati automaticamente. Puoi correggerli nello storico.</p><button class="btn sec largo" data-a="piano-apri" data-d="${oggi()}">Piano di oggi e settimana</button></section>
+    h+=`<section class="home-card"><span class="home-etichetta">La giornata di oggi</span><h2>${registrati} <small>di ${pasti.length} pasti registrati</small></h2><p>Consulta il tuo piano alimentare di oggi e di tutta la settimana ed effettua eventuali cambi pasto in base alla tabella delle alternative.</p><p>A fine giornata i pasti rimasti vengono registrati automaticamente. Puoi correggerli nello storico.</p><button class="btn sec largo" data-a="piano-apri" data-d="${oggi()}">Piano di oggi e settimana</button></section>
       <section class="home-card"><span class="home-etichetta">La spesa della famiglia</span><h2>${daComprare} <small>voci da prendere</small></h2><p>${esc(nomePeriodoLight(lista))}</p><button class="btn sec largo" data-a="vai" data-tab="spesa">Apri la lista</button></section>
       <section class="home-card"><span class="home-etichetta">Il tuo diario</span>${LS.get("ds_home_peso",true)?`<h2>${esc(ultimoPesoTesto())}</h2>`:"<h2>Il tuo percorso</h2>"}<p>Pasti, pesate e attività fisica, con il report per la dietista.</p><div class="due"><button class="btn piccolo sec" data-a="vai-diario" data-v="peso">Peso</button><button class="btn piccolo sec" data-a="vai-diario" data-v="storico">Storico</button></div></section></div></div>`;
     return h;
@@ -978,7 +978,6 @@
       }
       if (!st && p.cambiato && sel >= oggi()) secondarie.push(`<button class="btn piccolo sec" data-a="cambia-ripristina" data-k="${esc(k)}">${p.spostato ? "Rimetti a posto" : "Ripristina"}</button>`);
       h += notaHtml;
-      if(gruppi && gruppi.length>1)h+=`<p class="nota-indicazioni">La conferma registra insieme condimenti e fuori pasto della giornata.</p>`;
       if (azioni.length) h += `<div class="azioni">${azioni.join("")}</div>`;
       if (secondarie.length) h += `<details class="azioni-secondarie"><summary>Altre azioni</summary><div class="azioni">${secondarie.join("")}</div></details>`;
       h += `</section>`;
@@ -1464,9 +1463,9 @@
       h += `<label class="campo">Di chi<select id="storico-persona" class="input">${sel(S.storicoPersona, [["tutti", "Tutti"], ...persone().map((p) => [p.id, p.nome])])}</select></label>`;
     }
     h += `<details class="periodo-storico" ${S.storicoIntervallo?"open":""}><summary>Scegli un periodo preciso</summary><form data-form="storico-periodo"><div class="due"><label class="campo">Dal<input id="storico-dal" type="date" value="${rep.da}" max="${oggi()}" required></label><label class="campo">Al<input id="storico-al" type="date" value="${rep.a}" max="${oggi()}" required></label></div><button class="btn sec piccolo">Applica periodo</button></form></details>
-      <div class="due"><button class="btn" data-a="report-stampa">Stampa o salva PDF</button><button class="btn sec" data-a="report-testo">File di testo</button></div>
+      <div class="due"><button class="btn" data-a="report-stampa">Stampa o salva PDF</button><button class="btn sec" data-a="report-condividi">Condividi storico</button></div>
       <p class="avviso blu">${esc(NOTA_STORICO)}</p>
-      <p style="font-size:13px;color:var(--muted);padding:0 4px">Il report comprende peso e andamento, pasti liberi o modificati, note, attività fisica e dettaglio dei pasti. Con «Stampa o salva PDF» scegli «Salva come PDF» nella finestra di stampa.</p>`;
+      <p style="font-size:13px;color:var(--muted);padding:0 4px">Il report comprende peso e andamento, pasti liberi o modificati, note, attività fisica e dettaglio dei pasti. Con «Stampa o salva PDF» scegli «Salva come PDF» nella finestra di stampa. «Condividi storico» prepara il PDF da inviare alla dottoressa.</p>`;
     h += `<details class="riepilogo-box" open><summary>Riepilogo del periodo · ${esc(ddmm(rep.da))}–${esc(ddmm(rep.a))}</summary>${htmlRiepilogoStorico(rep)}</details>`;
     if (!rep.giorni.length) return h + `<p class="vuoto">Nessun pasto nello storico in questi giorni. I pasti previsti vengono conservati dal giorno di inizio della dieta.</p>`;
     h += `<p style="font-size:14px;padding:0 4px"><b>${rep.fatti}</b> pasti nello storico · <b>${rep.saltati}</b> saltati${rep.attivita ? ` · <b>${rep.attivita}</b> attività fisiche (${esc(durata(rep.minuti))})` : ""} · dal ${esc(ddmm(rep.da))} al ${esc(ddmm(rep.a))}</p>`;
@@ -1521,10 +1520,12 @@
   function htmlReportStorico(rep) {
     const t=intestazioneReport(rep);
     let h='<h1>'+esc(t.titolo)+'</h1><p>'+esc(t.periodo)+'</p>'+htmlRiepilogoStorico(rep,true)+'<h2>Dettaglio dei pasti registrati</h2>';
-    if(!rep.giorni.some(g=>g.pasti.some(p=>!p.fitness)))h+='<p>Nessun pasto registrato nel periodo.</p>';
-    for(const g of rep.giorni){
-      const pasti=g.pasti.filter(p=>!p.fitness);if(!pasti.length)continue;
-      h+='<div class="giorno"><h3>'+esc(dataLunga(g.data))+'</h3><table><tbody>'+pasti.map(p=>'<tr><th style="width:22%">'+esc(p.pasto)+(p.stato==='saltato'?'<br><small>Saltato</small>':'')+'</th><td>'+(p.piatti.length?'<b>'+esc(p.piatti.join(', '))+'</b><br>':'')+(p.libero?'Pasto libero':esc(p.cibi.join(' · '))||'—')+(p.nota?'<br><i>Nota condivisa del pasto: '+esc(p.nota)+'</i>':'')+'</td></tr>').join('')+'</tbody></table></div>';
+    const settimane=window.CheMancaReport.settimane(rep);
+    if(!settimane.length)h+='<p>Nessun pasto registrato nel periodo.</p>';
+    for(const settimana of settimane){
+      h+='<section class="settimana-report"><h2>Settimana '+esc(ddmm(settimana.dal))+' - '+esc(ddmm(L.piuGiorni(settimana.dal,6)))+'</h2><table class="tabella-settimana"><thead><tr><th>Pasto</th>'+settimana.giorni.map(g=>'<th>'+esc(g.nome)+'<br>'+esc(ddmm(g.data))+'</th>').join('')+'</tr></thead><tbody>';
+      for(const r of settimana.righe)h+='<tr><th scope="row">'+esc(r.titolo)+'</th>'+r.celle.map((c,i)=>'<td'+(settimana.giorni[i].fuori?' class="fuori-periodo"':'')+'>'+(c.length?c.map(esc).join('<br>'):'—')+'</td>').join('')+'</tr>';
+      h+='</tbody></table><p class="sotto">Celle con «—»: nessun pasto registrato. Sono riportati solo i dati del periodo selezionato.</p></section>';
     }
     return h+'<p class="report-fonte">I pasti seguono il piano salvato e le modifiche registrate. Generato da CheManca? il '+esc(new Date().toLocaleDateString('it-IT'))+'.</p>';
   }
@@ -1535,6 +1536,33 @@
     el.innerHTML=htmlReportStorico(rep);window.print();
   }
 
+  let preparandoReport=false;
+  async function preparaCondivisioneReport() {
+    if(preparandoReport)return;preparandoReport=true;
+    const rep=datiReport(daStorico(),aStorico(),S.storicoPersona),nomi=persone().map(p=>({...p})),famiglia=S.cloud?.famigliaId;
+    try {
+      toast("Preparazione del PDF…");
+      if(!window.CheMancaReport)throw Error("Modulo report non disponibile. Aggiorna i file dell’app.");
+      if(!window.PDFLib)await new Promise((ok,ko)=>{const script=document.createElement("script");script.src="vendor/pdf-lib.min.js";script.onload=ok;script.onerror=()=>{script.remove();ko(Error("Modulo PDF non disponibile: controlla che la cartella vendor sia stata caricata."));};document.head.appendChild(script);});
+      const bytes=await window.CheMancaReport.crea(rep,nomi);
+      if(condiviso && (A.stato().fase!=="pronto" || famiglia!==S.cloud?.famigliaId))throw Error("Accesso cambiato: riapri lo storico e riprova.");
+      const file=new File([bytes],`CheManca-storico-${rep.da}-${rep.a}.pdf`,{type:"application/pdf"});
+      apriFoglio({tipo:"condividiReport",d:{file,da:rep.da,a:rep.a}});
+    }finally{preparandoReport=false;}
+  }
+  function foglioCondividiReport() {
+    const d=S.sheet.d,condivisibile=!!(navigator.canShare && navigator.canShare({files:[d.file]}));
+    const whatsapp="https://wa.me/393494906341?text="+encodeURIComponent("Buongiorno Dottoressa, le invio il mio diario alimentare in PDF.");
+    return `<h2>Condividi storico</h2><p>PDF dal ${esc(ddmm(d.da))} al ${esc(ddmm(d.a))}. Destinataria: <b>Dott.ssa Ginevra Mochi</b>, 349 490 6341.</p>${condivisibile?'<button class="btn largo" data-a="report-invia-pdf">Condividi il PDF</button><p class="sotto">Scegli WhatsApp e seleziona la chat della dottoressa. L’invio resta da confermare.</p>':'<p>Questo browser non condivide direttamente gli allegati. Scarica il PDF, apri la chat e allegalo come documento.</p>'}<button class="btn sec largo" data-a="report-scarica-pdf">Scarica il PDF</button><a class="btn sec largo" href="${esc(whatsapp)}" target="_blank" rel="noopener noreferrer">Apri WhatsApp della dottoressa</a><p class="sotto">Aprire la chat non allega il file automaticamente: usa la graffetta per aggiungere il PDF scaricato.</p><button class="link" data-a="chiudi">Chiudi</button>`;
+  }
+  function scaricaReportPdf(file) {
+    const url=URL.createObjectURL(file),link=document.createElement("a");link.href=url;link.download=file.name;link.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }
+  async function condividiReportPdf(file) {
+    if(!navigator.canShare?.({files:[file]})){toast("Scarica il PDF e allegalo alla chat della dottoressa");return;}
+    try{await navigator.share({files:[file],title:"Diario alimentare CheManca?"});}
+    catch(e){if(e?.name!=="AbortError")toast("Condivisione non disponibile: scarica il PDF e allegalo in WhatsApp");}
+  }
   async function esportaTesto() {
     const rep = datiReport(daStorico(), aStorico(), S.storicoPersona);
     const nome = `CheManca-diario-${rep.da}-${rep.a}.txt`;
@@ -1846,9 +1874,9 @@
     const fine = finePeriodoLight(p), conclusa = conclusaListaLight(p);
     const mancanti = righe.filter((r) => !r.coperto).length + p.manuali.filter((r) => !r.fatto).length;
     let h = testa("", "Spesa") + `<div class="corpo"><section class="card pad"><h2>Spesa ${esc(nomePeriodoLight(p))}</h2><p>${mancanti} voci da prendere. Comprato e «Ce l'ho già» valgono soltanto per questa lista.</p>
-      <form data-form="light-periodo" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"><div class="due"><label class="campo">Dal giorno<input type="date" id="light-dal" value="${esc(p.dal)}" required></label><label class="campo">Durata<select id="light-giorni">${sel(p.giorni, [[1,"1 giorno · 24 ore"],[3,"3 giorni"],[7,"7 giorni"],[14,"14 giorni"]])}</select></label></div><button class="btn sec" type="submit">Apri questa lista</button></form>
-      ${stato.periodi.length > 1 ? `<label class="campo" style="margin-top:12px">Liste salvate<select id="light-liste">${sel(p.id, stato.periodi.map((x) => [x.id, nomePeriodoLight(x)]))}</select></label>` : ""}</section>
-      ${conclusa ? '<p class="avviso blu">Periodo concluso: la lista resta nello storico della spesa.</p>' : '<p style="font-size:13px;color:var(--muted)">Le quantità seguono il piano, senza sottrarre scorte. Se il piano cambia, gli acquisti restano e vengono indicate le eventuali aggiunte. Ogni periodo è una lista autonoma.</p>'}
+      <form data-form="light-periodo" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"><div class="due"><label class="campo">Dal giorno<input type="date" id="light-dal" value="${esc(p.dal)}" required></label><label class="campo">Durata<select id="light-giorni">${sel(p.giorni, [[1,"1 giorno · 24 ore"],[3,"3 giorni"],[7,"7 giorni"],[14,"14 giorni"]])}</select></label></div><button class="btn sec" type="submit">Apri la lista</button></form>
+      </section>
+      ${conclusa ? '<p class="avviso blu">Periodo concluso: la lista resta nello storico della spesa.</p>' : '<p style="font-size:13px;color:var(--muted)">Le quantità impostate seguono il piano. Se cambia il periodo selezionato i prodotti si aggiornano di conseguenza.</p>'}
       ${!S.piano && !conclusa ? '<p class="avviso giallo">Carica un piano per generare gli alimenti. Puoi comunque aggiungere voci a mano.</p>' : ""}
       <form data-form="spesa-nuova" style="display:flex;gap:8px"><label class="sr" for="nuova-voce">Aggiungi alla lista</label><input class="input" id="nuova-voce" placeholder="Aggiungi: caffè, detersivo…" style="flex:1" autocomplete="off"><button class="btn piccolo" style="min-height:52px" aria-label="Aggiungi">${ico("piu",20)}</button></form>`;
     if (!righe.length && !p.manuali.length) h += '<p class="vuoto">Nessun alimento previsto per questo periodo.</p>';
@@ -2075,7 +2103,7 @@
   function renderFoglio() {
     const el = $("#sheet");
     if (!S.sheet) { el.classList.remove("on"); el.innerHTML = ""; return; }
-    const fogli = { quantitaSpesa: foglioQuantitaSpesa, prodotto: foglioProdotto, rivedi: foglioRivedi, item: foglioItem, nuovoCat: foglioNuovoCat, mancanza: foglioMancanza, pasto: foglioPasto, importa: foglioImporta, importa4: foglioImporta4, alternativa: foglioAlternativa, cambia: foglioCambia, gruppoTap: foglioGruppoTap, nota: foglioNota, inverti: foglioInverti, fitness: foglioFitness, chi: foglioChi, gruppo: foglioGruppo, benvenuto: foglioBenvenuto, abbinaPdf: foglioAbbinaPdf, backup: foglioBackup };
+    const fogli = { condividiReport:foglioCondividiReport, quantitaSpesa: foglioQuantitaSpesa, prodotto: foglioProdotto, rivedi: foglioRivedi, item: foglioItem, nuovoCat: foglioNuovoCat, mancanza: foglioMancanza, pasto: foglioPasto, importa: foglioImporta, importa4: foglioImporta4, alternativa: foglioAlternativa, cambia: foglioCambia, gruppoTap: foglioGruppoTap, nota: foglioNota, inverti: foglioInverti, fitness: foglioFitness, chi: foglioChi, gruppo: foglioGruppo, benvenuto: foglioBenvenuto, abbinaPdf: foglioAbbinaPdf, backup: foglioBackup };
     // il benvenuto non si chiude toccando fuori: servono almeno i nomi
     const fissoP = S.sheet.tipo === "benvenuto" && S.sheet.d.passo < 3;
     el.innerHTML = `<div class="velo" ${fissoP ? "" : 'data-a="chiudi"'}></div><div class="foglio"><span class="maniglia" aria-hidden="true"></span>${fogli[S.sheet.tipo]()}</div>`;
@@ -3151,7 +3179,9 @@
       }
       case "storico-giorni": S.storicoIntervallo=null; S.storicoGiorni = Number(b.dataset.v); render(); break;
       case "report-stampa": stampaReport(); break;
-      case "report-testo": await esportaTesto(); break;
+      case "report-condividi": await preparaCondivisioneReport(); break;
+      case "report-invia-pdf": await condividiReportPdf(d.file); break;
+      case "report-scarica-pdf": scaricaReportPdf(d.file); break;
       case "tema": {
         if(!["chiaro","scuro"].includes(b.dataset.v))break;
         LS.set("ds_tema",b.dataset.v);applicaTema();render();break;
