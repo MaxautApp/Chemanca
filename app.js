@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "26.10.2026 · 37";
+  const VERSIONE = "28.10.2026 · 38";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -261,7 +261,7 @@
 
   function giorniSpesaPro() {
     const r = S.db.piano.find((x) => x.id === "spesa_pro");
-    return r && r.dati && [1,3,7,14].includes(r.dati.giorni) ? r.dati.giorni : 3;
+    return S.spesaProGiorni ?? (r && r.dati && [1,3,7,14].includes(r.dati.giorni) ? r.dati.giorni : 1);
   }
   function ricalcola() {
     verificaProfiloAttivo();
@@ -279,9 +279,10 @@
     if (light()) {
       return accodaSpesaLight(async () => {
         await assicuraSpesaLight();
-        const stato = JSON.parse(JSON.stringify(statoSpesaLight())), p = periodoSpesaLight(stato);
+        const stato = JSON.parse(JSON.stringify(statoSpesaLight()));
+        const p = periodoSpesaLight(stato).mobile ? aggiornaListaMobileLight(stato) : periodoSpesaLight(stato);
         const righe = fabbisognoPeriodoLight(p);
-        if (JSON.stringify(p.righe) !== JSON.stringify(righe)) { p.righe = righe; await salvaStatoLight(stato); }
+        if (p.mobile || JSON.stringify(p.righe) !== JSON.stringify(righe)) { p.righe = righe; await salvaStatoLight(stato); }
       });
     }
     if (allineando || !S.calc) return;
@@ -1034,6 +1035,13 @@
         <small>${esc(primaPastoFitness(prima))}</small></button>`;
     }).join("");
   }
+  function aggiornaOrarioFitness(el){
+    if(!el.dataset.fitOrario || S.sheet?.tipo!=="fitness")return false;
+    const d=S.sheet.d,campo=el.dataset.fitOrario,parti=(d[campo]||"00:00").split(":");
+    parti[el.dataset.parte==="ore"?0:1]=el.value;d[campo]=parti.join(":");
+    if(campo==="dalle"&&!d.dopoManuale){d.dopo=dopoDa(d.dalle);const posto=document.querySelector('[data-f="dopo"]');if(posto){posto.value=d.dopo;const aiuto=posto.parentElement.querySelector('.aiuto');if(aiuto)aiuto.textContent="Scelto in base all’orario."+(prossimoPasto(d.dopo)?" Va "+primaPastoFitness(prossimoPasto(d.dopo))+".":"");}}
+    return true;
+  }
   function foglioFitness() {
     const d = S.sheet.d;
     const preset = SPORT.includes(d.tipo);
@@ -1044,10 +1052,10 @@
         <button type="button" class="chip ${!preset ? "scelto" : ""}" data-a="fit-tipo" data-v="">Altro</button>
       </div></div>
       ${!preset ? `<label class="campo">Scrivi l'attività<input class="input" id="fit-altro" data-f="tipo" value="${esc(d.tipo)}" placeholder="Es. yoga, padel, zumba" autocomplete="off"></label>` : ""}
-      <div class="due">
-        <label class="campo">Dalle ore<input type="time" class="input" data-f="dalle" value="${esc(d.dalle)}"></label>
-        <label class="campo">Alle ore<input type="time" class="input" data-f="alle" value="${esc(d.alle)}"></label>
-      </div>
+      <div class="due">${["dalle","alle"].map(campo=>{
+        const [ore,minuti]=(d[campo]||"00:00").split(":");
+        return `<div class="campo"><span>${campo==="dalle"?"Dalle":"Alle"}</span><div class="due"><label class="campo">Ora<select class="input" aria-label="${campo==="dalle"?"Ora di inizio":"Ora di fine"}" data-fit-orario="${campo}" data-parte="ore">${sel(ore,Array.from({length:24},(_,i)=>{const v=String(i).padStart(2,"0");return [v,v];}))}</select></label><label class="campo">Minuti<select class="input" aria-label="${campo==="dalle"?"Minuti di inizio":"Minuti di fine"}" data-fit-orario="${campo}" data-parte="minuti">${sel(minuti,Array.from({length:60},(_,i)=>{const v=String(i).padStart(2,"0");return [v,v];}))}</select></label></div></div>`;
+      }).join("")}</div>
       <label class="campo">Nella giornata<select class="input" data-f="dopo">${sel(d.dopo, POSTI_FITNESS)}</select>
         <span class="aiuto">${d.dopoManuale ? "Scelto a mano." : "Scelto in base all'orario."}${prossimoPasto(d.dopo) ? " Va " + esc(primaPastoFitness(prossimoPasto(d.dopo))) + "." : ""}</span></label>
       ${persone().length > 1 ? `<div class="campo"><span>Chi l'ha fatta</span><div class="chips">${persone().map((p) => `<button type="button" class="chip fit-persona fit-${coloreFitness(p.id)} ${d.persone.includes(p.id) ? "scelto" : ""}" data-a="fit-chi" data-v="${esc(p.id)}">${esc(p.nome)}</button>`).join("")}</div></div>` : ""}
@@ -1832,10 +1840,10 @@
   function statoSpesaLight() {
     const r = S.db.piano.find((x) => x.id === "spesa_light");
     if (r && r.dati && Array.isArray(r.dati.periodi) && r.dati.periodi.length) return r.dati;
-    const p = nuovaListaLight(oggi(), 3);
+    const p = nuovaListaLight(oggi(), 1);
     // Le voci manuali precedenti vengono copiate una volta; i dati PRO restano intatti.
     p.manuali = S.db.spesa.filter((x) => x.origine === "mano").map((x) => ({ id: x.id, nome: x.nome, fatto: !!x.fatto }));
-    return { attivo: p.id, periodi: [p], durataPredefinita: 3 };
+    return { attivo: p.id, periodi: [p], durataPredefinita: 1 };
   }
   function periodoSpesaLight(stato = statoSpesaLight()) {
     return stato.periodi.find((x) => x.id === stato.attivo) || stato.periodi[0];
@@ -1853,12 +1861,32 @@
   async function assicuraSpesaLight() {
     const esistente = S.db.piano.find((x) => x.id === "spesa_light");
     if (!esistente) { await salvaStatoLight(statoSpesaLight()); return; }
-    if (esistente.dati.durataPredefinita !== 3) {
-      const stato = JSON.parse(JSON.stringify(esistente.dati)), nuovo = nuovaListaLight(oggi(),3);
-      if (!stato.periodi.some((p) => p.id === nuovo.id)) stato.periodi.push(nuovo);
-      stato.attivo = nuovo.id; stato.durataPredefinita = 3; await salvaStatoLight(stato);
-    }
   }
+
+  function aggiornaListaMobileLight(stato) {
+    let p=stato.periodi.find(x=>x.id==="mobile24");
+    if(!p){
+      const precedente=periodoSpesaLight(stato);
+      p=nuovaListaLight(oggi(),1);p.id="mobile24";p.mobile=true;
+      p.manuali=JSON.parse(JSON.stringify(precedente.manuali||[]));
+      stato.periodi.push(p);
+    }
+    const ora=Math.floor(oraAdesso()*60)/60;
+    const vecchie=p.righe||[];
+    for(const r of vecchie){
+      const uscita=(r.pasti||[]).filter(m=>L.istanteLocale(m.data,L.ORA[m.pasto]??12)<L.istanteLocale(oggi(),ora)).reduce((n,m)=>n+Object.values(m.q||{}).reduce((a,b)=>a+Number(b||0),0),0);
+      const c=p.coperture[r.id];if(!c||!uscita)continue;
+      let residuo=uscita;
+      for(const campo of ["comprato","disponibile"]){const scalare=Math.min(residuo,Number(c[campo])||0);c[campo]=Math.max(0,(Number(c[campo])||0)-scalare);residuo-=scalare;}
+      if(!c.comprato&&!c.disponibile)delete p.coperture[r.id];
+    }
+    p.dal=oggi();p.giorni=1;p.oraInizio=ora;
+    p.righe=L.fabbisognoLight(pianoPerSpesaLight(),p.dal,1,persone(),ora);
+    stato.attivo=p.id;stato.durataPredefinita=1;return p;
+  }
+  function apriSpesaMobileLight(){return accodaSpesaLight(async()=>{
+    const stato=JSON.parse(JSON.stringify(statoSpesaLight()));aggiornaListaMobileLight(stato);await salvaStatoLight(stato);
+  });}
   function fmtLight(q, u) {
     return L.fmtNum(q) + " " + (u === "n." ? "pz" : u);
   }
@@ -1876,7 +1904,7 @@
     let h = testa("", "Spesa") + `<div class="corpo"><section class="card pad"><h2>Spesa ${esc(nomePeriodoLight(p))}</h2><p>${mancanti} voci da prendere. Comprato e «Ce l'ho già» valgono soltanto per questa lista.</p>
       <form data-form="light-periodo" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"><div class="due"><label class="campo">Dal giorno<input type="date" id="light-dal" value="${esc(p.dal)}" required></label><label class="campo">Durata<select id="light-giorni">${sel(p.giorni, [[1,"1 giorno · 24 ore"],[3,"3 giorni"],[7,"7 giorni"],[14,"14 giorni"]])}</select></label></div><button class="btn sec" type="submit">Apri la lista</button></form>
       </section>
-      ${conclusa ? '<p class="avviso blu">Periodo concluso: la lista resta nello storico della spesa.</p>' : '<p style="font-size:13px;color:var(--muted)">Le quantità impostate seguono il piano. Se cambia il periodo selezionato i prodotti si aggiornano di conseguenza.</p>'}
+      <p style="font-size:13px;color:var(--muted)">Le quantità impostate seguono il piano. Se cambia il periodo selezionato i prodotti si aggiornano di conseguenza.</p>
       ${!S.piano && !conclusa ? '<p class="avviso giallo">Carica un piano per generare gli alimenti. Puoi comunque aggiungere voci a mano.</p>' : ""}
       <form data-form="spesa-nuova" style="display:flex;gap:8px"><label class="sr" for="nuova-voce">Aggiungi alla lista</label><input class="input" id="nuova-voce" placeholder="Aggiungi: caffè, detersivo…" style="flex:1" autocomplete="off"><button class="btn piccolo" style="min-height:52px" aria-label="Aggiungi">${ico("piu",20)}</button></form>`;
     if (!righe.length && !p.manuali.length) h += '<p class="vuoto">Nessun alimento previsto per questo periodo.</p>';
@@ -1899,6 +1927,7 @@
   async function cambiaPeriodoLightOra(dal, giorni) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dal) || L.iso(L.daIso(dal)) !== dal || ![1,3,7,14].includes(giorni)) throw new Error("Scegli una data valida e una durata di 1, 3, 7 o 14 giorni");
     const stato = JSON.parse(JSON.stringify(statoSpesaLight()));
+    if(dal===oggi()&&giorni===1){aggiornaListaMobileLight(stato);await salvaStatoLight(stato);render();return;}
     const attuale = periodoSpesaLight(stato); attuale.righe = fabbisognoPeriodoLight(attuale);
     const id = dal + "|" + giorni;
     if (!stato.periodi.some((p) => p.id === id)) stato.periodi.push(nuovaListaLight(dal, giorni));
@@ -1952,11 +1981,15 @@
     }
   }
 
-  function vai(tab) {
+  async function vai(tab) {
     // La Home è il punto di ingresso della Light.
     if (light() && !SCHERMI_LIGHT.includes(tab)) tab = "oggi";
     if (tab !== "aggiungi" || S.aggTab !== "codice") fermaScanner();
     S.tab = tab;
+    if(tab==="spesa"){
+      if(light())await apriSpesaMobileLight();
+      else {S.spesaProGiorni=1;ricalcola();await allineaSpesa();}
+    }
     if (tab !== "imp" && tab !== "diario") LS.set("ds_tab", tab);
     if (tab === "piano") S.giornoSel = S.giornoSel || oggi();
     render();
@@ -2967,7 +3000,7 @@
         if (b.dataset.pasto) document.getElementById("pasto-" + L.chiavePasto(S.giornoSel,b.dataset.pasto))?.scrollIntoView({ behavior: "smooth", block: "start" });
         break;
       }
-      case "vai": chiudiFoglio(); vai(b.dataset.tab); break;
+      case "vai": chiudiFoglio(); await vai(b.dataset.tab); break;
       case "chiudi": chiudiFoglio(); break;
       case "tutti-verdi": S.tuttiVerdi = true; render(); break;
       case "casa-tab": S.casaTab = b.dataset.v; render(); break;
@@ -3320,6 +3353,7 @@
   // campi dei fogli e ricerche: aggiornano lo stato mentre si scrive
   document.addEventListener("input", (ev) => {
     const el = ev.target;
+    if(aggiornaOrarioFitness(el))return;
     if (el.dataset.nomeI != null && S.sheet && S.sheet.tipo === "benvenuto") { S.sheet.d.nomi[Number(el.dataset.nomeI)] = el.value; return; }
     if (S.sheet && S.sheet.tipo === "fitness" && el.dataset.f) {
       const d = S.sheet.d;
@@ -3366,12 +3400,14 @@
   });
   document.addEventListener("change", eventoSicuro(async (ev) => {
     const el = ev.target;
+    if(aggiornaOrarioFitness(el))return;
     if(condiviso && A.stato().fase!=="pronto")return;
     if (el.id === "home-persona") { impostaProfiloAttivo(el.value); render(); return; }
     if (el.id === "home-mostra-peso") { LS.set("ds_home_peso",el.checked); toast("Preferenza della Home salvata"); return; }
     if (el.id === "pro-spesa-giorni") {
       const giorni = Number(el.value);
       if (![1,3,7,14].includes(giorni)) return;
+      S.spesaProGiorni=giorni;
       await salva("piano", [{ id: "spesa_pro", dati: { giorni }, aggiornato: new Date().toISOString() }]);
       ricalcola(); await allineaSpesa(); render(); return;
     }
@@ -3522,6 +3558,7 @@
       const r=S.db.piano.find((x)=>x.id==="chiusura_giorni");
       if(S.piano && (!r || r.dati.dal!==oggi())) { await chiudiGiorniPassati();dopoModifica(); }
       aggiornaHomeAutomatica();
+      if(S.tab==="spesa"&&!S.sheet&&!document.hidden){ricalcola();await allineaSpesa();render();}
     }),30000);
     if(condiviso){window.addEventListener("online",()=>A.notificaRete());window.addEventListener("offline",()=>{A.notificaRete();render();});}
     }
@@ -3549,3 +3586,4 @@
   }
   avvio();
 })();
+
