@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "28.10.2026 · 38";
+  const VERSIONE = "28.10.2026 · 39";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -1605,7 +1605,7 @@
           if (!d || !Array.isArray(d.periodi) || !d.periodi.length || !d.periodi.some((p) => p.id === d.attivo)) throw new Error("Liste Light non valide");
           const listaIds = new Set();
           for (const p of d.periodi) {
-            if (!p || typeof p.id !== "string" || listaIds.has(p.id) || !/^\d{4}-\d{2}-\d{2}$/.test(p.dal || "") || L.iso(L.daIso(p.dal)) !== p.dal || ![1,3,7,14].includes(p.giorni) || p.id !== p.dal + "|" + p.giorni || !Array.isArray(p.manuali) || !Array.isArray(p.righe) || !p.coperture || typeof p.coperture !== "object" || Array.isArray(p.coperture)) throw new Error("Periodo della spesa Light non valido");
+            if (!p || typeof p.id !== "string" || listaIds.has(p.id) || !/^\d{4}-\d{2}-\d{2}$/.test(p.dal || "") || L.iso(L.daIso(p.dal)) !== p.dal || ![1,3,7,14].includes(p.giorni) || !(p.mobile === true ? p.id === "mobile24" && p.giorni === 1 && typeof p.oraInizio === "number" : p.id === p.dal + "|" + p.giorni) || !Array.isArray(p.manuali) || !Array.isArray(p.righe) || !p.coperture || typeof p.coperture !== "object" || Array.isArray(p.coperture)) throw new Error("Periodo della spesa Light non valido");
             if (p.oraInizio != null && !(typeof p.oraInizio === "number" && Number.isFinite(p.oraInizio) && p.oraInizio >= 0 && p.oraInizio < 24)) throw new Error("Orario della lista non valido");
             listaIds.add(p.id);
             if (p.manuali.some((m) => !m || typeof m.id !== "string" || typeof m.nome !== "string" || typeof m.fatto !== "boolean")) throw new Error("Voci manuali Light non valide");
