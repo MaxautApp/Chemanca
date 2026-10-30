@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "28.10.2026 · 39";
+  const VERSIONE = "30.10.2026 · 40";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -1603,6 +1603,13 @@
         if (t === "piano" && r.id === "spesa_light") {
           const d = r.dati;
           if (!d || !Array.isArray(d.periodi) || !d.periodi.length || !d.periodi.some((p) => p.id === d.attivo)) throw new Error("Liste Light non valide");
+          if(d.scorte!=null){
+            const sc=d.scorte;if(sc.versione!==1||!Array.isArray(sc.lotti))throw Error("Disponibilità Light non valide");
+            if(sc.manuali!=null&&(!Array.isArray(sc.manuali)||sc.manuali.some(m=>!m||typeof m.id!=="string"||typeof m.nome!=="string"||typeof m.fatto!=="boolean")))throw Error("Acquisti aggiuntivi Light non validi");
+            const ids=new Set();for(const l of sc.lotti){
+              if(!l||typeof l.id!=="string"||ids.has(l.id)||typeof l.nome!=="string"||typeof l.u!=="string"||l.voce!==JSON.stringify([l.nome,l.u])||!["comprato","disponibile"].includes(l.stato)||!Number.isFinite(l.qty)||l.qty<=0||!/^\d{4}-\d{2}-\d{2}$/.test(l.dal)||L.iso(L.daIso(l.dal))!==l.dal||!l.prima||typeof l.prima!=="object"||Array.isArray(l.prima)||Object.values(l.prima).some(q=>!Number.isFinite(q)||q<0))throw Error("Quantità disponibili Light non valide");ids.add(l.id);
+            }
+          }
           const listaIds = new Set();
           for (const p of d.periodi) {
             if (!p || typeof p.id !== "string" || listaIds.has(p.id) || !/^\d{4}-\d{2}-\d{2}$/.test(p.dal || "") || L.iso(L.daIso(p.dal)) !== p.dal || ![1,3,7,14].includes(p.giorni) || !(p.mobile === true ? p.id === "mobile24" && p.giorni === 1 && typeof p.oraInizio === "number" : p.id === p.dal + "|" + p.giorni) || !Array.isArray(p.manuali) || !Array.isArray(p.righe) || !p.coperture || typeof p.coperture !== "object" || Array.isArray(p.coperture)) throw new Error("Periodo della spesa Light non valido");
@@ -1846,16 +1853,58 @@
     return { attivo: p.id, periodi: [p], durataPredefinita: 1 };
   }
   function periodoSpesaLight(stato = statoSpesaLight()) {
-    return stato.periodi.find((x) => x.id === stato.attivo) || stato.periodi[0];
+    const p=stato.periodi.find((x) => x.id === stato.attivo) || stato.periodi[0];
+    p.manuali=assicuraScorteLight(stato).manuali;return p;
+  }
+  function consumiScorteLight(){
+    const out=[];
+    for(const r of S.db.pasti){
+      if(r.data>oggi()||["saltato","auto","da_correggere"].includes(r.stato))continue;
+      const p=r.contenuto||pastoArchiviato(r.id);if(!p||p.libero)continue;
+      for(const persona of chiHaMangiato(r,p))for(const v of p.voci||[]){
+        const voce=L.voceScortaLight(v.nome,v.u,Number(L.dosi(v)[persona])||0);
+        if(voce.qty>0)out.push({id:r.id+"|"+persona+"|"+voce.id,data:r.data,voce:voce.id,qty:voce.qty});
+      }
+    }
+    const aggregati=new Map();for(const x of out){if(aggregati.has(x.id))aggregati.get(x.id).qty+=x.qty;else aggregati.set(x.id,{...x});}return [...aggregati.values()];
+  }
+  function unisciManualiLight(stato){
+    const v=new Map();for(const p of stato.periodi)for(const m of p.manuali||[]){const prima=v.get(m.id);if(!prima||m.fatto)v.set(m.id,{...m});}return [...v.values()];
+  }
+  function assicuraScorteLight(stato){
+    if(stato.scorte?.versione===1){if(!stato.scorte.manuali)stato.scorte.manuali=unisciManualiLight(stato);return stato.scorte;}
+    const consumi=consumiScorteLight(),mappa={};
+    // I vecchi periodi potevano ripetere lo stesso acquisto: non sommarli.
+    for(const p of stato.periodi)if(!conclusaListaLight(p))for(const c of Object.values(p.coperture||{})){
+      const voce=L.voceScortaLight(c.nome,c.u,1),r=mappa[voce.id]||(mappa[voce.id]={...voce,comprato:0,disponibile:0});
+      for(const campo of ["comprato","disponibile"])r[campo]=Math.max(r[campo],L.voceScortaLight(c.nome,c.u,Number(c[campo])||0).qty);
+    }
+    const lotti=[];for(const r of Object.values(mappa))for(const campo of ["comprato","disponibile"])if(r[campo]>0)lotti.push({id:uid(),voce:r.id,nome:r.nome,u:r.u,qty:r[campo],stato:campo,dal:oggi(),prima:Object.fromEntries(consumi.filter(m=>m.voce===r.id&&m.data===oggi()).map(m=>[m.id,m.qty]))});
+    return stato.scorte={versione:1,lotti,manuali:unisciManualiLight(stato)};
   }
   function fabbisognoPeriodoLight(p) {
-    const fine = finePeriodoLight(p);
-    // Le liste concluse rimangono consultabili anche dopo aver caricato una nuova dieta.
-    if (conclusaListaLight(p)) return p.righe || [];
-    return L.fabbisognoLight(pianoPerSpesaLight(), p.dal, p.giorni, persone(), p.oraInizio || 0);
+    if(conclusaListaLight(p))return p.righe||[];
+    const raw=L.fabbisognoLight(pianoPerSpesaLight(),p.dal,p.giorni,persone(),p.oraInizio||0),out=[];
+    const stati=statiPasti();
+    for(const r of raw){
+      const base=L.voceScortaLight(r.nome,r.u,0),pasti=[];
+      for(const m of r.pasti||[]){
+        const st=stati[L.chiavePasto(m.data,m.pasto)];
+        const q=Object.fromEntries(Object.entries(m.q).filter(([id])=>!registratoPerPersona(st,id)).map(([id,n])=>[id,L.voceScortaLight(r.nome,r.u,n).qty]));
+        if(Object.keys(q).length)pasti.push({...m,q,u:base.u});
+      }
+      const q={};for(const m of pasti)for(const [id,n]of Object.entries(m.q))q[id]=(q[id]||0)+n;
+      const qty=Object.values(q).reduce((a,b)=>a+b,0);if(qty>0)out.push({...r,id:base.id,u:base.u,qty,q,pasti});
+    }
+    return out;
   }
-  function righeListaLight(p = periodoSpesaLight()) { return L.righeLight(fabbisognoPeriodoLight(p), p.coperture); }
+  function righeListaLight(p=periodoSpesaLight()){
+    const stato=JSON.parse(JSON.stringify(statoSpesaLight())),scorte=assicuraScorteLight(stato);
+    const saldo=L.saldoScorteLight(scorte.lotti,consumiScorteLight());
+    return L.righeLight(fabbisognoPeriodoLight(p),saldo).filter(r=>!r.rimosso);
+  }
   async function salvaStatoLight(stato) {
+    assicuraScorteLight(stato);
     await salva("piano", [{ id: "spesa_light", dati: stato, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
   }
   async function assicuraSpesaLight() {
@@ -1871,15 +1920,8 @@
       p.manuali=JSON.parse(JSON.stringify(precedente.manuali||[]));
       stato.periodi.push(p);
     }
+    assicuraScorteLight(stato);
     const ora=Math.floor(oraAdesso()*60)/60;
-    const vecchie=p.righe||[];
-    for(const r of vecchie){
-      const uscita=(r.pasti||[]).filter(m=>L.istanteLocale(m.data,L.ORA[m.pasto]??12)<L.istanteLocale(oggi(),ora)).reduce((n,m)=>n+Object.values(m.q||{}).reduce((a,b)=>a+Number(b||0),0),0);
-      const c=p.coperture[r.id];if(!c||!uscita)continue;
-      let residuo=uscita;
-      for(const campo of ["comprato","disponibile"]){const scalare=Math.min(residuo,Number(c[campo])||0);c[campo]=Math.max(0,(Number(c[campo])||0)-scalare);residuo-=scalare;}
-      if(!c.comprato&&!c.disponibile)delete p.coperture[r.id];
-    }
     p.dal=oggi();p.giorni=1;p.oraInizio=ora;
     p.righe=L.fabbisognoLight(pianoPerSpesaLight(),p.dal,1,persone(),ora);
     stato.attivo=p.id;stato.durataPredefinita=1;return p;
@@ -1901,7 +1943,7 @@
     const stato = statoSpesaLight(), p = periodoSpesaLight(stato), righe = righeListaLight(p);
     const fine = finePeriodoLight(p), conclusa = conclusaListaLight(p);
     const mancanti = righe.filter((r) => !r.coperto).length + p.manuali.filter((r) => !r.fatto).length;
-    let h = testa("", "Spesa") + `<div class="corpo"><section class="card pad"><h2>Spesa ${esc(nomePeriodoLight(p))}</h2><p>${mancanti} voci da prendere. Comprato e «Ce l'ho già» valgono soltanto per questa lista.</p>
+    let h = testa("", "Spesa") + `<div class="corpo"><section class="card pad"><h2>Spesa ${esc(nomePeriodoLight(p))}</h2><p>${mancanti} voci da prendere. Le quantità comprate o già disponibili restano valide anche cambiando periodo.</p>
       <form data-form="light-periodo" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"><div class="due"><label class="campo">Dal giorno<input type="date" id="light-dal" value="${esc(p.dal)}" required></label><label class="campo">Durata<select id="light-giorni">${sel(p.giorni, [[1,"1 giorno · 24 ore"],[3,"3 giorni"],[7,"7 giorni"],[14,"14 giorni"]])}</select></label></div><button class="btn sec" type="submit">Apri la lista</button></form>
       </section>
       <p style="font-size:13px;color:var(--muted)">Le quantità impostate seguono il piano. Se cambia il periodo selezionato i prodotti si aggiornano di conseguenza.</p>
@@ -1911,9 +1953,9 @@
     for (const r of righe) {
       const dettaglio = Object.entries(r.q || {}).map(([id, q]) => nomeDi(id) + " " + fmtLight(q, r.u)).join(" · ");
       const dettagliPasti=dettaglioPastiSpesa(r.pasti,r.u);
-      const statoRiga = r.rimosso ? "Non più previsto dal piano" : r.aggiunta ? "Ancora da prendere: " + fmtLight(r.manca, r.u) : r.coperto ? "Completo per questa lista" : "Da comprare";
+      const statoRiga = r.rimosso ? "Non più previsto dal piano" : r.aggiunta ? "Ancora da prendere: " + fmtLight(r.manca, r.u) : r.coperto ? "Quantità disponibile" : "Da comprare";
       h += `<section class="card pad"><div class="titolo-sez"><h2 style="font-size:16px">${esc(r.nome)}</h2><b>${r.rimosso ? "" : esc(fmtLight(r.qty, r.u))}</b></div><p style="font-size:13px;color:var(--muted);margin-top:6px">${dettagliPasti || esc(dettaglio)}</p><p style="margin:8px 0;font-weight:700">${statoRiga==="Da comprare"?"&nbsp;":esc(statoRiga)}</p>
-        ${r.comprato > 0 ? `<p>Comprato: ${esc(fmtLight(r.comprato,r.u))}</p>` : ""}${r.disponibile > 0 ? `<p>Ce l'ho già: ${esc(fmtLight(r.disponibile,r.u))}</p>` : ""}
+        ${r.comprato > 0 ? `<p>Resta degli acquisti: ${esc(fmtLight(r.comprato,r.u))}</p>` : ""}${r.disponibile > 0 ? `<p>Ce l'ho già: ${esc(fmtLight(r.disponibile,r.u))}</p>` : ""}
         ${!conclusa && !r.coperto ? `<div class="due" style="margin-top:10px"><button class="btn piccolo" data-a="light-copri" data-id="${esc(r.id)}" data-stato="comprato">Comprato</button><button class="btn piccolo sec" data-a="light-copri" data-id="${esc(r.id)}" data-stato="disponibile">Ce l'ho già</button></div><button class="link" data-a="quantita-spesa" data-id="${esc(r.id)}">Usa quantità diversa</button>` : ""}
         ${!conclusa && r.comprato+r.disponibile > 0 ? `<button class="link" data-a="light-copri" data-id="${esc(r.id)}" data-stato="annulla">Annulla acquisto / disponibilità</button>` : ""}</section>`;
     }
@@ -1939,12 +1981,13 @@
     if (conclusaListaLight(p)) throw new Error("Questa lista è conclusa: apri un nuovo periodo");
     const r = righeListaLight(p).find((x) => x.id === id); if (!r) return;
     p.righe = fabbisognoPeriodoLight(p);
-    if (azione === "annulla") delete p.coperture[id];
-    else if (["comprato", "disponibile"].includes(azione)) {
-      const c = p.coperture[id] || { nome: r.nome, u: r.u, comprato: 0, disponibile: 0 };
-      const q = quantita == null ? r.manca : Number(quantita);
-      if (!Number.isFinite(q) || q <= 0) throw new Error("Inserisci una quantità maggiore di zero");
-      c[azione] = (Number(c[azione]) || 0) + q; p.coperture[id] = c;
+    const scorte=assicuraScorteLight(stato);
+    if(azione==="annulla")scorte.lotti=scorte.lotti.filter(l=>l.voce!==id);
+    else if(["comprato","disponibile"].includes(azione)){
+      const q=quantita==null?r.manca:Number(quantita);
+      if(!Number.isFinite(q)||q<=0)throw Error("Inserisci una quantità maggiore di zero");
+      const consumi=consumiScorteLight();
+      scorte.lotti.push({id:uid(),voce:id,nome:r.nome,u:r.u,qty:q,stato:azione,dal:oggi(),prima:Object.fromEntries(consumi.filter(m=>m.voce===id&&m.data===oggi()).map(m=>[m.id,m.qty]))});
     }
     await salvaStatoLight(stato); render();
   }
@@ -1957,6 +2000,7 @@
     if (azione === "togli") p.manuali = p.manuali.filter((m) => m.id !== id);
     if (azione === "spunta") p.manuali = p.manuali.map((m) => m.id === id ? { ...m, fatto: !m.fatto, stato:"comprato" } : m);
     if (azione === "disponibile") p.manuali = p.manuali.map((m) => m.id === id ? { ...m, fatto:true, stato:"disponibile" } : m);
+    assicuraScorteLight(stato).manuali=p.manuali;
     await salvaStatoLight(stato); render();
   }
 
@@ -2197,7 +2241,7 @@
   function apriQuantitaSpesa(id) {
     if(light()) {
       const r=righeListaLight().find(x=>x.id===id);if(!r)return;
-      apriFoglio({tipo:"quantitaSpesa",d:{id,light:true,nome:r.nome,unita:r.u,qty:r.manca}});
+      apriFoglio({tipo:"quantitaSpesa",d:{id,light:true,nome:r.nome,unita:r.nome==="Avocado"?"avocado":r.nome==="Crackers non salati"?"pacchetti":r.u,qty:r.manca}});
     } else {
       const s=S.db.spesa.find(x=>x.id===id);if(!s)return;
       const a=datiAcquistoPro(s);if(!a){toast("Per questo alimento scegli prima un prodotto nel catalogo");return;}

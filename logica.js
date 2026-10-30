@@ -558,8 +558,28 @@
     return {dal,al:piuGiorni(dal,giorni-1),persona,giorni:risultati,totali};
   }
 
+  // Disponibilità Light: acquisti condivisi tra periodi, consumi ricostruiti dai pasti.
+  function voceScortaLight(nome,u,qty){
+    const pezzi=conteggioPezzi(nome,qty,u);return {nome,u:pezzi?"pz":u,qty:pezzi?pezzi.qty:qty,id:JSON.stringify([nome,pezzi?"pz":u])};
+  }
+  function saldoScorteLight(lotti,consumi){
+    const residui=lotti.map(l=>({...l,resta:l.qty}));
+    for(const m of [...consumi].sort((a,b)=>a.data.localeCompare(b.data)||a.id.localeCompare(b.id))){
+      let coperto=0;
+      for(const l of residui){
+        if(l.voce!==m.voce || m.data<l.dal)continue;
+        const nuovo=Math.max(0,m.qty-(l.prima?.[m.id]||0));
+        const q=Math.min(l.resta,Math.max(0,m.qty-coperto),nuovo);
+        l.resta=Math.max(0,l.resta-q);coperto+=q;
+      }
+    }
+    const out={};for(const l of residui){const r=out[l.voce]||(out[l.voce]={nome:l.nome,u:l.u,comprato:0,disponibile:0});r[l.stato]+=l.resta;}
+    for(const r of Object.values(out))for(const k of ["comprato","disponibile"])r[k]=Math.round(r[k]*10000)/10000;
+    return out;
+  }
+
   return {
-    conteggioPezzi, normalizzaPezzi, confrontaPiani,
+    voceScortaLight,saldoScorteLight,conteggioPezzi, normalizzaPezzi, confrontaPiani,
     fabbisognoLight, righeLight, istanteLocale,
     PASTI, ORA, PRESENZA, GENERICHE, REGOLE, regola, fmtLitri,
     iso, daIso, piuGiorni, diffGiorni, nomeGiorno, etichettaData, GIORNI,
