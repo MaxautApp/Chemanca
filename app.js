@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "30.10.2026 · 40";
+  const VERSIONE = "30.10.2026 · 41";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -978,6 +978,7 @@
         secondarie.push(`<button class="btn piccolo cambia" data-a="cambia-apri" data-k="${esc(k)}">${ico("cambia", 16)} Cambia pasto</button>`);
       }
       if (!st && p.cambiato && sel >= oggi()) secondarie.push(`<button class="btn piccolo sec" data-a="cambia-ripristina" data-k="${esc(k)}">${p.spostato ? "Rimetti a posto" : "Ripristina"}</button>`);
+      if(window.CheMancaRicette && p.pasto!=="Fuori pasto" && p.voci.some(v=>window.CheMancaRicette.categoria(v.nome)))azioni.push(`<button class="btn piccolo sec" data-a="ric-apri" data-k="${esc(k)}">Cucina questo pasto</button>`);
       h += notaHtml;
       if (azioni.length) h += `<div class="azioni">${azioni.join("")}</div>`;
       if (secondarie.length) h += `<details class="azioni-secondarie"><summary>Altre azioni</summary><div class="azioni">${secondarie.join("")}</div></details>`;
@@ -1599,6 +1600,10 @@
         ids.add(r.id);
         if (t === "pesi" && !(typeof r.kg === "number" && Number.isFinite(r.kg) && r.kg > 0)) throw new Error("Pesata non valida");
         if (t === "piano" && r.id === "persone" && (!Array.isArray(r.dati) || r.dati.some((p) => !p || typeof p.id !== "string" || typeof p.nome !== "string") || new Set(r.dati.map((p) => p.id)).size !== r.dati.length)) throw new Error("Nominativi non validi");
+        if(t==="piano"&&r.id==="ricette_salvate"){
+          if(!Array.isArray(r.dati)||r.dati.length>100)throw Error("Ricettario non valido");
+          const ids=new Set();for(const x of r.dati){if(!x||typeof x.id!=="string"||!x.id||ids.has(x.id)||typeof x.titolo!=="string"||!x.titolo.trim()||x.titolo.length>150||typeof x.ingredienti!=="string"||x.ingredienti.length>8000||!Array.isArray(x.passi)||!x.passi.length||x.passi.some(p=>typeof p!=="string")||x.passi.join("\n").length>16000||typeof x.note!=="string"||x.note.length>4000||!["forno","amc","bimby"].includes(x.sistema)||!Array.isArray(x.fonti)||x.fonti.some(f=>typeof f!=="string")||!Array.isArray(x.resto)||x.resto.some(n=>typeof n!=="string"))throw Error("Ricetta salvata non valida");ids.add(x.id);}
+        }
         if (t === "piano" && r.id === "spesa_pro" && (!r.dati || ![1,3,7,14].includes(r.dati.giorni))) throw new Error("Periodo spesa PRO non valido");
         if (t === "piano" && r.id === "spesa_light") {
           const d = r.dati;
@@ -1673,6 +1678,36 @@
     return `<section class="sezione-imp"><h2>Movimenti delle scorte</h2><p>Ultimi consumi e restituzioni legati ai pasti.</p>${voci.length?voci.map((v)=>`<details><summary>${v.tipo==="consumo"?"Consumo":"Restituzione"} · ${esc(v.pasto.replace("|"," · "))}${v.automatico?" · automatico":""}</summary><ul>${v.movimenti.map((m)=>`<li>${esc(m.prodotto.nome)}: ${v.tipo==="consumo"?"−":"+"}${esc(fmtLight(m.delta,m.unita))}</li>`).join("")}</ul></details>`).join(""):'<p>Nessun movimento registrato con la nuova versione.</p>'}</section>`;
   }
 
+  /* ---------------- cucina: ricette locali e preferiti personali ---------------- */
+  const cucinaAttrezzi=()=>LS.get("ds_cucina",{forno:true,tm7:false,varoma:false,navigenio:false,easyquick:false,secuquick:false,audiotherm:false,inserto:false,diametro:"24"});
+  function ricetteSalvate(){return S.db.piano.find(x=>x.id==="ricette_salvate")?.dati||[];}
+  function apriRicette(k=""){
+    const p=k?pastoArchiviato(k):null;
+    apriFoglio({tipo:"ricette",d:{k,fase:k?"scelta":"preferiti",ids:S.chi?[S.chi]:persone().slice(0,1).map(x=>x.id),sistema:"forno",scelte:{},passo:0}});
+  }
+  function foglioRicette(){
+    const d=S.sheet.d,R=window.CheMancaRicette;if(!R)return '<h2>Ricette</h2><p>Aggiorna i file dell’app per caricare il ricettario.</p><button class="link" data-a="chiudi">Chiudi</button>';
+    const chiudi='<button class="link" data-a="chiudi">Chiudi</button>';
+    if(d.fase==="attrezzi"){
+      const a=d.attrezzi;
+      return '<h2>La tua cucina</h2><p>Attrezzature ricordate su questo dispositivo, per Light e PRO.</p>'+[["forno","Forno"],["tm7","Bimby TM7"],["varoma","Varoma per TM7"],["navigenio","AMC Navigenio"],["easyquick","AMC EasyQuick"],["secuquick","AMC Secuquick softline"],["audiotherm","AMC Audiotherm"],["inserto","AMC inserto forato per vapore"]].map(([k,n])=>`<label class="preferenza-home"><input type="checkbox" data-ric-attrezzo="${k}" ${a[k]?"checked":""}> ${n}</label>`).join('')+`<label class="campo">Pentola AMC per EasyQuick<select data-ric-diametro>${sel(a.diametro,[["20","20 cm"],["24","24 cm"]])}</select></label><button class="btn" data-a="ric-attrezzi-salva">Salva attrezzature</button><h3>Manuali ufficiali</h3><p class="sotto">Verifica che il modello del manuale corrisponda al tuo apparecchio. I documenti si aprono online sui siti dei produttori.</p>`+R.fonti.filter(x=>x.id!=="temperature").map(f=>`<a href="${esc(f.url)}" target="_blank" rel="noopener noreferrer">${esc(f.titolo)}</a>`).join('')+chiudi;
+    }
+    if(d.fase==="preferiti")return '<h2>Le tue ricette preferite</h2><p>Conservate nell’archivio condiviso. Le quantità sono quelle salvate: confrontale con il pasto attuale.</p>'+ricetteSalvate().map(r=>`<section class="card pad"><h3>${esc(r.titolo)}</h3><p class="sotto">${esc(r.sistema)} · ${r.personale?"Ricetta personale":"Preparazione salvata"}</p><button class="btn sec" data-a="ric-preferita-apri" data-id="${esc(r.id)}">Apri ricetta</button><button class="link" data-a="ric-preferita-togli" data-id="${esc(r.id)}">Rimuovi dai preferiti</button></section>`).join('')+(ricetteSalvate().length?'':'<p>Nessuna ricetta salvata. Parti da un pasto nel Piano e scegli Cucina questo pasto.</p>')+(d.k?'<button class="btn sec" data-a="ric-scelta">Torna al pasto</button>':'')+chiudi;
+    if(d.fase==="modifica")return `<h2>Modifica ricetta</h2><p>La ricetta personale non modifica il piano né la Spesa. Ingredienti o tempi modificati da te non vengono verificati automaticamente.</p><label class="campo">Titolo<input data-ric-edit="titolo" maxlength="150" value="${esc(d.edit.titolo)}"></label><label class="campo">Ingredienti e dosi<textarea rows="6" data-ric-edit="ingredienti" maxlength="8000">${esc(d.edit.ingredienti)}</textarea></label><label class="campo">Passaggi (una riga per passaggio)<textarea rows="10" data-ric-edit="passi" maxlength="16000">${esc(d.edit.passi)}</textarea></label><label class="campo">Note personali<textarea rows="3" data-ric-edit="note" maxlength="4000">${esc(d.edit.note)}</textarea></label><button class="btn" data-a="ric-applica">Applica modifiche</button><button class="link" data-a="ric-modifica-annulla">Annulla modifiche</button>`;
+    if(d.fase==="ricetta"){
+      const r=d.ricetta,passo=Math.min(d.passo||0,r.passi.length-1);
+      return `<h2>${esc(r.titolo)}</h2><p class="sotto">${r.personale?"Ricetta personale · modifiche non verificate":"Preparazione adattata alle dosi selezionate"}. Il piano alimentare resta invariato.</p><h3>Ingredienti e dosi</h3><p style="white-space:pre-line">${esc(r.ingredienti)}</p>${r.resto?.length?`<p class="avviso blu">Questa preparazione riguarda solo gli ingredienti elencati sopra. Restano nel pasto: ${esc(r.resto.join(', '))}.</p>`:""}${r.note?`<p style="white-space:pre-line" class="avviso blu">${esc(r.note)}</p>`:""}<h3>Passo ${passo+1} di ${r.passi.length}</h3><p>${esc(r.passi[passo])}</p><div class="due"><button class="btn sec" data-a="ric-passo" data-v="-1" ${passo===0?'disabled':''}>Indietro</button><button class="btn" data-a="ric-passo" data-v="1" ${passo===r.passi.length-1?'disabled':''}>Avanti</button></div><details><summary>Tutti i passaggi</summary><ol>${r.passi.map(x=>`<li>${esc(x)}</li>`).join('')}</ol></details><button class="btn sec" data-a="ric-modifica">Modifica ricetta</button><button class="btn" data-a="ric-salva">${r.id?"Salva modifiche nei preferiti":"Salva nei preferiti"}</button><button class="link" data-a="ric-preferiti">Apri preferiti</button><details><summary>Fonti e istruzioni</summary>${R.fonti.filter(x=>(r.fonti||[]).includes(x.id)).map(x=>`<p><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.titolo)}</a></p>`).join('')}<p>Le schede CheManca sono preparazioni indipendenti; non sono ricette ufficiali AMC o Vorwerk né vengono inviate agli apparecchi.</p></details>${d.k?'<button class="link" data-a="ric-scelta">Nuova proposta per questo pasto</button>':''}${chiudi}`;
+    }
+    const p=pastoArchiviato(d.k);if(!p)return '<h2>Pasto non disponibile</h2>'+chiudi;
+    const voci=(p.voci||[]).map((v,i)=>({v,i})).filter(x=>R.categoria(x.v.nome));
+    return `<h2>Cucina questo pasto</h2><p>${esc(d.k.replace('|',' · '))}. Scegli persone e sistema: gli ingredienti e le dosi vengono dal piano.</p><div class="campo"><span>Per chi cucini</span><div class="chips">${persone().map(p=>`<button class="chip ${d.ids.includes(p.id)?'scelto':''}" data-a="ric-persona" data-id="${esc(p.id)}">${esc(p.nome)}</button>`).join('')}</div></div><label class="campo">Sistema di cottura<select data-ric-sistema>${sel(d.sistema,[["forno","Forno"],["amc","AMC · EasyQuick"],["bimby","Bimby TM7 · vapore"]])}</select></label><button class="link" data-a="ric-attrezzi">Configura attrezzature e apri manuali</button><h3>Ingredienti da preparare</h3>${voci.map(({v,i})=>`<label class="preferenza-home"><input type="checkbox" data-ric-voce="${i}" ${d.scelte['escludi'+i]?'':'checked'}> ${esc(v.nome)}</label>${R.categoria(v.nome)==='generica'?`<label class="campo">Quale verdura è prevista?<select data-ric-verdura="${i}">${sel(d.scelte[i]||'',[["","Scegli la verdura"],...["Zucchine","Carote","Broccoli","Cavolfiore","Finocchi","Melanzane","Peperoni","Zucca","Fagiolini"].map(x=>[x,x])])}</select></label>`:''}`).join('')}${!voci.length?'<p>Questo pasto non richiede una preparazione supportata. Pane, formaggio, crackers e insalate semplici non vengono trasformati automaticamente in ricette.</p>':''}<p class="sotto">Ricettario iniziale: forno per verdure, filetti di pesce, hamburger e petto di pollo; pasta con cottura separata. AMC e TM7: guida al vapore con rimando ai tempi della ricetta ufficiale. Risotti, Secuquick, pane e crackers fatti in casa richiedono ancora preparazioni validate.</p><button class="btn" data-a="ric-genera">Prepara la proposta</button><button class="link" data-a="ric-preferiti">Ricette preferite</button>${chiudi}`;
+  }
+  async function salvaRicettaPreferita(){
+    const r=S.sheet.d.ricetta,lista=ricetteSalvate().map(x=>({...x}));if(!r||!r.titolo.trim()||!r.passi.length)throw Error("Completa titolo e passaggi");
+    const ricetta={...r,id:r.id||uid(),aggiornata:new Date().toISOString()};const i=lista.findIndex(x=>x.id===ricetta.id);if(i<0){if(lista.length>=100)throw Error("Rimuovi una ricetta prima di aggiungerne altre (massimo 100)");lista.push(ricetta);}else lista[i]=ricetta;
+    await salva("piano",[{id:"ricette_salvate",dati:lista}]);if(S.sheet?.tipo!=="ricette")return;S.sheet.d.ricetta=ricetta;if(condiviso)S.sheet._cloudRevisione=A.stato().revisione;toast("Ricetta salvata nei preferiti");renderFoglio();
+  }
+
   function schermoImpostazioni() {
     const t = tg(); const w = wa();
     let h = testa("", "Impostazioni", "oggi");
@@ -1682,6 +1717,7 @@
         <p>${light() ? "<b>Light</b>: Piano, Spesa, Peso e storico, con Cambia pasto, Inverti pasti e Fitness. Spesa per 24 ore oppure periodi di 3, 7 o 14 giorni, con Comprato e Ce l’ho già, senza inventario." : "<b>PRO</b>: tutto, anche frigo e dispensa, codice a barre e cosa manca giorno per giorno."}</p>
       </section>
 
+      <section class="sezione-imp"><h2>Ricette e cucina</h2><button class="btn sec largo" data-a="ric-attrezzi">Attrezzature e manuali</button><button class="btn sec largo" data-a="ric-preferiti">Le ricette preferite</button><p>Preparazioni dal piano, modificabili e salvabili. Le ricette personali non cambiano la dieta.</p></section>
       <section class="sezione-imp"><h2>Aspetto</h2>
         <div class="segmenti scelta-tema" role="group" aria-label="Aspetto dell’app">
           <button data-a="tema" data-v="chiaro" aria-pressed="${!temaScuro()}">${ico("sole",20)} Chiara</button>
@@ -2180,7 +2216,7 @@
   function renderFoglio() {
     const el = $("#sheet");
     if (!S.sheet) { el.classList.remove("on"); el.innerHTML = ""; return; }
-    const fogli = { condividiReport:foglioCondividiReport, quantitaSpesa: foglioQuantitaSpesa, prodotto: foglioProdotto, rivedi: foglioRivedi, item: foglioItem, nuovoCat: foglioNuovoCat, mancanza: foglioMancanza, pasto: foglioPasto, importa: foglioImporta, importa4: foglioImporta4, alternativa: foglioAlternativa, cambia: foglioCambia, gruppoTap: foglioGruppoTap, nota: foglioNota, inverti: foglioInverti, fitness: foglioFitness, chi: foglioChi, gruppo: foglioGruppo, benvenuto: foglioBenvenuto, abbinaPdf: foglioAbbinaPdf, backup: foglioBackup };
+    const fogli = { ricette:foglioRicette, condividiReport:foglioCondividiReport, quantitaSpesa: foglioQuantitaSpesa, prodotto: foglioProdotto, rivedi: foglioRivedi, item: foglioItem, nuovoCat: foglioNuovoCat, mancanza: foglioMancanza, pasto: foglioPasto, importa: foglioImporta, importa4: foglioImporta4, alternativa: foglioAlternativa, cambia: foglioCambia, gruppoTap: foglioGruppoTap, nota: foglioNota, inverti: foglioInverti, fitness: foglioFitness, chi: foglioChi, gruppo: foglioGruppo, benvenuto: foglioBenvenuto, abbinaPdf: foglioAbbinaPdf, backup: foglioBackup };
     // il benvenuto non si chiude toccando fuori: servono almeno i nomi
     const fissoP = S.sheet.tipo === "benvenuto" && S.sheet.d.passo < 3;
     el.innerHTML = `<div class="velo" ${fissoP ? "" : 'data-a="chiudi"'}></div><div class="foglio"><span class="maniglia" aria-hidden="true"></span>${fogli[S.sheet.tipo]()}</div>`;
@@ -3161,6 +3197,20 @@
         break;
       }
       case "home-pasto-fatto": await confermaPastoHome(b.dataset.k); break;
+      case "ric-apri": apriRicette(b.dataset.k);break;
+      case "ric-persona": {const d=S.sheet.d;d.ids=d.ids.includes(b.dataset.id)?d.ids.filter(x=>x!==b.dataset.id):[...d.ids,b.dataset.id];renderFoglio();break;}
+      case "ric-attrezzi": {if(S.sheet?.tipo!=="ricette")apriRicette();S.sheet.d.attrezzi={...cucinaAttrezzi()};S.sheet.d.fase="attrezzi";renderFoglio();break;}
+      case "ric-attrezzi-salva": {LS.set("ds_cucina",S.sheet.d.attrezzi);S.sheet.d.fase=S.sheet.d.k?"scelta":"preferiti";renderFoglio();toast("Attrezzature salvate");break;}
+      case "ric-preferiti": if(S.sheet?.tipo!=="ricette")apriRicette();S.sheet.d.fase="preferiti";renderFoglio();break;
+      case "ric-scelta": S.sheet.d.fase="scelta";renderFoglio();break;
+      case "ric-genera": {const d=S.sheet.d,p=pastoArchiviato(d.k);if(!d.ids.length){toast("Scegli per chi cucinare");break;}if(p?.voci.some((v,i)=>window.CheMancaRicette.categoria(v.nome)==="generica"&&!d.scelte['escludi'+i]&&!d.scelte[i])){toast("Scegli quale verdura è prevista nel piano");break;}const r=window.CheMancaRicette.proponi(p,persone(),d.ids,d.sistema,cucinaAttrezzi(),d.scelte);if(!r.length){toast("Nessuna preparazione disponibile: controlla attrezzature e ingredienti o scegli un altro sistema");break;}d.ricetta=r[0];d.fase="ricetta";d.passo=0;renderFoglio();break;}
+      case "ric-passo": S.sheet.d.passo=Math.max(0,Math.min(S.sheet.d.ricetta.passi.length-1,S.sheet.d.passo+Number(b.dataset.v)));renderFoglio();break;
+      case "ric-modifica": {const d=S.sheet.d;d.edit={...d.ricetta,passi:d.ricetta.passi.join("\n")};d.fase="modifica";renderFoglio();break;}
+      case "ric-modifica-annulla": S.sheet.d.fase="ricetta";renderFoglio();break;
+      case "ric-applica": {const d=S.sheet.d,e=d.edit;if(!e.titolo.trim()||!e.ingredienti.trim()||!e.passi.trim()){toast("Completa titolo, ingredienti e passaggi");break;}d.ricetta={...d.ricetta,...e,passi:e.passi.split(/\n/).map(x=>x.trim()).filter(Boolean),personale:true};d.fase="ricetta";d.passo=0;renderFoglio();break;}
+      case "ric-salva": await salvaRicettaPreferita();break;
+      case "ric-preferita-apri": {const r=ricetteSalvate().find(x=>x.id===b.dataset.id);if(r){S.sheet.d.ricetta=JSON.parse(JSON.stringify(r));S.sheet.d.fase="ricetta";S.sheet.d.passo=0;renderFoglio();}break;}
+      case "ric-preferita-togli": await salva("piano",[{id:"ricette_salvate",dati:ricetteSalvate().filter(x=>x.id!==b.dataset.id)}]);renderFoglio();break;
       case "pasto": await segnaPasto(b.dataset.k, b.dataset.stato); break;
       case "pasto-altro": apriFoglio({ tipo: "pasto", k: b.dataset.k }); break;
       case "pasto-annulla": await annullaPasto(b.dataset.k); break;
@@ -3398,6 +3448,16 @@
   document.addEventListener("input", (ev) => {
     const el = ev.target;
     if(aggiornaOrarioFitness(el))return;
+    if(S.sheet?.tipo==="ricette"){
+      const d=S.sheet.d;
+      if(el.dataset.ricEdit){d.edit[el.dataset.ricEdit]=el.value;return;}
+      if(el.dataset.ricAttrezzo){d.attrezzi[el.dataset.ricAttrezzo]=el.checked;return;}
+      if(el.hasAttribute?.("data-ric-diametro")){d.attrezzi.diametro=el.value;return;}
+      if(el.hasAttribute?.("data-ric-sistema")){d.sistema=el.value;return;}
+      if(el.dataset.ricVoce!=null){d.scelte['escludi'+el.dataset.ricVoce]=!el.checked;return;}
+      if(el.dataset.ricVerdura!=null){d.scelte[el.dataset.ricVerdura]=el.value;return;}
+    }
+
     if (el.dataset.nomeI != null && S.sheet && S.sheet.tipo === "benvenuto") { S.sheet.d.nomi[Number(el.dataset.nomeI)] = el.value; return; }
     if (S.sheet && S.sheet.tipo === "fitness" && el.dataset.f) {
       const d = S.sheet.d;
@@ -3445,6 +3505,16 @@
   document.addEventListener("change", eventoSicuro(async (ev) => {
     const el = ev.target;
     if(aggiornaOrarioFitness(el))return;
+    if(S.sheet?.tipo==="ricette"){
+      const d=S.sheet.d;
+      if(el.dataset.ricEdit){d.edit[el.dataset.ricEdit]=el.value;return;}
+      if(el.dataset.ricAttrezzo){d.attrezzi[el.dataset.ricAttrezzo]=el.checked;return;}
+      if(el.hasAttribute?.("data-ric-diametro")){d.attrezzi.diametro=el.value;return;}
+      if(el.hasAttribute?.("data-ric-sistema")){d.sistema=el.value;return;}
+      if(el.dataset.ricVoce!=null){d.scelte['escludi'+el.dataset.ricVoce]=!el.checked;return;}
+      if(el.dataset.ricVerdura!=null){d.scelte[el.dataset.ricVerdura]=el.value;return;}
+    }
+
     if(condiviso && A.stato().fase!=="pronto")return;
     if (el.id === "home-persona") { impostaProfiloAttivo(el.value); render(); return; }
     if (el.id === "home-mostra-peso") { LS.set("ds_home_peso",el.checked); toast("Preferenza della Home salvata"); return; }
