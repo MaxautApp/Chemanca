@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "31.10.2026 · 44";
+  const VERSIONE = "31.10.2026 · 45";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -1687,7 +1687,7 @@
   function ricetteSalvate(){return S.db.piano.find(x=>x.id==="ricette_salvate")?.dati||[];}
   function apriRicette(k=""){
     const p=k?pastoArchiviato(k):null;
-    apriFoglio({tipo:"ricette",d:{k,fase:k?"scelta":"preferiti",ids:S.chi?[S.chi]:persone().slice(0,1).map(x=>x.id),sistema:"forno",scelte:{},passo:0}});
+    apriFoglio({tipo:"ricette",d:{k,fase:k?"scelta":"preferiti",ids:S.chi?[S.chi]:persone().slice(0,1).map(x=>x.id),sistema:"tradizionale",scelte:{},passo:0}});
   }
   function foglioRicette(){
     const d=S.sheet.d,R=window.CheMancaRicette;if(!R)return '<h2>Ricette</h2><p>Aggiorna i file dell’app per caricare il ricettario.</p><button class="link" data-a="chiudi">Chiudi</button>';
