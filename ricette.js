@@ -47,6 +47,12 @@ function proponiBase(pasto,persone,ids,sistema,attrezzature,scelte={}){
 }
 
 fonti.push({id:'amc-tempi',titolo:'AMC · tecniche e tabelle dei tempi (preparazioni adattate)',url:'https://it.amc.info/pages/download',documento:'Cucinare con AMC, tabella tempi 2023; EasyQuick, tabella pesce; ricetta AMC Petto di pollo',consultato:'2026-10-30'});
+fonti.push(
+ {id:'gz-orata-padella',titolo:'GialloZafferano · Filetti di orata e patate in padella (riferimento, adattato al piano)',url:'https://ricette.giallozafferano.it/Filetti-di-orata-e-patate-in-padella.html'},
+ {id:'misya-melanzane',titolo:'Misya · Melanzane in padella (riferimento, adattato al piano)',url:'https://www.misya.info/ricetta/melanzane-in-padella.htm'},
+ {id:'lci-melanzane',titolo:'La Cucina Italiana · Melanzane in padella (riferimento, adattato al piano)',url:'https://www.lacucinaitaliana.it/tutorial/i-consigli/melanzane-padella-ricette-facili-veloci/'},
+ {id:'cucchiaio-riso',titolo:'Cucchiaio d’Argento · Riso bollito, ricetta base (riferimento)',url:'https://www.cucchiaio.it/ricetta/ricetta-riso-bollito-ricetta-base/'}
+);
 const listaNomi=xs=>xs.map(x=>x.nome).join(', ');
 function verduraAMC(nome){const n=norm(nome);if(/melanzan/.test(n))return {taglio:'pezzetti di circa 1-2 cm',easy:8,trad:10};if(/zucchin/.test(n))return {taglio:'fette uniformi',easy:4,trad:5};if(/carot/.test(n))return {taglio:'fette di circa 1 cm',easy:12,trad:15,soft:1};if(/broccol/.test(n))return {taglio:'cimette',easy:10,trad:12,soft:0};if(/cavolfior/.test(n))return {taglio:'cimette',easy:12,trad:15,soft:0};if(/finocch/.test(n))return {taglio:'metà',easy:20,trad:25,soft:3};if(/peperon/.test(n))return {taglio:'listarelle',easy:8,trad:10};if(/zucca/.test(n))return {taglio:'cubetti',easy:12,trad:15};if(/fagiolin/.test(n))return {taglio:'pezzetti',easy:16,trad:20,soft:1};if(/patat/.test(n))return {taglio:'cubetti di circa 3 cm',trad:25,soft:3};return null;}
 function datiPasto(pasto,persone,ids,scelte){return (pasto.voci||[]).map((v,i)=>{const nome=categoria(v.nome)==='generica'?(scelte[i]||v.nome):v.nome;const dosi=ids.map(id=>({nome:persone.find(p=>p.id===id)?.nome||id,q:Number(v.q?.[id]||0)})).filter(x=>x.q>0);return {nome,origine:v.nome,indice:i,u:v.u,qty:dosi.reduce((a,b)=>a+b.q,0),dosi,cat:categoria(nome)};}).filter(x=>x.qty>0&&!scelte['escludi'+x.indice]);}
@@ -56,7 +62,7 @@ function analizza(pasto,persone,ids,sistema,a,scelte={}){
  if(!ids.length)return no('Scegli per chi cucinare.');
  const tutti=datiPasto(pasto,persone,ids,scelte);if(tutti.some(x=>x.cat==='generica'))return no('Scegli la verdura prevista per la voce generica. Le patate restano un ingrediente distinto.');
  if(sistema==='bimby'){const r=proponiBase(pasto,persone,ids,sistema,a,scelte);return {ricette:r,errore:r.length?'':'Per il vapore TM7 configura Bimby TM7 e Varoma e seleziona fino a 600 g di verdure supportate.'};}
- if(!['forno','amc'].includes(sistema))return no('Scegli un sistema di cottura supportato.');
+ if(!['forno','amc','tradizionale'].includes(sistema))return no('Scegli un sistema di cottura supportato.');
  if(sistema==='forno'&&a.forno===false)return no('Attiva il forno nelle attrezzature della tua cucina.');
  const usati=tutti.filter(x=>['verdure','pesce','hamburger','pollo','coscia','carne','pasta','riso'].includes(x.cat));if(!usati.length)return no('Non ci sono ancora preparazioni per gli ingredienti selezionati.');
  const verdure=usati.filter(x=>x.cat==='verdure'&&!/patat/.test(norm(x.nome))),patate=usati.filter(x=>/patat/.test(norm(x.nome))),pesce=usati.filter(x=>x.cat==='pesce'),carne=usati.filter(x=>['pollo','hamburger','coscia','carne'].includes(x.cat)),pasta=usati.filter(x=>x.cat==='pasta'),riso=usati.filter(x=>x.cat==='riso');
@@ -82,6 +88,36 @@ function analizza(pasto,persone,ids,sistema,a,scelte={}){
   }
   for(const x of carne){passi.push('Prepara '+x.nome+(x.cat==='hamburger'?' senza aggiungere pane, uova o formaggio.':' in pezzi di spessore uniforme.')+' Usa una teglia separata dai contorni. Cuoci indicativamente '+(x.cat==='coscia'?'40-55':'20-30')+' minuti a 200 °C e verifica almeno '+soglia(x)+' °C al cuore'+(x.cat==='carne'?', poi lascia riposare almeno 3 minuti':'')+'; se i contorni richiedono più tempo, finiscili separatamente.');usa('temperature');}
   if(pasta.length||riso.length)passi.push('Cuoci '+listaNomi([...pasta,...riso])+' separatamente in una pentola sul fornello, con acqua e tempo indicati sulla confezione. Non mettere cereali crudi in forno. Unisci al contorno cotto solo dopo aver suddiviso le dosi personali.');
+ }else if(sistema==='tradizionale'){
+  if(pesce.length&&scelte.formatoPesce==='intero')return no('Per la cucina tradizionale questa raccolta prevede filetti e tranci. Per il pesce intero seleziona Forno oppure scegli filetti.');
+  titolo=(pesce.length?listaNomi(pesce):carne.length?listaNomi(carne):pasta.length?listaNomi(pasta):riso.length?listaNomi(riso):'Verdure')+' in '+(pasta.length||riso.length?'pentola':'padella')+(patate.length?' con patate':'')+(verdure.length?' e '+listaNomi(verdure):'');
+  passi.push('Prepara una pentola con coperchio e una padella antiaderente adatte al gas. Regola la fiamma senza farla uscire dal fondo. Se le dosi non stanno in un solo strato, cuoci in più riprese: non moltiplicare automaticamente i tempi per il numero di persone.');
+  if(patate.length){passi.push('Patate: pela e taglia a cubetti di circa 2 cm. Mettile in pentola, coprile con acqua e porta a bollore a fiamma media. Abbassa e lascia sobbollire circa 12-18 minuti dal bollore, finché una forchetta entra al centro. Scola e tieni coperte; preparale prima del pesce. Non aggiungere patate crude alla sua cottura breve.');if(pesce.some(x=>/orata/.test(norm(x.nome))))usa('gz-orata-padella');}
+  for(const v of verdure){
+   const n=norm(v.nome);
+   let taglio='cubetti di 1-2 cm',tempo='15-20';
+   if(/zucchin/.test(n)){taglio='mezze rondelle di circa 5 mm';tempo='10-15';}
+   else if(/melanzan/.test(n)){tempo='15-25';usa('misya-melanzane','lci-melanzane');}
+   else if(/carot/.test(n)){taglio='rondelle sottili di circa 3 mm';tempo='15-20';}
+   else if(/broccol|cavolfior/.test(n)){taglio='cimette piccole di dimensioni simili';tempo=/broccol/.test(n)?'10-15':'15-20';}
+   else if(/finocch/.test(n)){taglio='spicchi sottili di circa 1 cm';tempo='20-25';}
+   else if(/peperon/.test(n)){taglio='listarelle di circa 1 cm, eliminando semi e filamenti';tempo='15-20';}
+   else if(/zucca/.test(n)){tempo='15-20';}
+   else if(/fagiolin/.test(n)){passi.push(v.nome+': spunta e lava. Lessa in una pentola con acqua in ebollizione per circa 15-20 minuti, verificando che siano teneri. Scola, conserva le dosi personali e tieni coperti.');continue;}
+   passi.push(v.nome+': lava, pulisci e taglia in '+taglio+'. Metti in una padella antiaderente con pochi cucchiai di acqua. Copri e cuoci a fiamma medio-bassa per circa '+tempo+' minuti, mescolando e aggiungendo poca acqua se il fondo si asciuga. Controlla la morbidezza; scopri alla fine per far evaporare l’acqua rimasta. Cuoci separatamente dagli altri contorni per rispettare i diversi tempi.');
+  }
+  if(pesce.length){preparaPesce();for(const x of pesce){
+   const gamberi=/gamber/.test(norm(x.nome));
+   passi.push(x.nome+': '+(gamberi?'sguscia e pulisci i gamberi.':'usa filetti o tranci di spessore uniforme e controlla le lische.')+' Scalda brevemente una padella antiaderente a fiamma media senza surriscaldarla vuota; usa soltanto una parte dell’olio già previsto dal piano oppure aggiungi poca acqua e copri. Adagia il pesce in un solo strato e abbassa la fiamma. Cuoci indicativamente '+(gamberi?'4-6 minuti complessivi':'6-12 minuti complessivi per filetti di circa 1-2 cm')+', girando delicatamente a metà. Verifica almeno 63 °C al cuore: lo spessore può richiedere più tempo. Patate e verdure restano già cotte e separate, da aggiungere al piatto alla fine.');if(/orata/.test(norm(x.nome)))usa('gz-orata-padella');usa('temperature');
+  }}
+  for(const x of carne){
+   const coscia=x.cat==='coscia',hamb=x.cat==='hamburger';
+   passi.push(x.nome+': '+(hamb?'forma hamburger uniformi di circa 1,5 cm con la sola carne prevista, senza pane, uova o formaggio.':coscia?'mantieni i pezzi di dimensioni simili.':'prepara fette o bocconcini di spessore uniforme, circa 1-2 cm.')+' In una padella antiaderente usa solo l’olio della quota giornaliera, senza impanare né aggiungere burro o vino. '+(coscia?'Rosola a fiamma media girando i pezzi, aggiungi acqua sul fondo, copri e prosegui a fiamma bassa per circa 35-50 minuti per il pollo; il tacchino può richiedere più tempo. Controlla il fondo e aggiungi poca acqua quando serve.':'Cuoci a fiamma media, girando a metà, indicativamente '+(hamb?'10-15':'8-15')+' minuti complessivi; abbassa se la superficie scurisce troppo e aggiungi poca acqua per terminare la cottura senza bruciare.')+' Verifica almeno '+soglia(x)+' °C al cuore'+(coscia?', lontano dall’osso':'')+(x.cat==='carne'?', poi lascia riposare almeno 3 minuti':'')+'. Il tempo è indicativo e va adattato allo spessore.');usa('temperature');
+  }
+  for(const x of [...pasta,...riso]){
+   passi.push(x.nome+': pesa separatamente la dose cruda di ogni persona. Porta una pentola d’acqua a bollore, versa il cereale e regola il gas per mantenere un bollore regolare. Segui acqua e tempo della confezione, assaggia e scola quando pronto. '+(x.cat==='riso'?'Basmati, integrale e riso per risotti hanno cotture diverse: questa proposta usa la lessatura, non il procedimento del risotto. ':'')+'Cuoci le dosi personali in pentole o riprese distinte; unisci solo dopo alle rispettive porzioni di verdure già cotte.');if(x.cat==='riso')usa('cucchiaio-riso');
+  }
+  note.push('Cucina tradizionale con pentole e padelle comuni sul gas. Preparazione originale adattata agli ingredienti e alle dosi del piano; i link sono riferimenti di tecnica e ispirazione, non la ricetta originale riprodotta. Gli ingredienti aggiuntivi delle fonti non vengono importati. Tempi indicativi per i tagli descritti; con una sola padella prepara prima i contorni.');
  }else{
   let metodo=scelte.metodoAMC||'automatico';
   if(metodo==='automatico')metodo=(a.easyquick&&a.inserto&&a.navigenio&&!patate.length&&!carne.length&&!pasta.length&&!riso.length&&pesce.every(x=>/merluzzo|salmone|gamber/.test(norm(x.nome))))?'easyquick':'tradizionale';
