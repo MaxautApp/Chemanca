@@ -1,6 +1,12 @@
 /* CheManca? - archivio familiare: identità anonima autorizzata, revisioni e RPC. */
 (function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory();else root.CheMancaCloud=factory();})(typeof window!=='undefined'?window:this,function(){
   'use strict';
+  // Limita anche le attese interne dell'SDK (recupero token e lock di sessione).
+  // Un timeout non annulla né ripete una scrittura: l'UUID pendente resta verificabile.
+  async function attendi(richiesta,descrizione,ms=20000){
+    let timer;try{return await Promise.race([Promise.resolve(richiesta),new Promise((_,ko)=>{timer=setTimeout(()=>{const e=Error(descrizione+' non risponde. Chiudi completamente l’app e riaprila, poi riprova. Nessun dato è stato cancellato.');e.code='CM_TIMEOUT';ko(e);},ms);})]);}finally{clearTimeout(timer);}
+  }
+
   const copia=x=>JSON.parse(JSON.stringify(x));
   const uguali=(a,b)=>JSON.stringify(a??null)===JSON.stringify(b??null);
   function crea(o){
@@ -25,7 +31,7 @@
     }
     async function leggi(){
       const g=generazione;
-      const {data,error}=await sb.from('cm_famiglie').select('id,dati,revisione,nome').eq('id',famiglia).maybeSingle();controllo(g);
+      const {data,error}=await attendi(sb.from('cm_famiglie').select('id,dati,revisione,nome').eq('id',famiglia).maybeSingle(),'La lettura dell’archivio familiare',o.timeoutMs);controllo(g);
       if(error)throw error;
       if(!data){revoca('Questo telefono non è più autorizzato. Richiedi un nuovo collegamento.');throw Error('Accesso alla famiglia non disponibile');}
       pubblica(data);return copia(db);
@@ -37,7 +43,7 @@
     }
     async function invia(p){
       const g=generazione;
-      const {data,error}=await sb.rpc('cm_salva_archivio',p);controllo(g);
+      const {data,error}=await attendi(sb.rpc('cm_salva_archivio',p),'Il salvataggio familiare',o.timeoutMs);controllo(g);
       if(error){
         if(error.code==='40001'||error.code==='22023'){storage.removeItem(chiave());await leggi();o.onConflitto?.();const e=Error(error.code==='40001'?'Dati aggiornati dall’altro telefono. Controlla e ripeti la modifica.':'Richiesta non valida: controlla i dati e riprova.');e.code=error.code;throw e;}
         if(error.code==='42501'){storage.removeItem(chiave());revoca('Collegamento non più autorizzato');}
@@ -78,17 +84,17 @@
           fase('iniziale','Controllo del collegamento');
           try{
             if(!online())throw Error('Collegati a Internet per aprire la famiglia');
-            const {data,error}=await sb.auth.getSession();if(error)throw error;
+            const {data,error}=await attendi(sb.auth.getSession(),'La verifica della sessione',o.timeoutMs);if(error)throw error;
             user=data.session?.user||null;
             if(!user){fase('senza_sessione');return false;}
             const g=generazione;
-            const m=await sb.from('cm_membri').select('famiglia_id').eq('user_id',user.id).maybeSingle();controllo(g);
+            const m=await attendi(sb.from('cm_membri').select('famiglia_id').eq('user_id',user.id).maybeSingle(),'La verifica del collegamento familiare',o.timeoutMs);controllo(g);
             if(m.error)throw m.error;
             if(!m.data){fase('non_collegato','Telefono in attesa di autorizzazione');return false;}
             famiglia=m.data.famiglia_id;
             try{await risolviPendente();}catch(e){if(!['40001','22023'].includes(e.code))throw e;}
             await leggi();fase('pronto');return true;
-          }catch(e){fase('errore',e.message||'Collegamento non riuscito');return false;}
+          }catch(e){fase(e.code==='CM_TIMEOUT'?'errore_temporaneo':'errore',e.message||'Collegamento non riuscito');return false;}
         });
       },
       codiceRicordato,
@@ -99,7 +105,7 @@
         if(!/^[0-9A-F]{20}$/.test(normalizzato))throw Error('Inserisci il codice familiare completo: 5 gruppi di 4 caratteri.');
         if(!online())throw Error('Collegati a Internet per verificare il codice.');
         await api.identifica(true);
-        const {data,error}=await sb.rpc('cm_collega_con_codice',{p_codice:normalizzato});
+        const {data,error}=await attendi(sb.rpc('cm_collega_con_codice',{p_codice:normalizzato}),'La verifica del codice familiare',o.timeoutMs);
         if(error){const e=Error(error.code==='PGRST202'?'Accesso con codice da attivare su Supabase: esegui prima le query 05 e 06.':error.message||'Verifica del codice non riuscita');throw e;}
         if(!data?.ok){storage.setItem(chiaveStop,'1');throw Error(data?.messaggio||'Codice non valido');}
         if(ricorda){storage.setItem(chiaveCodice,normalizzato);storage.removeItem(chiaveStop);}else api.dimenticaCodice();
@@ -108,15 +114,15 @@
       async identifica(recupera=false){
         // Verifica prima che la sessione possa essere conservata nel browser.
         storage.setItem('cm_verifica_storage','1');storage.removeItem('cm_verifica_storage');
-        let {data:esistente,error:erroreSessione}=await sb.auth.getSession();
+        let {data:esistente,error:erroreSessione}=await attendi(sb.auth.getSession(),'La verifica della sessione',o.timeoutMs);
         if(erroreSessione){
           const scaduta=['refresh_token_not_found','refresh_token_already_used','session_not_found','session_expired'].includes(erroreSessione.code)||erroreSessione.name==='AuthSessionMissingError'||erroreSessione.status===401;
           if(!recupera||!scaduta)throw erroreSessione;
-          const {error:uscita}=await sb.auth.signOut({scope:'local'});
+          const {error:uscita}=await attendi(sb.auth.signOut({scope:'local'}),'La chiusura della sessione',o.timeoutMs);
           if(uscita && ![401,403,404].includes(uscita.status) && uscita.name!=='AuthSessionMissingError')throw uscita;
           esistente={session:null};
         }
-        if(!esistente.session){const {error}=await sb.auth.signInAnonymously();if(error)throw Error('Non riesco a collegare il telefono. Verifica che Anonymous Sign-Ins sia attivo in Supabase. '+error.message);}
+        if(!esistente.session){const {error}=await attendi(sb.auth.signInAnonymously(),'Il servizio di accesso',o.timeoutMs);if(error)throw Error('Non riesco a collegare il telefono. Verifica che Anonymous Sign-Ins sia attivo in Supabase. '+error.message);}
         return api.inizializza();
       },
       carica(){return accoda(async()=>{connesso();await risolviPendente();return leggi();});},
@@ -135,7 +141,7 @@
         await coda;const k=user&&famiglia?chiave():null;
         if(k&&storage.getItem(k))throw Error('Prima verifica il salvataggio in sospeso: usa Aggiorna famiglia');
         api.dimenticaCodice();
-        const {error}=await sb.auth.signOut({scope:'local'});if(error)throw error;
+        const {error}=await attendi(sb.auth.signOut({scope:'local'}),'La chiusura della sessione',o.timeoutMs);if(error)throw error;
         user=null;revoca('Telefono scollegato. Al prossimo accesso occorrerà una nuova autorizzazione.');fase('senza_sessione');
       },
       notificaRete(){stato={...stato,online:online()};notifica();if(online()&&aggiorna)aggiorna();},

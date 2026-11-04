@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "31.10.2026 · 45";
+  const VERSIONE = "04.11.2026 · 46";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -3625,7 +3625,7 @@
     S.erroreCodice="";S.collegando=true;render();
     try {
       let pronto=codice!==null?await A.accediConCodice(codice,ricorda):await A.inizializza();
-      if(!pronto && codice===null && A.recuperoAutomatico?.())pronto=await A.accediConCodice(A.codiceRicordato(),true);
+      if(!pronto && codice===null && A.stato().fase!=="errore_temporaneo" && A.recuperoAutomatico?.())pronto=await A.accediConCodice(A.codiceRicordato(),true);
       if(pronto){S.codiceIngresso=null;S.db=A.istantanea();if(!cloudAvviato){cloudAvviato=true;await avvioDati();}else{dopoModifica(false);A.ascolta(ricaricaPresto);}}else render();
     }catch(e){toast(e.message||"Collegamento non riuscito");S.erroreCodice=e.message;render();}
     finally{S.collegando=false;render();}
@@ -3638,7 +3638,7 @@
   async function avvioDati() {
     // la Light si apre sulla Home di oggi
     if (light()) S.tab = "oggi";
-    try { S.pianoFile = await (await fetch("piano.json", { cache: "no-cache" })).json(); }
+    try { S.pianoFile = await (await fetch("piano.json", { cache: "no-cache", signal: AbortSignal.timeout(15000) })).json(); }
     catch { S.pianoFile = null; }
     try { S.db = await A.carica(); }
     catch (e) { console.error(e); S.erroreSalvataggio = e.message || String(e); toast(S.erroreSalvataggio); }
