@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "06.11.2026 · 47";
+  const VERSIONE = "06.11.2026 · 48";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -1073,7 +1073,7 @@
     await salva("fitness", [{ id: d.id || uid(), data: d.data, dalle: d.dalle, alle: d.alle, tipo, dopo: d.dopo, persone: d.persone, chi: S.chi || "", quando: new Date().toISOString() }]);
     chiudiFoglio();
     render();
-    toast(`${tipo} ${d.dalle}–${d.alle} aggiunto`);
+    toast(`${tipo} ${d.dalle}–${d.alle} ${d.id ? "aggiornato" : "aggiunto"}`);
   }
 
   /* ---------------- la matita: cosa ho mangiato davvero ---------------- */
@@ -1407,7 +1407,7 @@
       if (!giorno) { giorno = { data: f.data, pasti: [] }; giorni.push(giorno); }
       attivita++; minuti += minutiFitness(f);
       giorno.pasti.push({
-        fitness: true, pasto: "Fitness", stato: durata(minutiFitness(f)), piatti: [], libero: false, nota: "",
+        id: f.id, fitness: true, pasto: "Fitness", stato: durata(minutiFitness(f)), piatti: [], libero: false, nota: "",
         cibi: [`${f.tipo} · ${f.dalle}–${f.alle}${persone().length > 1 ? " · " + ids.map(nomeDi).join(", ") : ""}`],
         ordine: (f.dopo && f.dopo !== "inizio" ? L.ORA[f.dopo] : 0) + 0.1 + oreDi(f.dalle) / 100,
       });
@@ -1485,7 +1485,7 @@
     for (const g of [...rep.giorni].reverse()) {
       h += `<section class="giorno-storico"><h3>${esc(dataLunga(g.data))}</h3><button class="link" data-a="fitness-apri" data-d="${esc(g.data)}">Aggiungi attività fisica</button>`;
       for (const p of g.pasti) {
-        if (p.fitness) { h += `<div class="pasto-storico fit"><span class="t"><span>${ico("fitness", 15)} Fitness</span><span class="pill fit">${esc(p.stato)}</span></span><span class="cibi">${esc(p.cibi[0])}</span></div>`; continue; }
+        if (p.fitness) { h += `<div class="pasto-storico fit"><span class="t"><span>${ico("fitness", 15)} Fitness</span><span class="pill fit">${esc(p.stato)}</span></span><span class="cibi">${esc(p.cibi[0])}</span><button class="link" data-a="fitness-apri" data-id="${esc(p.id)}">Modifica</button></div>`; continue; }
         h += `<div class="pasto-storico"><span class="t"><span>${esc(p.pasto)}${p.piatti.length ? " · " + esc(p.piatti.join(", ")) : ""}</span>${p.automatico ? "" : `<span class="pill ${p.stato === "saltato" ? "grigio" : "ok"}">${esc(p.stato)}</span>`}</span>
           <span class="cibi">${p.libero ? "Pasto libero" : esc(p.cibi.join(" · ")) || "—"}</span>${p.nota ? `<span class="cibi nota-st">${ico("matita", 13)} ${esc(p.nota)}</span>` : ""}<button class="link" data-a="nota-apri" data-k="${esc(p.id)}">${p.libero && !p.nota ? "Scrivi cosa hai mangiato" : "Modifica"}</button></div>`;
       }
@@ -1537,8 +1537,8 @@
     if(!settimane.length)h+='<p>Nessun pasto registrato nel periodo.</p>';
     for(const settimana of settimane){
       h+='<section class="settimana-report"><h2>Settimana '+esc(ddmm(settimana.dal))+' - '+esc(ddmm(L.piuGiorni(settimana.dal,6)))+'</h2><table class="tabella-settimana"><thead><tr><th>Pasto</th>'+settimana.giorni.map(g=>'<th>'+esc(g.nome)+'<br>'+esc(ddmm(g.data))+'</th>').join('')+'</tr></thead><tbody>';
-      for(const r of settimana.righe)h+='<tr><th scope="row">'+esc(r.titolo)+'</th>'+r.celle.map((c,i)=>'<td'+(settimana.giorni[i].fuori?' class="fuori-periodo"':'')+'>'+(c.length?c.map(esc).join('<br>'):'—')+'</td>').join('')+'</tr>';
-      h+='</tbody></table><p class="sotto">Celle con «—»: nessun pasto registrato. Sono riportati solo i dati del periodo selezionato.</p></section>';
+      for(const r of settimana.righe)h+='<tr><th scope="row">'+esc(r.titolo)+'</th>'+r.celle.map((c,i)=>'<td'+(settimana.giorni[i].fuori?' class="fuori-periodo"':r.evidenziate[i]?' class="pasto-modificato-report"':'')+'>'+(c.length?c.map(esc).join('<br>'):'—')+'</td>').join('')+'</tr>';
+      h+='</tbody></table><p class="sotto">Giallo / MODIFICATO: pasti con variazioni, sostituzioni, integrazioni o saltati. Celle con «—»: nessun pasto registrato. Sono riportati solo i dati del periodo selezionato.</p></section>';
     }
     return h+'<p class="report-fonte">I pasti seguono il piano salvato e le modifiche registrate. Generato da CheManca? il '+esc(new Date().toLocaleDateString('it-IT'))+'.</p>';
   }

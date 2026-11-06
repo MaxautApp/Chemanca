@@ -9,8 +9,10 @@
   const giorni=['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
   const ordine=['Colazione','Metà mattina','Pranzo','Merenda','Cena','Fuori pasto'];
   const pulisci=s=>String(s??'').replace(/[–—−]/g,'-').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/…/g,'...').replace(/[^\x09\x0A\x0D\x20-\xFF]/g,'?');
+  function modificato(p){return !p.fitness && (!!p.cambiato || p.stato==='saltato' || (!!p.nota && !p.libero));}
   function righePasto(p){
     const out=[];
+    if(modificato(p))out.push('MODIFICATO');
     if(p.stato==='saltato')out.push('Saltato');
     if(p.libero)out.push('Pasto libero');
     if(p.piatti?.length)out.push(p.piatti.join(', '));
@@ -28,7 +30,7 @@
     }
     return [...map.values()].sort((a,b)=>a.dal.localeCompare(b.dal)).map(s=>{
       const nomi=[...new Set(s.giorni.flatMap(g=>g.pasti.map(p=>p.pasto)))];
-      s.righe=nomi.sort((a,b)=>{const ia=ordine.indexOf(a),ib=ordine.indexOf(b);return(ia<0?99:ia)-(ib<0?99:ib);}).map(pasto=>({pasto,titolo:pasto==='Fuori pasto'?'Condimenti / Fuori pasto':pasto,celle:s.giorni.map(g=>g.fuori?['Fuori periodo']:g.pasti.filter(p=>p.pasto===pasto).flatMap(righePasto))}));
+      s.righe=nomi.sort((a,b)=>{const ia=ordine.indexOf(a),ib=ordine.indexOf(b);return(ia<0?99:ia)-(ib<0?99:ib);}).map(pasto=>({pasto,titolo:pasto==='Fuori pasto'?'Condimenti / Fuori pasto':pasto,celle:s.giorni.map(g=>g.fuori?['Fuori periodo']:g.pasti.filter(p=>p.pasto===pasto).flatMap(righePasto)),evidenziate:s.giorni.map(g=>!g.fuori && g.pasti.some(p=>p.pasto===pasto && modificato(p)))}));
       return s;
     });
   }
@@ -83,15 +85,15 @@
     if(!weeks.length){sezione('Pasti registrati');par('Nessun pasto registrato nel periodo.');}
     for(const week of weeks){
       let continua=false;
-      const testa=()=>{nuova('Settimana '+breve(week.dal)+' - '+breve(piu(week.dal,6))+(continua?' (segue)':''));par(titolo,10,true);for(let i=0;i<8;i++){const x=M+(i?lw+(i-1)*cw:0),w=i?cw:lw;pagina.drawRectangle({x,y:y-29,width:w,height:29,color:verde});if(!i)testo('PASTO',x+5,y-18,8,true,rgb(1,1,1));else{testo(week.giorni[i-1].nome,x+5,y-11,8,true,rgb(1,1,1));testo(breve(week.giorni[i-1].data),x+5,y-22,8,false,rgb(1,1,1));}}y-=29;};
+      const testa=()=>{nuova('Settimana '+breve(week.dal)+' - '+breve(piu(week.dal,6))+(continua?' (segue)':''));par(titolo,10,true);par('Giallo / MODIFICATO: variazioni, sostituzioni, integrazioni o pasti saltati.',8,false,muted);for(let i=0;i<8;i++){const x=M+(i?lw+(i-1)*cw:0),w=i?cw:lw;pagina.drawRectangle({x,y:y-29,width:w,height:29,color:verde});if(!i)testo('PASTO',x+5,y-18,8,true,rgb(1,1,1));else{testo(week.giorni[i-1].nome,x+5,y-11,8,true,rgb(1,1,1));testo(breve(week.giorni[i-1].data),x+5,y-22,8,false,rgb(1,1,1));}}y-=29;};
       testa();
       for(const row of week.righe){const celle=row.celle.map(c=>righe(c.length?c.join('\n'):'-',cw-2*pad,fs));const label=righe(row.titolo,lw-2*pad,8,true);const n=Math.max(...celle.map(c=>c.length),label.length);let offset=0;
-        while(offset<n){let cap=Math.floor((y-M-20-2*pad)/leading);if(cap<Math.min(n-offset,4)){continua=true;testa();cap=Math.floor((y-M-20-2*pad)/leading);}const take=Math.min(n-offset,cap),h=Math.max(take*leading+2*pad,30);for(let i=0;i<8;i++){const x=M+(i?lw+(i-1)*cw:0),w=i?cw:lw,fuori=i&&week.giorni[i-1].fuori;pagina.drawRectangle({x,y:y-h,width:w,height:h,borderColor:line,borderWidth:.5,color:i?(fuori?rgb(.94,.94,.94):rgb(1,1,1)):rgb(.92,.95,.93)});const lines=i?celle[i-1].slice(offset,offset+take):offset?righe(row.titolo+' (segue)',lw-2*pad,8,true):label;for(let j=0;j<lines.length;j++)testo(lines[j],x+pad,y-pad-(j+1)*leading,i?fs:8,!i,fuori?muted:ink);}y-=h;offset+=take;if(offset<n){continua=true;testa();}}
+        while(offset<n){let cap=Math.floor((y-M-20-2*pad)/leading);if(cap<Math.min(n-offset,4)){continua=true;testa();cap=Math.floor((y-M-20-2*pad)/leading);}const take=Math.min(n-offset,cap),h=Math.max(take*leading+2*pad,30);for(let i=0;i<8;i++){const x=M+(i?lw+(i-1)*cw:0),w=i?cw:lw,fuori=i&&week.giorni[i-1].fuori;pagina.drawRectangle({x,y:y-h,width:w,height:h,borderColor:line,borderWidth:.5,color:i?(fuori?rgb(.94,.94,.94):row.evidenziate[i-1]?rgb(1,.94,.65):rgb(1,1,1)):rgb(.92,.95,.93)});const lines=i?celle[i-1].slice(offset,offset+take):offset?righe(row.titolo+' (segue)',lw-2*pad,8,true):label;for(let j=0;j<lines.length;j++)testo(lines[j],x+pad,y-pad-(j+1)*leading,i?fs:8,!i,fuori?muted:ink);}y-=h;offset+=take;if(offset<n){continua=true;testa();}}
       }
       y-=15;par('Sono riportati solo i pasti registrati nel periodo. Celle con "-": nessun pasto registrato.',8,false,muted);
     }
     const pages=doc.getPages();for(let i=0;i<pages.length;i++){pagina=pages[i];testo('CheManca? - Generato il '+new Date().toLocaleDateString('it-IT'),M,16,8,false,muted);testo((i+1)+' / '+pages.length,W-M-40,16,8,false,muted);}
     doc.setTitle(titolo);doc.setAuthor('CheManca?');return doc.save();
   }
-  return {settimane,righePasto,crea};
+  return {settimane,righePasto,modificato,crea};
 });

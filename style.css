@@ -558,3 +558,8 @@ button:focus-visible, summary:focus-visible { outline:3px solid var(--green); ou
   #stampa .tabella-settimana tbody th { background:#EDF3EF!important; print-color-adjust:exact; }
   #stampa .tabella-settimana .fuori-periodo { color:#777; background:#eee!important; print-color-adjust:exact; }
 }
+
+/* Il testo MODIFICATO resta leggibile anche nelle stampe senza sfondi. */
+@media print {
+  #stampa .tabella-settimana td.pasto-modificato-report { background:#FFF0A6!important; color:#20251F!important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}
