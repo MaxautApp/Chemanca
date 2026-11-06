@@ -45,7 +45,7 @@
       const g=generazione;
       const {data,error}=await attendi(sb.rpc('cm_salva_archivio',p),'Il salvataggio familiare',o.timeoutMs);controllo(g);
       if(error){
-        if(error.code==='40001'||error.code==='22023'){storage.removeItem(chiave());await leggi();o.onConflitto?.();const e=Error(error.code==='40001'?'Dati aggiornati dall’altro telefono. Controlla e ripeti la modifica.':'Richiesta non valida: controlla i dati e riprova.');e.code=error.code;throw e;}
+        if(['PT409','40001','22023'].includes(error.code)){storage.removeItem(chiave());await leggi();o.onConflitto?.();const e=Error(['PT409','40001'].includes(error.code)?'Archivio aggiornato. Controlla i dati correnti e ripeti la modifica.':'Richiesta non valida: controlla i dati e riprova.');e.code=error.code;throw e;}
         if(error.code==='42501'){storage.removeItem(chiave());revoca('Collegamento non più autorizzato');}
         throw error;
       }
@@ -92,7 +92,7 @@
             if(m.error)throw m.error;
             if(!m.data){fase('non_collegato','Telefono in attesa di autorizzazione');return false;}
             famiglia=m.data.famiglia_id;
-            try{await risolviPendente();}catch(e){if(!['40001','22023'].includes(e.code))throw e;}
+            try{await risolviPendente();}catch(e){if(!['PT409','40001','22023'].includes(e.code))throw e;}
             await leggi();fase('pronto');return true;
           }catch(e){fase(e.code==='CM_TIMEOUT'?'errore_temporaneo':'errore',e.message||'Collegamento non riuscito');return false;}
         });

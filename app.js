@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "04.11.2026 · 46";
+  const VERSIONE = "06.11.2026 · 47";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -1945,6 +1945,8 @@
   }
   async function salvaStatoLight(stato) {
     assicuraScorteLight(stato);
+    const precedente=S.db.piano.find(x=>x.id==="spesa_light");
+    if(precedente && JSON.stringify(precedente.dati)===JSON.stringify(stato))return;
     await salva("piano", [{ id: "spesa_light", dati: stato, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
   }
   async function assicuraSpesaLight() {
