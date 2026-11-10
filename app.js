@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "10.11.2026 · 50";
+  const VERSIONE = "10.11.2026 · 51";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -1160,6 +1160,9 @@
     const r=db.pasti.find(x=>x.id===L.chiavePasto(data,pasto));
     return (data<oggi()?r?.stato==="da_correggere":!r) && !!pastoDi(data,pasto,db);
   }
+  function selezionabileInverti(data,pasto) {
+    return PASTI_SCAMBIABILI.includes(pasto) && !!pastoDi(data,pasto);
+  }
   function foglioInverti() {
     const d = S.sheet.d;
     const giorni = [...new Set([d.dataA,...Array.from({length:14},(_,i)=>L.piuGiorni(oggi(),i-7))])].sort();
@@ -1168,12 +1171,19 @@
       return `<div class="scheda-pasto"><small>${esc(cap(L.nomeGiorno(data, oggi())))} · ${esc(pasto.toLowerCase())}</small><b>${p ? esc(p.libero ? "Pasto libero" : descrPasto(p)) : "—"}</b></div>`;
     };
     const chips = (chiave, dataSel) => PASTI_SCAMBIABILI.map((ps) => {
-      const ok = scambiabile(dataSel, ps);
+      const ok = selezionabileInverti(dataSel, ps);
       const on = d[chiave] === ps;
       return `<button type="button" class="chip ${on ? "scelto" : ""}" data-a="inv-pasto" data-q="${chiave}" data-v="${ps}" ${ok ? "" : "disabled"}>${ps}</button>`;
     }).join("");
     const uguale = d.dataA === d.dataB && d.pastoA === d.pastoB;
     const valido = !uguale && scambiabile(d.dataA, d.pastoA) && scambiabile(d.dataB, d.pastoB);
+    const sblocchi=[['A',d.dataA,d.pastoA],['B',d.dataB,d.pastoB]].filter((x,i,a)=>a.findIndex(y=>y[1]===x[1]&&y[2]===x[2])===i).map(([q,data,nome])=>{
+      if(scambiabile(data,nome))return '';
+      const r=S.db.pasti.find(x=>x.id===L.chiavePasto(data,nome));
+      if(!pastoDi(data,nome))return `<p class="avviso giallo" role="status">${esc(nome)} del ${esc(ddmm(data))}: nessun pasto disponibile nel piano.</p>`;
+      if(data<oggi()&&!r)return `<p class="avviso giallo" role="status">${esc(nome)} del ${esc(ddmm(data))}: riapri il pasto registrato dal Piano prima di invertirlo.</p>`;
+      return `<div class="avviso giallo"><div><p>${esc(nome)} del ${esc(ddmm(data))} risulta ancora registrato. Annulla la conferma per poterlo scambiare.</p><button class="btn piccolo sec" data-a="inv-annulla" data-k="${esc(L.chiavePasto(data,nome))}">Annulla Fatto! per questo pasto</button></div></div>`;
+    }).join('');
     return `<h2>Inverti pasti</h2>
       <p class="sotto">Scambia due pasti tra loro: nello stesso giorno (pranzo e cena) o tra giorni diversi (due cene, due colazioni…). Per i giorni passati, premi prima Annulla «fatto» su entrambi i pasti da scambiare. Poi confermali di nuovo con Fatto! Spesa e dispensa si ricalcolano da sole.</p>
       <div class="campo"><span>Questo pasto di ${esc(L.nomeGiorno(d.dataA, oggi()))}</span><div class="chips">${chips("pastoA", d.dataA)}</div></div>
@@ -1182,6 +1192,8 @@
         <div class="chips">${chips("pastoB", d.dataB)}</div></div>
       <div class="scambio-pasti">${scheda(d.dataA, d.pastoA)}<span aria-hidden="true">${ico("inverti", 22)}</span>${scheda(d.dataB, d.pastoB)}</div>
       ${uguale ? `<p class="sotto" style="text-align:center">Scegli un pasto diverso.</p>` : ""}
+      ${sblocchi}
+      ${valido?'<p class="sotto" role="status">Entrambi i pasti sono disponibili: puoi premere Inverti.</p>':""}
       <p style="font-size:12px;color:var(--muted)">Le norme del piano chiedono di non spostare alimenti o giorni senza l'indicazione della dietista: nel dubbio, chiedi a lei.</p>
       <button class="btn largo" data-a="inv-conferma" ${valido ? "" : "disabled"}>Inverti</button>
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
@@ -3276,12 +3288,19 @@
         apriFoglio({ tipo: "inverti", d: { dataA: data, pastoA, dataB: data, pastoB } });
         break;
       }
+      case "inv-annulla": {
+        const foglio=S.sheet;
+        if(![L.chiavePasto(d.dataA,d.pastoA),L.chiavePasto(d.dataB,d.pastoB)].includes(b.dataset.k))break;
+        await annullaPasto(b.dataset.k);
+        if(S.sheet===foglio){if(condiviso)foglio._cloudRevisione=A.stato().revisione;renderFoglio();}
+        break;
+      }
       case "inv-pasto": d[b.dataset.q] = b.dataset.v; renderFoglio(); break;
       case "inv-giorno": {
         d.dataB = b.dataset.v;
-        if (!scambiabile(d.dataB, d.pastoB)) d.pastoB = PASTI_SCAMBIABILI.find((ps) => scambiabile(d.dataB, ps)) || d.pastoB;
+        if (!selezionabileInverti(d.dataB, d.pastoB)) d.pastoB = PASTI_SCAMBIABILI.find((ps) => selezionabileInverti(d.dataB, ps)) || d.pastoB;
         // tra due giorni diversi di solito si scambia lo stesso pasto (cena con cena)
-        if (d.dataB !== d.dataA && scambiabile(d.dataB, d.pastoA)) d.pastoB = d.pastoA;
+        if (d.dataB !== d.dataA && selezionabileInverti(d.dataB, d.pastoA)) d.pastoB = d.pastoA;
         renderFoglio(); break;
       }
       case "inv-conferma": await confermaInverti(); break;
