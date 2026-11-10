@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "10.11.2026 · 49";
+  const VERSIONE = "10.11.2026 · 50";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -985,8 +985,9 @@
       h += `</section>`;
       h += schedeFitness(sel, p.pasto);
     }
-    h += `<div class="${sel >= oggi() ? "due" : ""}">
-      ${sel >= oggi() ? `<button class="btn sec" data-a="inverti-apri" data-d="${sel}">${ico("inverti", 18)} Inverti pasti</button>` : ""}
+    const puoInvertire=sel>=oggi() || PASTI_SCAMBIABILI.some(ps=>scambiabile(sel,ps));
+    h += `<div class="${puoInvertire ? "due" : ""}">
+      ${puoInvertire ? `<button class="btn sec" data-a="inverti-apri" data-d="${sel}">${ico("inverti", 18)} Inverti pasti</button>` : ""}
       <button class="btn fitness" data-a="fitness-apri" data-d="${sel}">${ico("fitness", 18)} Fitness</button>
     </div>`;
     return h + `</div>`;
@@ -1148,16 +1149,20 @@
      giovedì passa a venerdì e quella di venerdì a giovedì. Si usano i "cambi" del piano, quindi
      spesa e dispensa si ricalcolano e tutto si può rimettere a posto. */
   const PASTI_SCAMBIABILI = ["Colazione", "Metà mattina", "Pranzo", "Merenda", "Cena"];
-  function pastoDi(data, pasto) {
-    const g = L.giornoPiano(S.piano, data);
+  function pastoDi(data, pasto, db=S.db) {
+    const r=db.pasti.find(x=>x.id===L.chiavePasto(data,pasto));
+    if(data<oggi() && r?.contenuto)return {...r.contenuto,pasto};
+    const g = S.piano && L.giornoPiano(S.piano, data);
     return g && g.pasti.find((x) => x.pasto === pasto);
   }
-  function scambiabile(data, pasto) {
-    return data >= oggi() && !statiPasti()[L.chiavePasto(data, pasto)] && !!pastoDi(data, pasto);
+  function scambiabile(data, pasto, db=S.db) {
+    if(!PASTI_SCAMBIABILI.includes(pasto))return false;
+    const r=db.pasti.find(x=>x.id===L.chiavePasto(data,pasto));
+    return (data<oggi()?r?.stato==="da_correggere":!r) && !!pastoDi(data,pasto,db);
   }
   function foglioInverti() {
     const d = S.sheet.d;
-    const giorni = [0, 1, 2, 3, 4, 5, 6].map((i) => L.piuGiorni(oggi(), i));
+    const giorni = [...new Set([d.dataA,...Array.from({length:14},(_,i)=>L.piuGiorni(oggi(),i-7))])].sort();
     const scheda = (data, pasto) => {
       const p = pastoDi(data, pasto);
       return `<div class="scheda-pasto"><small>${esc(cap(L.nomeGiorno(data, oggi())))} · ${esc(pasto.toLowerCase())}</small><b>${p ? esc(p.libero ? "Pasto libero" : descrPasto(p)) : "—"}</b></div>`;
@@ -1170,7 +1175,7 @@
     const uguale = d.dataA === d.dataB && d.pastoA === d.pastoB;
     const valido = !uguale && scambiabile(d.dataA, d.pastoA) && scambiabile(d.dataB, d.pastoB);
     return `<h2>Inverti pasti</h2>
-      <p class="sotto">Scambia due pasti tra loro: nello stesso giorno (pranzo e cena) o tra giorni diversi (due cene, due colazioni…). Spesa e dispensa si ricalcolano da sole.</p>
+      <p class="sotto">Scambia due pasti tra loro: nello stesso giorno (pranzo e cena) o tra giorni diversi (due cene, due colazioni…). Per i giorni passati, premi prima Annulla «fatto» su entrambi i pasti da scambiare. Poi confermali di nuovo con Fatto! Spesa e dispensa si ricalcolano da sole.</p>
       <div class="campo"><span>Questo pasto di ${esc(L.nomeGiorno(d.dataA, oggi()))}</span><div class="chips">${chips("pastoA", d.dataA)}</div></div>
       <div class="campo"><span>Con il pasto di</span>
         <div class="giorni mini">${giorni.map((g) => `<button type="button" data-a="inv-giorno" data-v="${g}" aria-pressed="${g === d.dataB}"><small>${esc(cap(L.nomeGiorno(g, oggi())).slice(0, 10))}</small><b>${esc(L.etichettaData(g))}</b></button>`).join("")}</div>
@@ -1183,14 +1188,25 @@
   }
   async function confermaInverti() {
     const d = S.sheet.d;
-    const a = pastoDi(d.dataA, d.pastoA), b = pastoDi(d.dataB, d.pastoB);
-    const kA = L.chiavePasto(d.dataA, d.pastoA), kB = L.chiavePasto(d.dataB, d.pastoB);
-    const contenuto = (p) => ({ libero: !!p.libero, piatti: p.piatti || [], voci: p.voci || [] });
-    const pp = JSON.parse(JSON.stringify(pianoSalvato()));
-    pp.cambi = { ...(pp.cambi || {}) };
-    pp.cambi[kA] = { ...contenuto(b), pasto: d.pastoA, spostato: kB, coppia: kB };
-    pp.cambi[kB] = { ...contenuto(a), pasto: d.pastoB, spostato: kA, coppia: kA };
-    await salva("piano", [{ id: "attuale", dati: pp, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
+    const kA=L.chiavePasto(d.dataA,d.pastoA),kB=L.chiavePasto(d.dataB,d.pastoB);
+    if(kA===kB)throw Error("Scegli due pasti diversi");
+    await operazionePasti(db=>{
+      if(!scambiabile(d.dataA,d.pastoA,db)||!scambiabile(d.dataB,d.pastoB,db))throw Error("Per invertire un pasto passato premi prima Annulla «fatto». Controlla entrambi i pasti selezionati.");
+      const a=pastoDi(d.dataA,d.pastoA,db),b=pastoDi(d.dataB,d.pastoB,db);
+      const contenuto=p=>({libero:!!p.libero,piatti:p.piatti||[],voci:p.voci||[]});
+      const pp=JSON.parse(JSON.stringify(db.piano.find(x=>x.id==="attuale")?.dati||pianoSalvato()));
+      if(!pp)throw Error("Non trovo il piano da aggiornare");
+      pp.cambi={...(pp.cambi||{})};
+      pp.cambi[kA]={...contenuto(b),pasto:d.pastoA,spostato:kB,coppia:kB};
+      pp.cambi[kB]={...contenuto(a),pasto:d.pastoB,spostato:kA,coppia:kA};
+      scriviRigaDb(db,"piano",{id:"attuale",dati:pp,aggiornato:new Date().toISOString(),da:S.chi||""});
+      // I pasti passati conservano la nuova fotografia e restano da riconfermare.
+      for(const [k,data,nome,nuovo] of [[kA,d.dataA,d.pastoA,b],[kB,d.dataB,d.pastoB,a]]){
+        if(data>=oggi())continue;
+        const precedente=db.pasti.find(x=>x.id===k);
+        scriviRigaDb(db,"pasti",{...precedente,id:k,data,pasto:nome,stato:"da_correggere",scalato:[],contenuto:{...fotoPasto(nuovo),cambiato:true,spostato:k===kA?kB:kA},quando:new Date().toISOString()});
+      }
+    });
     chiudiFoglio();
     S.giornoSel = d.dataA;
     await dopoCambioPiano();
