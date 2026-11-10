@@ -564,3 +564,7 @@ button:focus-visible, summary:focus-visible { outline:3px solid var(--green); ou
 @media print {
   #stampa .tabella-settimana td.pasto-modificato-report { background:#FFF0A6!important; color:#20251F!important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 }
+
+@media print {
+  #stampa .tabella-settimana td.pasto-invertito-report { background:#FFC97A!important; color:#20251F!important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}

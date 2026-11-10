@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "10.11.2026 · 51";
+  const VERSIONE = "10.11.2026 · 52";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -977,7 +977,7 @@
       if (!st && sel >= oggi() && p.pasto !== "Fuori pasto" && window.ImportaPdf.caselle(p, g.alternative).length) {
         secondarie.push(`<button class="btn piccolo cambia" data-a="cambia-apri" data-k="${esc(k)}">${ico("cambia", 16)} Cambia pasto</button>`);
       }
-      if (!st && p.cambiato && sel >= oggi()) secondarie.push(`<button class="btn piccolo sec" data-a="cambia-ripristina" data-k="${esc(k)}">${p.spostato ? "Rimetti a posto" : "Ripristina"}</button>`);
+      if (p.cambiato && ((!st && sel >= oggi()) || st?.stato==="da_correggere")) secondarie.push(`<button class="btn piccolo sec" data-a="cambia-ripristina" data-k="${esc(k)}">${p.spostato ? "Rimetti a posto" : "Ripristina"}</button>`);
       if(window.CheMancaRicette && p.pasto!=="Fuori pasto" && p.voci.some(v=>window.CheMancaRicette.categoria(v.nome)))azioni.push(`<button class="btn piccolo sec" data-a="ric-apri" data-k="${esc(k)}">Cucina questo pasto</button>`);
       h += notaHtml;
       if (azioni.length) h += `<div class="azioni">${azioni.join("")}</div>`;
@@ -1151,9 +1151,11 @@
   const PASTI_SCAMBIABILI = ["Colazione", "Metà mattina", "Pranzo", "Merenda", "Cena"];
   function pastoDi(data, pasto, db=S.db) {
     const r=db.pasti.find(x=>x.id===L.chiavePasto(data,pasto));
-    if(data<oggi() && r?.contenuto)return {...r.contenuto,pasto};
-    const g = S.piano && L.giornoPiano(S.piano, data);
-    return g && g.pasti.find((x) => x.pasto === pasto);
+    if(data<oggi() && r?.contenuto)return JSON.parse(JSON.stringify({...r.contenuto,pasto}));
+    const piano=db.piano.find(x=>x.id==="attuale")?.dati||S.piano;
+    const g = piano && L.giornoPiano(piano, data);
+    const trovato=g && g.pasti.find((x) => x.pasto === pasto);
+    return trovato && JSON.parse(JSON.stringify(trovato));
   }
   function scambiabile(data, pasto, db=S.db) {
     if(!PASTI_SCAMBIABILI.includes(pasto))return false;
@@ -1176,7 +1178,7 @@
       return `<button type="button" class="chip ${on ? "scelto" : ""}" data-a="inv-pasto" data-q="${chiave}" data-v="${ps}" ${ok ? "" : "disabled"}>${ps}</button>`;
     }).join("");
     const uguale = d.dataA === d.dataB && d.pastoA === d.pastoB;
-    const valido = !uguale && scambiabile(d.dataA, d.pastoA) && scambiabile(d.dataB, d.pastoB);
+    const valido = !d.invio && !uguale && scambiabile(d.dataA, d.pastoA) && scambiabile(d.dataB, d.pastoB);
     const sblocchi=[['A',d.dataA,d.pastoA],['B',d.dataB,d.pastoB]].filter((x,i,a)=>a.findIndex(y=>y[1]===x[1]&&y[2]===x[2])===i).map(([q,data,nome])=>{
       if(scambiabile(data,nome))return '';
       const r=S.db.pasti.find(x=>x.id===L.chiavePasto(data,nome));
@@ -1195,34 +1197,69 @@
       ${sblocchi}
       ${valido?'<p class="sotto" role="status">Entrambi i pasti sono disponibili: puoi premere Inverti.</p>':""}
       <p style="font-size:12px;color:var(--muted)">Le norme del piano chiedono di non spostare alimenti o giorni senza l'indicazione della dietista: nel dubbio, chiedi a lei.</p>
-      <button class="btn largo" data-a="inv-conferma" ${valido ? "" : "disabled"}>Inverti</button>
+      <button class="btn largo" data-a="inv-conferma" ${valido ? "" : "disabled"}>${d.invio?"Inversione in corso…":"Inverti"}</button>
       <button class="link" data-a="chiudi" style="align-self:center">Annulla</button>`;
   }
   async function confermaInverti() {
-    const d = S.sheet.d;
-    const kA=L.chiavePasto(d.dataA,d.pastoA),kB=L.chiavePasto(d.dataB,d.pastoB);
+    const foglio=S.sheet;
+    if(!foglio || foglio.d.invio)return;
+    const d={...foglio.d},kA=L.chiavePasto(d.dataA,d.pastoA),kB=L.chiavePasto(d.dataB,d.pastoB);
     if(kA===kB)throw Error("Scegli due pasti diversi");
-    await operazionePasti(db=>{
+    const copia=p=>JSON.parse(JSON.stringify(p));
+    const contenuto=p=>({libero:!!p.libero,piatti:p.piatti||[],voci:p.voci||[]});
+    const attesoA=pastoDi(d.dataA,d.pastoA),attesoB=pastoDi(d.dataB,d.pastoB);
+    if(!attesoA||!attesoB)throw Error("Non trovo entrambi i pasti selezionati");
+    foglio.d.invio=true;renderFoglio();
+    try{await operazionePasti(db=>{
       if(!scambiabile(d.dataA,d.pastoA,db)||!scambiabile(d.dataB,d.pastoB,db))throw Error("Per invertire un pasto passato premi prima Annulla «fatto». Controlla entrambi i pasti selezionati.");
       const a=pastoDi(d.dataA,d.pastoA,db),b=pastoDi(d.dataB,d.pastoB,db);
-      const contenuto=p=>({libero:!!p.libero,piatti:p.piatti||[],voci:p.voci||[]});
-      const pp=JSON.parse(JSON.stringify(db.piano.find(x=>x.id==="attuale")?.dati||pianoSalvato()));
+      if(JSON.stringify(contenuto(a))!==JSON.stringify(contenuto(attesoA))||JSON.stringify(contenuto(b))!==JSON.stringify(contenuto(attesoB)))throw Error("Uno dei pasti è cambiato: riapri Inverti pasti e controlla la selezione.");
+      const pp=copia(db.piano.find(x=>x.id==="attuale")?.dati||pianoSalvato());
       if(!pp)throw Error("Non trovo il piano da aggiornare");
       pp.cambi={...(pp.cambi||{})};
-      pp.cambi[kA]={...contenuto(b),pasto:d.pastoA,spostato:kB,coppia:kB};
-      pp.cambi[kB]={...contenuto(a),pasto:d.pastoB,spostato:kA,coppia:kA};
+      pp.cambi[kA]={...copia(contenuto(b)),pasto:d.pastoA,spostato:kB,coppia:kB,originale:copia(contenuto(a))};
+      pp.cambi[kB]={...copia(contenuto(a)),pasto:d.pastoB,spostato:kA,coppia:kA,originale:copia(contenuto(b))};
+      // Verifica entrambe le destinazioni prima del salvataggio atomico.
+      for(const [data,nome,atteso] of [[d.dataA,d.pastoA,b],[d.dataB,d.pastoB,a]]){
+        const effettivo=L.giornoPiano(pp,data)?.pasti.find(p=>p.pasto===nome);
+        if(data>=oggi() && (!effettivo || JSON.stringify(contenuto(effettivo))!==JSON.stringify(contenuto(atteso))))throw Error("L’inversione non può essere applicata al piano selezionato. Nessun pasto modificato.");
+      }
       scriviRigaDb(db,"piano",{id:"attuale",dati:pp,aggiornato:new Date().toISOString(),da:S.chi||""});
-      // I pasti passati conservano la nuova fotografia e restano da riconfermare.
       for(const [k,data,nome,nuovo] of [[kA,d.dataA,d.pastoA,b],[kB,d.dataB,d.pastoB,a]]){
         if(data>=oggi())continue;
         const precedente=db.pasti.find(x=>x.id===k);
-        scriviRigaDb(db,"pasti",{...precedente,id:k,data,pasto:nome,stato:"da_correggere",scalato:[],contenuto:{...fotoPasto(nuovo),cambiato:true,spostato:k===kA?kB:kA},quando:new Date().toISOString()});
+        scriviRigaDb(db,"pasti",{...precedente,id:k,data,pasto:nome,stato:"da_correggere",scalato:[],contenuto:{...fotoPasto(nuovo),cambiato:true,spostato:k===kA?kB:kA,coppia:k===kA?kB:kA},quando:new Date().toISOString()});
       }
-    });
+    });}catch(e){if(S.sheet===foglio){foglio.d.invio=false;renderFoglio();}throw e;}
+    scegliPiano();
     chiudiFoglio();
     S.giornoSel = d.dataA;
     await dopoCambioPiano();
     toast(`Invertiti: ${d.pastoA.toLowerCase()} di ${L.nomeGiorno(d.dataA, oggi())} e ${d.pastoB.toLowerCase()} di ${L.nomeGiorno(d.dataB, oggi())}`);
+  }
+
+  async function ripristinaCambioPasto(k) {
+    await operazionePasti(db=>{
+      const piano=JSON.parse(JSON.stringify(db.piano.find(x=>x.id==="attuale")?.dati||null));
+      const c=piano?.cambi?.[k];if(!c)return;
+      const opposto=c.coppia && piano.cambi[c.coppia]?.coppia===k?c.coppia:null;
+      const chiavi=opposto?[k,opposto]:[k],prima={...piano.cambi};
+      for(const key of chiavi){const r=db.pasti.find(x=>x.id===key);if(key.split('|')[0]<oggi() && r && r.stato!=="da_correggere")throw Error("Prima di ripristinare l’inversione, annulla Fatto sui pasti passati coinvolti.");}
+      for(const key of chiavi)delete piano.cambi[key];
+      const cibi=p=>JSON.stringify({libero:!!p?.libero,piatti:p?.piatti||[],voci:p?.voci||[]});
+      for(const key of chiavi){
+        const [data,nome]=key.split('|'),r=db.pasti.find(x=>x.id===key);if(data>=oggi()||!r)continue;
+        const precedente=prima[key],altro=precedente.coppia && prima[precedente.coppia];
+        // Per le vecchie coppie lo scambio opposto conserva il contenuto originale.
+        // Se entrambe le copie erano uguali, Ripristina riporta il menu del piano di quella data.
+        const base=L.giornoPiano(piano,data)?.pasti.find(x=>x.pasto===nome);
+        const originale=precedente.originale || (altro && cibi(altro)!==cibi(precedente)?altro:base);
+        if(!originale)throw Error("Non trovo il pasto originale: correggilo dallo storico prima di ripristinare.");
+        scriviRigaDb(db,"pasti",{...r,stato:"da_correggere",scalato:[],contenuto:fotoPasto({...originale,cambiato:!!originale.cambiato && !originale.spostato,spostato:null,coppia:null})});
+      }
+      scriviRigaDb(db,"piano",{id:"attuale",dati:piano,aggiornato:new Date().toISOString(),da:S.chi||""});
+    });
+    await dopoCambioPiano();toast("Pasti rimessi a posto. Riconferma quelli passati dopo averli controllati.");
   }
 
   /* ---------------- cambia pasto ---------------- */
@@ -1274,7 +1311,7 @@
   // cosa c'era nel pasto, persona per persona: resta anche se poi la dieta cambia
   function fotoPasto(p) {
     if (!p) return null;
-    return { cambiato: !!p.cambiato, piatti: p.piatti || [], libero: !!p.libero, voci: (p.voci || []).map((v) => ({ nome: v.nome, q: L.dosi(v), u: v.u })) };
+    return { cambiato: !!p.cambiato, ...(p.spostato?{spostato:p.spostato,coppia:p.coppia||p.spostato}:{}), piatti: p.piatti || [], libero: !!p.libero, voci: (p.voci || []).map((v) => ({ nome: v.nome, q: L.dosi(v), u: v.u })) };
   }
   function pesateDi(id) { return S.db.pesi.filter((x) => x.persona === id).sort((a, b) => a.data.localeCompare(b.data)); }
   function ultimoPesoTesto() {
@@ -1420,7 +1457,7 @@
       if (!giorno) { giorno = { data: r.data, pasti: [] }; giorni.push(giorno); }
       const nota = notaDi(r.id);
       giorno.pasti.push({
-        id: r.id, automatico: r.stato === "auto", cambiato: !!(contenuto && contenuto.cambiato) || !!S.piano?.cambi?.[r.id],
+        id: r.id, invertito: !!contenuto?.spostato || !!S.piano?.cambi?.[r.id]?.spostato, automatico: r.stato === "auto", cambiato: !!(contenuto && contenuto.cambiato) || !!S.piano?.cambi?.[r.id],
         nota: notaLiberaTesto(nota,persona),
         pasto: r.pasto, stato: statoTesto(r.stato,r),
         piatti: idsPiano.length && contenuto ? contenuto.piatti : [], libero: !!(contenuto && contenuto.libero), cibi,
@@ -1565,8 +1602,8 @@
     if(!settimane.length)h+='<p>Nessun pasto registrato nel periodo.</p>';
     for(const settimana of settimane){
       h+='<section class="settimana-report"><h2>Settimana '+esc(ddmm(settimana.dal))+' - '+esc(ddmm(L.piuGiorni(settimana.dal,6)))+'</h2><table class="tabella-settimana"><thead><tr><th>Pasto</th>'+settimana.giorni.map(g=>'<th>'+esc(g.nome)+'<br>'+esc(ddmm(g.data))+'</th>').join('')+'</tr></thead><tbody>';
-      for(const r of settimana.righe)h+='<tr><th scope="row">'+esc(r.titolo)+'</th>'+r.celle.map((c,i)=>'<td'+(settimana.giorni[i].fuori?' class="fuori-periodo"':r.evidenziate[i]?' class="pasto-modificato-report"':'')+'>'+(c.length?c.map(esc).join('<br>'):'—')+'</td>').join('')+'</tr>';
-      h+='</tbody></table><p class="sotto">Giallo / MODIFICATO: pasti con variazioni, sostituzioni, integrazioni o saltati. Celle con «—»: nessun pasto registrato. Sono riportati solo i dati del periodo selezionato.</p></section>';
+      for(const r of settimana.righe)h+='<tr><th scope="row">'+esc(r.titolo)+'</th>'+r.celle.map((c,i)=>'<td'+(settimana.giorni[i].fuori?' class="fuori-periodo"':r.inversioni[i]?' class="pasto-invertito-report"':r.evidenziate[i]?' class="pasto-modificato-report"':'')+'>'+(c.length?c.map(esc).join('<br>'):'—')+'</td>').join('')+'</tr>';
+      h+='</tbody></table><p class="sotto">Arancione / INVERTITO: pasti scambiati. Giallo / MODIFICATO: altre variazioni, sostituzioni, integrazioni o pasti saltati. Celle con «—»: nessun pasto registrato. Sono riportati solo i dati del periodo selezionato.</p></section>';
     }
     return h+'<p class="report-fonte">I pasti seguono il piano salvato e le modifiche registrate. Generato da CheManca? il '+esc(new Date().toLocaleDateString('it-IT'))+'.</p>';
   }
@@ -3318,16 +3355,7 @@
       case "fit-salva": await salvaFitness(); break;
       case "fit-togli": await elimina("fitness", d.id); chiudiFoglio(); render(); toast("Attività tolta"); break;
       case "cambia-salva": await salvaCambio(); break;
-      case "cambia-ripristina": {
-        const p = JSON.parse(JSON.stringify(pianoSalvato()));
-        const c = p.cambi && p.cambi[b.dataset.k];
-        if (c && c.coppia && p.cambi[c.coppia] && p.cambi[c.coppia].coppia === b.dataset.k) delete p.cambi[c.coppia];
-        if (p.cambi) delete p.cambi[b.dataset.k];
-        if (S.piano) await storicoArretrato(S.piano, S.piano.inizio);
-    await salva("piano", [{ id: "attuale", dati: p, aggiornato: new Date().toISOString(), da: S.chi || "" }]);
-        await dopoCambioPiano(); toast(c && c.coppia ? "Tutti e due i pasti tornano al loro posto" : "Torna il pasto del piano");
-        break;
-      }
+      case "cambia-ripristina": await ripristinaCambioPasto(b.dataset.k); break;
       case "vai-diario": S.diarioTab = b.dataset.v; S.pesoPersona = S.chi; S.storicoPersona = S.chi || "tutti"; chiudiFoglio(); vai("diario"); break;
       case "diario-tab": S.diarioTab = b.dataset.v; render(); break;
       case "peso-persona": S.pesoPersona = b.dataset.v; render(); break;
