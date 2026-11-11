@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "11.11.2026 · 53";
+  const VERSIONE = "11.11.2026 · 54";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -154,8 +154,8 @@
       online:()=>navigator.onLine!==false,
       valida:d=>validaBackup({formato:"chemanca-backup",versione:1,dati:d}),
       onStato:st=>{S.cloud=st;S.online=st.online;if(st.fase!=="pronto")render();else renderTesta();},
-      onConflitto:()=>{S.scelta.clear();S.sheet=null;$("#sheet")?.classList.remove("on");$("#sheet").innerHTML="";},
-      onRecupero:()=>{S.scelta.clear();S.sheet=null;$("#sheet")?.classList.remove("on");toast("Salvataggio precedente verificato. Le quantità sono state aggiornate.");},
+      onConflitto:()=>{S.scelta.clear();if(S.sheet?.tipo==="inverti"){S.sheet._cloudRevisione=null;S.sheet.d.avviso="Archivio aggiornato: la selezione è rimasta aperta. Controlla i pasti e riprova.";return;}S.sheet=null;$("#sheet")?.classList.remove("on");$("#sheet").innerHTML="";},
+      onRecupero:()=>{S.scelta.clear();if(S.sheet?.tipo==="inverti"){S.sheet._cloudRevisione=null;S.sheet.d.avviso="Salvataggio precedente verificato. La selezione è rimasta aperta: controlla i pasti.";return;}S.sheet=null;$("#sheet")?.classList.remove("on");toast("Salvataggio precedente verificato. Le quantità sono state aggiornate.");},
       onRevoca:()=>{S.db=vuoto();S.piano=null;S.calc=null;S.calc7=null;S.scelta.clear();S.sheet=null;fermaScanner();$("#sheet")?.classList.remove("on");$("#sheet").innerHTML="";},
     });
   }
@@ -189,15 +189,18 @@
     if(condiviso && A.istantanea?.()) {S.db=A.istantanea();ricalcola();render();}
     S.erroreSalvataggio = e.message || String(e);
     toast(S.erroreSalvataggio);
-    renderTesta();
+    renderTesta();if(S.sheet?.tipo==="inverti")renderFoglio();
   }
 
   let attesaRicarica = null;
   async function ricarica() {
     try {
       S.db = await A.carica();
-      if(condiviso && S.sheet?._cloudRevisione!=null && S.sheet._cloudRevisione!==A.stato().revisione){S.sheet=null;$("#sheet").classList.remove("on");$("#sheet").innerHTML="";toast("Famiglia aggiornata dall’altro telefono. Riapri il pannello per modificarla.");}
-      S.erroreSalvataggio="";dopoModifica(false);
+      if(condiviso && S.sheet?._cloudRevisione!=null && S.sheet._cloudRevisione!==A.stato().revisione){
+        if(S.sheet.tipo==="inverti")S.sheet._cloudRevisione=A.stato().revisione;
+        else{S.sheet=null;$("#sheet").classList.remove("on");$("#sheet").innerHTML="";toast("Famiglia aggiornata dall’altro telefono. Riapri il pannello per modificarla.");}
+      }
+      S.erroreSalvataggio="";dopoModifica(false);if(S.sheet?.tipo==="inverti")renderFoglio();
     } catch (e) {
       console.error(e);
       toast("Database non raggiungibile: " + (e.message || e));
@@ -1162,6 +1165,15 @@
     const r=db.pasti.find(x=>x.id===L.chiavePasto(data,pasto));
     return (data<oggi()?r?.stato==="da_correggere":!r) && !!pastoDi(data,pasto,db);
   }
+  function originalePrimaInversione(k,piano) {
+    const precedente=piano?.cambi?.[k];if(!precedente)return null;
+    const altro=precedente.coppia && piano.cambi[precedente.coppia];
+    const cibi=p=>JSON.stringify({libero:!!p?.libero,piatti:p?.piatti||[],voci:p?.voci||[]});
+    if(precedente.originale)return JSON.parse(JSON.stringify(precedente.originale));
+    if(altro && altro.coppia===k && cibi(altro)!==cibi(precedente))return JSON.parse(JSON.stringify(altro));
+    const senza=JSON.parse(JSON.stringify(piano));delete senza.cambi[k];if(precedente.coppia)delete senza.cambi[precedente.coppia];
+    const [data,nome]=k.split('|');return L.giornoPiano(senza,data)?.pasti.find(p=>p.pasto===nome)||null;
+  }
   function selezionabileInverti(data,pasto) {
     return PASTI_SCAMBIABILI.includes(pasto) && !!pastoDi(data,pasto);
   }
@@ -1176,6 +1188,8 @@
     const chiavePrecedente=[chiaveA,chiaveB].find(k=>cambiSalvati[k]?.coppia && cambiSalvati[k].coppia!==(k===chiaveA?chiaveB:chiaveA));
     const precedente=chiavePrecedente && cambiSalvati[chiavePrecedente];
     const vecchiaCoppia=precedente?.coppia;
+    const pianoPerRipristino=S.db.piano.find(x=>x.id==="attuale")?.dati;
+    const originali=vecchiaCoppia?[chiavePrecedente,vecchiaCoppia].map(k=>{const originale=originalePrimaInversione(k,pianoPerRipristino);return `<p><b>${esc(k.split('|')[1])} di ${esc(dataCompleta(k.split('|')[0]))}:</b> ${esc(originale?(originale.libero?"Pasto libero":descrPasto(originale)):"Contenuto originale non disponibile")}</p>`;}).join(''):"";
     const scheda = (data, pasto) => {
       const p = pastoDi(data, pasto);
       return `<div class="scheda-pasto"><small>${esc(dataCompleta(data))} · ${esc(pasto.toLowerCase())}</small><b>${p ? esc(p.libero ? "Pasto libero" : descrPasto(p)) : "—"}</b></div>`;
@@ -1202,10 +1216,11 @@
         <details><summary>Scegli un giorno passato</summary><div class="giorni mini">${passati.map(pulsanteGiorno).join("")}</div></details>
         <p class="sotto">Selezionato: <b>${esc(dataCompleta(d.dataB))}</b>${d.dataB<oggi()?" · giorno passato":""}.</p>
         <div class="chips">${chips("pastoB", d.dataB)}</div></div>
-      ${vecchiaCoppia?`<div class="avviso giallo"><div><p>Questo pasto ha già un’inversione con ${esc(vecchiaCoppia.split('|')[1])} di ${esc(dataCompleta(vecchiaCoppia.split('|')[0]))}. Per scegliere un’altra data, rimetti prima a posto lo scambio precedente.</p><button class="btn piccolo sec" data-a="inv-ripristina" data-k="${esc(chiavePrecedente)}">Rimetti a posto l’inversione precedente</button></div></div>`:""}
+      ${vecchiaCoppia?`<div class="avviso giallo"><div><p>Questo pasto ha già un’inversione con ${esc(vecchiaCoppia.split('|')[1])} di ${esc(dataCompleta(vecchiaCoppia.split('|')[0]))}. Per scegliere un’altra data, rimetti prima a posto lo scambio precedente.</p>${originali}<button class="btn piccolo sec" data-a="inv-ripristina" data-k="${esc(chiavePrecedente)}">Ripristina questi pasti: annulla l’inversione precedente</button></div></div>`:""}
       <div class="scambio-pasti">${scheda(d.dataA, d.pastoA)}<span aria-hidden="true">${ico("inverti", 22)}</span>${scheda(d.dataB, d.pastoB)}</div>
       ${uguale ? `<p class="sotto" style="text-align:center">Scegli un pasto diverso.</p>` : ""}
       ${sblocchi}
+      ${d.avviso?`<p class="avviso blu" role="status">${esc(d.avviso)}</p>`:""}
       ${valido?'<p class="sotto" role="status">Entrambi i pasti sono disponibili: puoi premere Inverti.</p>':""}
       <p style="font-size:12px;color:var(--muted)">Le norme del piano chiedono di non spostare alimenti o giorni senza l'indicazione della dietista: nel dubbio, chiedi a lei.</p>
       <button class="btn largo" data-a="inv-conferma" ${valido ? "" : "disabled"}>${d.invio?"Inversione in corso…":"Inverti"}</button>
@@ -1259,14 +1274,11 @@
       const chiavi=opposto?[k,opposto]:[k],prima={...piano.cambi};
       for(const key of chiavi){const r=db.pasti.find(x=>x.id===key);if(key.split('|')[0]<oggi() && r && r.stato!=="da_correggere")throw Error("Prima di ripristinare l’inversione, annulla Fatto sui pasti passati coinvolti.");}
       for(const key of chiavi)delete piano.cambi[key];
-      const cibi=p=>JSON.stringify({libero:!!p?.libero,piatti:p?.piatti||[],voci:p?.voci||[]});
       for(const key of chiavi){
         const [data,nome]=key.split('|'),r=db.pasti.find(x=>x.id===key);if(data>=oggi()||!r)continue;
-        const precedente=prima[key],altro=precedente.coppia && prima[precedente.coppia];
         // Per le vecchie coppie lo scambio opposto conserva il contenuto originale.
         // Se entrambe le copie erano uguali, Ripristina riporta il menu del piano di quella data.
-        const base=L.giornoPiano(piano,data)?.pasti.find(x=>x.pasto===nome);
-        const originale=precedente.originale || (altro && cibi(altro)!==cibi(precedente)?altro:base);
+        const originale=originalePrimaInversione(key,{...piano,cambi:prima});
         if(!originale)throw Error("Non trovo il pasto originale: correggilo dallo storico prima di ripristinare.");
         scriviRigaDb(db,"pasti",{...r,stato:"da_correggere",scalato:[],contenuto:fotoPasto({...originale,cambiato:!!originale.cambiato && !originale.spostato,spostato:null,coppia:null})});
       }
@@ -2966,6 +2978,7 @@
       if(r.data<oggi())scriviRigaDb(db,"pasti",{...r,stato:"da_correggere",scalato:[]});
       else db.pasti=db.pasti.filter((x)=>x.id!==k);
     });
+    if(condiviso && S.sheet?.tipo==="inverti")S.sheet._cloudRevisione=A.stato().revisione;
     dopoModifica();
   }
 
