@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "10.11.2026 · 52";
+  const VERSIONE = "11.11.2026 · 53";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -1167,10 +1167,18 @@
   }
   function foglioInverti() {
     const d = S.sheet.d;
-    const giorni = [...new Set([d.dataA,...Array.from({length:14},(_,i)=>L.piuGiorni(oggi(),i-7))])].sort();
+    const prossimi=Array.from({length:7},(_,i)=>L.piuGiorni(oggi(),i));
+    const passati=[...new Set([d.dataA,...Array.from({length:7},(_,i)=>L.piuGiorni(oggi(),-i-1))])].filter(g=>g<oggi()).sort().reverse();
+    const dataCompleta=g=>cap(L.GIORNI[L.daIso(g).getDay()])+" "+ddmm(g)+"/"+g.slice(0,4);
+    const pulsanteGiorno=g=>`<button type="button" data-a="inv-giorno" data-v="${g}" aria-label="${esc(dataCompleta(g))}${g<oggi()?", giorno passato":""}" aria-pressed="${g===d.dataB}"><small>${g===oggi()?"Oggi":g===L.piuGiorni(oggi(),1)?"Domani":g<oggi()?"Passato":cap(L.GIORNI[L.daIso(g).getDay()])}</small><b>${esc(ddmm(g))}</b><small>${g.slice(0,4)}</small></button>`;
+    const cambiSalvati=S.db.piano.find(x=>x.id==="attuale")?.dati?.cambi||{};
+    const chiaveA=L.chiavePasto(d.dataA,d.pastoA),chiaveB=L.chiavePasto(d.dataB,d.pastoB);
+    const chiavePrecedente=[chiaveA,chiaveB].find(k=>cambiSalvati[k]?.coppia && cambiSalvati[k].coppia!==(k===chiaveA?chiaveB:chiaveA));
+    const precedente=chiavePrecedente && cambiSalvati[chiavePrecedente];
+    const vecchiaCoppia=precedente?.coppia;
     const scheda = (data, pasto) => {
       const p = pastoDi(data, pasto);
-      return `<div class="scheda-pasto"><small>${esc(cap(L.nomeGiorno(data, oggi())))} · ${esc(pasto.toLowerCase())}</small><b>${p ? esc(p.libero ? "Pasto libero" : descrPasto(p)) : "—"}</b></div>`;
+      return `<div class="scheda-pasto"><small>${esc(dataCompleta(data))} · ${esc(pasto.toLowerCase())}</small><b>${p ? esc(p.libero ? "Pasto libero" : descrPasto(p)) : "—"}</b></div>`;
     };
     const chips = (chiave, dataSel) => PASTI_SCAMBIABILI.map((ps) => {
       const ok = selezionabileInverti(dataSel, ps);
@@ -1178,7 +1186,7 @@
       return `<button type="button" class="chip ${on ? "scelto" : ""}" data-a="inv-pasto" data-q="${chiave}" data-v="${ps}" ${ok ? "" : "disabled"}>${ps}</button>`;
     }).join("");
     const uguale = d.dataA === d.dataB && d.pastoA === d.pastoB;
-    const valido = !d.invio && !uguale && scambiabile(d.dataA, d.pastoA) && scambiabile(d.dataB, d.pastoB);
+    const valido = !d.invio && !vecchiaCoppia && !uguale && scambiabile(d.dataA, d.pastoA) && scambiabile(d.dataB, d.pastoB);
     const sblocchi=[['A',d.dataA,d.pastoA],['B',d.dataB,d.pastoB]].filter((x,i,a)=>a.findIndex(y=>y[1]===x[1]&&y[2]===x[2])===i).map(([q,data,nome])=>{
       if(scambiabile(data,nome))return '';
       const r=S.db.pasti.find(x=>x.id===L.chiavePasto(data,nome));
@@ -1188,10 +1196,13 @@
     }).join('');
     return `<h2>Inverti pasti</h2>
       <p class="sotto">Scambia due pasti tra loro: nello stesso giorno (pranzo e cena) o tra giorni diversi (due cene, due colazioni…). Per i giorni passati, premi prima Annulla «fatto» su entrambi i pasti da scambiare. Poi confermali di nuovo con Fatto! Spesa e dispensa si ricalcolano da sole.</p>
-      <div class="campo"><span>Questo pasto di ${esc(L.nomeGiorno(d.dataA, oggi()))}</span><div class="chips">${chips("pastoA", d.dataA)}</div></div>
+      <div class="campo"><span>Questo pasto di ${esc(dataCompleta(d.dataA))}</span><div class="chips">${chips("pastoA", d.dataA)}</div></div>
       <div class="campo"><span>Con il pasto di</span>
-        <div class="giorni mini">${giorni.map((g) => `<button type="button" data-a="inv-giorno" data-v="${g}" aria-pressed="${g === d.dataB}"><small>${esc(cap(L.nomeGiorno(g, oggi())).slice(0, 10))}</small><b>${esc(L.etichettaData(g))}</b></button>`).join("")}</div>
+        <span>Oggi e prossimi giorni</span><div class="giorni mini">${prossimi.map(pulsanteGiorno).join("")}</div>
+        <details><summary>Scegli un giorno passato</summary><div class="giorni mini">${passati.map(pulsanteGiorno).join("")}</div></details>
+        <p class="sotto">Selezionato: <b>${esc(dataCompleta(d.dataB))}</b>${d.dataB<oggi()?" · giorno passato":""}.</p>
         <div class="chips">${chips("pastoB", d.dataB)}</div></div>
+      ${vecchiaCoppia?`<div class="avviso giallo"><div><p>Questo pasto ha già un’inversione con ${esc(vecchiaCoppia.split('|')[1])} di ${esc(dataCompleta(vecchiaCoppia.split('|')[0]))}. Per scegliere un’altra data, rimetti prima a posto lo scambio precedente.</p><button class="btn piccolo sec" data-a="inv-ripristina" data-k="${esc(chiavePrecedente)}">Rimetti a posto l’inversione precedente</button></div></div>`:""}
       <div class="scambio-pasti">${scheda(d.dataA, d.pastoA)}<span aria-hidden="true">${ico("inverti", 22)}</span>${scheda(d.dataB, d.pastoB)}</div>
       ${uguale ? `<p class="sotto" style="text-align:center">Scegli un pasto diverso.</p>` : ""}
       ${sblocchi}
@@ -1212,6 +1223,8 @@
     foglio.d.invio=true;renderFoglio();
     try{await operazionePasti(db=>{
       if(!scambiabile(d.dataA,d.pastoA,db)||!scambiabile(d.dataB,d.pastoB,db))throw Error("Per invertire un pasto passato premi prima Annulla «fatto». Controlla entrambi i pasti selezionati.");
+      const cambiAttuali=db.piano.find(x=>x.id==="attuale")?.dati?.cambi||{};
+      for(const [key,altro] of [[kA,kB],[kB,kA]])if(cambiAttuali[key]?.coppia && cambiAttuali[key].coppia!==altro)throw Error("Rimetti prima a posto l’inversione precedente, poi scegli la nuova data.");
       const a=pastoDi(d.dataA,d.pastoA,db),b=pastoDi(d.dataB,d.pastoB,db);
       if(JSON.stringify(contenuto(a))!==JSON.stringify(contenuto(attesoA))||JSON.stringify(contenuto(b))!==JSON.stringify(contenuto(attesoB)))throw Error("Uno dei pasti è cambiato: riapri Inverti pasti e controlla la selezione.");
       const pp=copia(db.piano.find(x=>x.id==="attuale")?.dati||pianoSalvato());
@@ -3323,6 +3336,13 @@
         const pastoA = liberi.includes("Pranzo") ? "Pranzo" : liberi[0];
         const pastoB = pastoA === "Pranzo" && liberi.includes("Cena") ? "Cena" : liberi.find((x) => x !== pastoA) || pastoA;
         apriFoglio({ tipo: "inverti", d: { dataA: data, pastoA, dataB: data, pastoB } });
+        break;
+      }
+      case "inv-ripristina": {
+        const foglio=S.sheet;
+        if(![L.chiavePasto(d.dataA,d.pastoA),L.chiavePasto(d.dataB,d.pastoB)].includes(b.dataset.k))break;
+        await ripristinaCambioPasto(b.dataset.k);
+        if(S.sheet===foglio){if(condiviso)foglio._cloudRevisione=A.stato().revisione;renderFoglio();}
         break;
       }
       case "inv-annulla": {
