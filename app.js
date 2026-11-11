@@ -3,7 +3,7 @@
   "use strict";
   const L = window.Logica;
   const CFG = window.CONFIG || {};
-  const VERSIONE = "11.11.2026 · 54";
+  const VERSIONE = "11.11.2026 · 55";
   const TABELLE = ["inventario", "prodotti", "catalogo", "spesa", "pasti", "avvisi", "piano", "pesi", "note", "fitness"];
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
   const ZXING = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
@@ -915,12 +915,15 @@
     const mancanze = S.calc7 ? S.calc7.mancanze : [];
     const stati = statiPasti();
     let h = testa("", "Piano dieta");
-    h += `<div class="giorni" role="group" aria-label="Giorno">`;
-    for (let i = -1; i < 7; i++) {
-      const d = L.piuGiorni(oggi(), i);
+    const dal = [S.piano.inizio || oggi(), sel, oggi(), ...S.db.pasti.map(p=>p.data).filter(Boolean)].sort()[0];
+    const fino = [L.piuGiorni(oggi(),28),L.piuGiorni(sel,14)].sort().pop();
+    h += `<div class="piano-navigazione"><button class="btn piccolo sec" data-a="giorno" data-d="${L.piuGiorni(sel,-7)}" aria-label="Vai a sette giorni prima">← 7 giorni</button><button class="btn piccolo sec" data-a="giorno" data-d="${oggi()}">Oggi</button><button class="btn piccolo sec" data-a="giorno" data-d="${L.piuGiorni(sel,7)}" aria-label="Vai a sette giorni dopo">7 giorni →</button></div>`;
+    h += `<div class="giorni piano-giorni" role="group" aria-label="Giorni del piano: scorri avanti e indietro">`;
+    for (let d = dal; d <= fino; d = L.piuGiorni(d,1)) {
+      const i = L.diffGiorni(oggi(),d);
       const n = new Set(mancanze.flatMap((m) => m.pasti.filter((p) => p.data === d).map(() => m.voce))).size;
       const nome = i === -1 ? "Ieri" : i === 0 ? "Oggi" : i === 1 ? "Domani" : cap(L.GIORNI[L.daIso(d).getDay()]).slice(0, 3);
-      h += `<button data-a="giorno" data-d="${d}" aria-pressed="${d === sel}"><small>${nome}</small><b>${esc(L.etichettaData(d))}</b>${n && i >= 0 && !light() ? `<span class="badge liv-${Math.min(3, i)}">${n}</span>` : ""}</button>`;
+      h += `<button data-a="giorno" data-d="${d}" aria-label="${esc(cap(L.GIORNI[L.daIso(d).getDay()])+" "+ddmm(d)+"/"+d.slice(0,4))}" aria-pressed="${d === sel}" ${d===oggi()?'aria-current="date"':""}><small>${nome}</small><b>${esc(ddmm(d))}</b>${n && i >= 0 && !light() ? `<span class="badge liv-${Math.min(3, i)}">${n}</span>` : ""}</button>`;
     }
     h += `</div>`;
     h += `<p class="settimana-piano">${g ? (g.alternativa ? "Settimana alternativa" : "Settimana " + g.settimana) : ""}</p>`;
@@ -2136,6 +2139,13 @@
     await salvaStatoLight(stato); render();
   }
 
+  function centraGiornoPiano() {
+    const barra = $(".piano-giorni");
+    const selezionato = barra?.querySelector('[aria-pressed="true"]');
+    if (!selezionato) return;
+    barra.scrollLeft += selezionato.getBoundingClientRect().left - barra.getBoundingClientRect().left - (barra.clientWidth - selezionato.offsetWidth) / 2;
+  }
+
   /* ---------------- disegno ---------------- */
   function render() {
     const app = $("#app");
@@ -2148,6 +2158,7 @@
     const schermi = { oggi: schermoOggi, casa: schermoCasa, aggiungi: schermoAggiungi, spesa: schermoSpesa, piano: schermoPiano, imp: schermoImpostazioni, diario: schermoDiario };
     app.innerHTML = (schermi[S.tab] || schermoOggi)();
     renderNav();
+    if (S.tab === "piano") centraGiornoPiano();
     posizionaCamera();
     // con il bottone verde in fondo, i messaggi salgono sopra di lui
     document.body.classList.toggle("con-scelta", S.tab === "aggiungi" && S.aggTab === "senza" && S.scelta.size > 0);
@@ -2157,7 +2168,7 @@
     }
   }
 
-  async function vai(tab) {
+  async function vai(tab, dataPiano = oggi()) {
     // La Home è il punto di ingresso della Light.
     if (light() && !SCHERMI_LIGHT.includes(tab)) tab = "oggi";
     if (tab !== "aggiungi" || S.aggTab !== "codice") fermaScanner();
@@ -2167,7 +2178,7 @@
       else {S.spesaProGiorni=1;ricalcola();await allineaSpesa();}
     }
     if (tab !== "imp" && tab !== "diario") LS.set("ds_tab", tab);
-    if (tab === "piano") S.giornoSel = S.giornoSel || oggi();
+    if (tab === "piano") S.giornoSel = dataPiano;
     render();
     window.scrollTo(0, 0);
     if (tab === "aggiungi" && S.aggTab === "codice") avviaScanner();
@@ -3173,7 +3184,7 @@
       case "cloud-copia": if(navigator.clipboard) {await navigator.clipboard.writeText(A.stato().userId||"");toast("Identificativo copiato");} else toast("Seleziona e copia l’identificativo mostrato"); break;
       case "cloud-esci": if(confirm("Uscire da questo telefono? Potrai accedere nuovamente con il codice familiare.")){await A.esci();cloudAvviato=false;render();} break;
       case "piano-apri": {
-        S.giornoSel = b.dataset.d || oggi(); vai("piano");
+        vai("piano", b.dataset.d || oggi());
         if (b.dataset.pasto) document.getElementById("pasto-" + L.chiavePasto(S.giornoSel,b.dataset.pasto))?.scrollIntoView({ behavior: "smooth", block: "start" });
         break;
       }

@@ -568,3 +568,8 @@ button:focus-visible, summary:focus-visible { outline:3px solid var(--green); ou
 @media print {
   #stampa .tabella-settimana td.pasto-invertito-report { background:#FFC97A!important; color:#20251F!important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 }
+
+/* Navigazione del piano: il giorno selezionato rimane al centro. */
+.piano-navigazione { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:0 16px 12px; }
+.piano-giorni { padding-inline:50%; scroll-padding-inline:50%; }
+.giorni.piano-giorni button[aria-current="date"]:not([aria-pressed="true"]) { border:2px solid var(--ink); }
