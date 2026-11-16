@@ -58,9 +58,59 @@ fonti.push(
  {id:'gz-frittata',titolo:'GialloZafferano · Frittata (tecnica di riferimento, dosi e ingredienti del piano)',url:'https://ricette.giallozafferano.it/Frittata.html'},
  {id:'gz-pancake-ricotta',titolo:'The Fit Mediterranean · Pancake alla ricotta (ispirazione, preparazione indipendente con le dosi del piano)',url:'https://blog.giallozafferano.it/thefitmediterranean/pancake-alla-ricotta-senza-carb-senza-glutine/'}
 );
+fonti.push(
+ {id:'amc-pancake',titolo:'AMC · Pancake e cottura con oPan (tecnica, impasto adattato al piano)',url:'https://recipes.cookandgo.amc.info/it-it/pancake'},
+ {id:'amc-uova',titolo:'AMC · Uova sode e tecniche con coperchio normale (preparazioni adattate)',url:'https://recipes.cookandgo.amc.info/it-it/uova-sode'},
+ {id:'amc-pasta-fagioli',titolo:'AMC · Pasta e fagioli (ispirazione; nella proposta CheManca fagioli già cotti, senza pressione)',url:'https://recipes.cookandgo.amc.info/it-it/pasta-e-fagioli'}
+);
 const listaNomi=xs=>xs.map(x=>x.nome).join(', ');
 function verduraAMC(nome){const n=norm(nome);if(/melanzan/.test(n))return {taglio:'pezzetti di circa 1-2 cm',easy:8,trad:10};if(/zucchin/.test(n))return {taglio:'fette uniformi',easy:4,trad:5};if(/carot/.test(n))return {taglio:'fette di circa 1 cm',easy:12,trad:15,soft:1};if(/broccol/.test(n))return {taglio:'cimette',easy:10,trad:12,soft:0};if(/cavolfior/.test(n))return {taglio:'cimette',easy:12,trad:15,soft:0};if(/finocch/.test(n))return {taglio:'metà',easy:20,trad:25,soft:3};if(/peperon/.test(n))return {taglio:'listarelle',easy:8,trad:10};if(/zucca/.test(n))return {taglio:'cubetti',easy:12,trad:15};if(/fagiolin/.test(n))return {taglio:'pezzetti',easy:16,trad:20,soft:1};if(/patat/.test(n))return {taglio:'cubetti di circa 3 cm',trad:25,soft:3};return null;}
 function datiPasto(pasto,persone,ids,scelte){return (pasto.voci||[]).map((v,i)=>{const nome=categoria(v.nome)==='generica'?(scelte[i]||v.nome):v.nome;const dosi=ids.map(id=>({id,nome:persone.find(p=>p.id===id)?.nome||id,q:Number(v.q?.[id]||0)})).filter(x=>x.q>0);return {nome,origine:v.nome,indice:i,u:v.u,qty:dosi.reduce((a,b)=>a+b.q,0),dosi,cat:categoria(nome)};}).filter(x=>x.qty>0&&!scelte['escludi'+x.indice]);}
+const quotaPersona=(xs,id)=>xs.reduce((sum,x)=>sum+(x.dosi.find(d=>d.id===id)?.q||0),0);
+function preparaPancake({cocco,albumi,usati,ids,persone,passi,note,usa,sistema,a}){
+ const quota=quotaPersona;let titolo='';
+  if(cocco.length){
+   titolo='Pancake al cocco'+(usati.some(x=>x.cat==='ricotta')?' e ricotta':'');
+   for(const id of ids){if(!quota(cocco,id))continue;
+    const nome=persone.find(p=>p.id===id)?.nome||id,propri=usati.filter(x=>['cocco','albume','ricotta'].includes(x.cat)&&x.dosi.some(d=>d.id===id));
+    passi.push('Impasto di '+nome+': prepara in una ciotola separata '+propri.map(x=>x.nome+' '+fmt(quota([x],id))+' '+x.u).join(', ')+'. Mescola gli albumi'+(propri.some(x=>x.cat==='ricotta')?' con la ricotta fino a sciogliere i grumi':' con una frusta')+', poi incorpora la farina di cocco. Lascia idratare 5 minuti. Se il composto è troppo asciutto, aggiungi soltanto acqua un cucchiaino alla volta, fino a ottenere una pastella densa da stendere con il cucchiaio. La farina di cocco e il cocco grattugiato assorbono diversamente.');
+   }
+   if(sistema==='amc'){
+    passi.push(a.opan?'Usa la padella AMC oPan sul fornello o su Navigenio come piano di cottura, senza coperchio. Preriscalda secondo il manuale e verifica la temperatura con poche gocce d’acqua, che devono muoversi sulla superficie; asciuga con cautela prima di versare l’impasto. Con Navigenio puoi preriscaldare a 6 e poi ridurre a 2: regola ulteriormente se i pancake colorano troppo rapidamente.':'Usa la padella AMC HotPan: preriscalda con coperchio normale fino alla finestra carne, quindi riduci il calore e togli il coperchio. Per i pancake mantieni una cottura dolce e gira ogni disco quando si stacca; se tende a bruciare riduci ancora. Non applicare la finestra carne a oPan, che non ha Visiotherm.');
+    usa('amc-pancake');
+   }
+   for(const id of ids){if(!quota(cocco,id))continue;const nome=persone.find(p=>p.id===id)?.nome||id;
+    if(sistema==='amc')passi.push('Pancake AMC di '+nome+': versa il suo impasto in piccoli dischi di circa 7-8 cm, non più spessi di 5 mm. Cuoci a calore ridotto e gira con una paletta quando il fondo si stacca e i bordi sono stabili. Completa il secondo lato, indicativamente 2-4 minuti per lato; se scuriscono troppo riduci ancora il calore. L’impasto al cocco ha consistenza diversa dalla ricetta AMC di riferimento: verifica almeno 71 °C al cuore, senza albume liquido al centro. Cuoci in più riprese e servi tutti i dischi della sua ciotola alla stessa persona. Non usare EasyQuick, Secuquick o Navigenio capovolto.');
+    else passi.push('Pancake di '+nome+': scalda brevemente una padella antiaderente sul gas a fiamma bassa. Distribuisci tutto il suo impasto in piccoli dischi di circa 7-8 cm e spessore non superiore a 5 mm, in più riprese. Copri e cuoci indicativamente 3-4 minuti sul primo lato; gira solo quando il fondo è stabile e completa per altri 2-3 minuti. Abbassa la fiamma se scuriscono prima di cuocere al centro. Verifica almeno 71 °C al cuore, senza impasto umido o albume liquido. Servi tutti i pancake della sua ciotola alla stessa persona, senza dividere il totale a metà.');
+   }
+   note.push('Pancake senza aggiunta automatica di zucchero, lievito, latte, burro, miele o altra farina. L’acqua serve solo a regolare la consistenza. Per ungere, se necessario, usa soltanto la quota di olio prevista e ancora disponibile nella giornata. L’eventuale ricotta non selezionata resta nel pasto, da consumare separatamente.');usa('gz-pancake-ricotta','temperature');
+  }
+ return titolo;
+}
+function preparaUova({uova,albumi,cocco,patate,usati,ids,persone,passi,usa,sistema,a,scelte,pasto}){
+ const quota=quotaPersona;let titolo='';
+  if(uova.length || (albumi.length&&!cocco.length)){
+   const frittata=scelte.preparazioneUova?scelte.preparazioneUova==='frittata':(pasto.piatti||[]).some(t=>/frittata/.test(norm(t)))||(pasto.voci||[]).some(v=>/frittata/.test(norm(v.piatto)));
+   if(!cocco.length)titolo=frittata?'Frittata in padella':uova.length?'Uova sode con contorno':'Albumi in padella';
+   for(const id of ids){
+    const proprie=uova.filter(x=>x.dosi.some(d=>d.id===id)),bianchi=cocco.length?[]:albumi.filter(x=>x.dosi.some(d=>d.id===id));if(!proprie.length&&!bianchi.length)continue;
+    const nome=persone.find(p=>p.id===id)?.nome||id;
+    const elenco=[...proprie,...bianchi].map(x=>x.nome+' '+fmt(quota([x],id))+' '+x.u).join(', ');
+    const aggiunte=usati.filter(x=>['parmigiano'].includes(x.cat)&&x.dosi.some(d=>d.id===id));
+    if(!frittata&&proprie.length&&!bianchi.length){
+     if(sistema==='amc')passi.push('Uova sode AMC per '+nome+': prepara '+elenco+' in una pentola AMC con coperchio normale, adatta al numero di uova. Per una piccola pentola e fino a 4 uova versa almeno 3 cucchiai d’acqua; con recipienti più grandi usa la quantità indicata nel relativo manuale. Porta l’indicatore alla finestra verdura, riduci il calore e cuoci indicativamente 10 minuti nel settore verdura. Controlla che il fondo non si asciughi. Raffredda e sguscia: albume e tuorlo devono essere ben rassodati. Le eventuali patate e il parmigiano restano nelle sole dosi della stessa persona, serviti a parte. Non usare tempi per uova barzotte né cottura in pressione.');
+     else passi.push('Uova sode per '+nome+': usa '+elenco+'. Disponile integre in un pentolino, copri con acqua e porta al bollore sul gas. Riduci a leggero bollore e cuoci indicativamente 9-12 minuti per uova medie; raffredda in acqua fredda e sguscia. Albume e tuorlo devono essere ben rassodati: prolunga la cottura se necessario. Servi con la sola porzione di contorno della stessa persona.'+(patate.some(x=>x.dosi.some(d=>d.id===id))?' Le sue patate già cotte restano a parte.':'')+(aggiunte.length?' Il parmigiano previsto resta separato: usa solo '+aggiunte.map(x=>fmt(quota([x],id))+' '+x.u+' per '+nome).join(', ')+'.':''));
+    }else{
+     const patateProprie=patate.filter(x=>x.dosi.some(d=>d.id===id));
+     passi.push('Frittata di '+nome+': sbatti in una ciotola '+elenco+'. '+(aggiunte.length?'Unisci soltanto '+aggiunte.map(x=>x.nome+' '+fmt(quota([x],id))+' '+x.u).join(', ')+', senza convertire i cucchiaini in grammi. ':'Non aggiungere automaticamente formaggio o latte. ')+(patateProprie.length?'Incorpora la sua dose di patate già cotte e tagliate, preparate nel passaggio precedente. Non usare le patate di un’altra persona. ':'Le verdure restano un contorno separato. '));
+     if(sistema==='amc')passi.push('Cottura AMC della frittata di '+nome+': usa una padella HotPan o una pentola AMC con coperchio normale, adeguata a ottenere uno strato di circa 1 cm. Ungi solo con l’olio della quota ancora disponibile. Scalda brevemente a calore dolce, versa il composto e chiudi con il coperchio normale. Cuoci a calore basso per circa 5-8 minuti, controllando il fondo; gira con un piatto resistente al calore soltanto quando la base è stabile e completa per altri 2-4 minuti. Se non si stacca, non forzare: prosegui coperto a calore molto basso fino a rassodamento. Verifica almeno 71 °C al cuore e assenza di uovo liquido. Questi tempi sono indicativi per il composto adattato: non sono un programma automatico AMC. Non usare EasyQuick o Secuquick e non montare Navigenio capovolto per questa preparazione.');
+     else passi.push('Cuoci la frittata di '+nome+' in una padellina antiaderente con coperchio, su gas a fiamma bassa, usando soltanto l’olio della quota disponibile nel piano. Mantieni uno spessore di circa 1 cm; se il composto è troppo abbondante prepara più frittatine. Cuoci indicativamente 5-8 minuti, poi gira con un piatto piano solo se la base è stabile e completa per circa 2-4 minuti. In alternativa completa coperto a calore dolce, verificando che il centro si rassodi. Deve raggiungere almeno 71 °C al cuore e non avere uovo liquido. Non sommare le porzioni personali e poi dividerle in parti uguali.');
+    }
+   }
+   usa(sistema==='amc'?'amc-uova':'gz-frittata','temperature');
+  }
+ return titolo;
+}
 function analizza(pasto,persone,ids,sistema,a,scelte={}){
  const no=errore=>({ricette:[],errore});
  if(!pasto||pasto.libero)return no('Scegli un pasto con ingredienti e dosi nel piano.');
@@ -71,10 +121,15 @@ function analizza(pasto,persone,ids,sistema,a,scelte={}){
  if(sistema==='forno'&&a.forno===false)return no('Attiva il forno nelle attrezzature della tua cucina.');
  const categorieBase=['verdure','pesce','hamburger','pollo','coscia','carne','pasta','riso'];
  const colazione=tutti.filter(x=>x.cat==='cocco'),uovaPasto=tutti.filter(x=>x.cat==='uova');
- const usati=tutti.filter(x=>categorieBase.includes(x.cat)||(sistema==='tradizionale'&&(['cocco','albume','uova','legumi'].includes(x.cat)||(x.cat==='ricotta'&&colazione.some(c=>c.dosi.some(d=>x.dosi.some(e=>e.id===d.id))))||(x.cat==='parmigiano'&&uovaPasto.some(c=>c.dosi.some(d=>x.dosi.some(e=>e.id===d.id)))))));
+ const usati=tutti.filter(x=>categorieBase.includes(x.cat)||(['tradizionale','amc'].includes(sistema)&&(['cocco','albume','uova','legumi'].includes(x.cat)||(x.cat==='ricotta'&&colazione.some(c=>c.dosi.some(d=>x.dosi.some(e=>e.id===d.id))))||(x.cat==='parmigiano'&&uovaPasto.some(c=>c.dosi.some(d=>x.dosi.some(e=>e.id===d.id)))))));
  if(!usati.length)return no('Non ci sono ancora preparazioni per gli ingredienti selezionati.');
  const verdure=usati.filter(x=>x.cat==='verdure'&&!/patat/.test(norm(x.nome))),patate=usati.filter(x=>/patat/.test(norm(x.nome))),pesce=usati.filter(x=>x.cat==='pesce'),carne=usati.filter(x=>['pollo','hamburger','coscia','carne'].includes(x.cat)),pasta=usati.filter(x=>x.cat==='pasta'),riso=usati.filter(x=>x.cat==='riso');
  if(sistema==='forno'&&!verdure.length&&!patate.length&&!pesce.length&&!carne.length)return no('Per la sola pasta o il solo riso usa il fornello; aggiungi al pasto un contorno previsto dal piano per una proposta al forno.');
+  const cocco=usati.filter(x=>x.cat==='cocco'),albumi=usati.filter(x=>x.cat==='albume'),uova=usati.filter(x=>x.cat==='uova'),legumi=usati.filter(x=>x.cat==='legumi');
+  const quota=(xs,id)=>xs.reduce((sum,x)=>sum+(x.dosi.find(d=>d.id===id)?.q||0),0);
+  for(const x of cocco)for(const d of x.dosi)if(!quota(albumi,d.id))return no('Per i pancake di '+d.nome+' seleziona anche gli albumi previsti nel suo pasto. Non vengono aggiunte uova o dosi di altre persone.');
+  if([...cocco,...albumi,...legumi].some(x=>x.u!=='g'))return no('Questa preparazione richiede cocco, albumi e legumi con quantità espresse in grammi come nel piano.');
+
  const passi=[],note=[],fontiRicetta=[],usa=(...v)=>fontiRicetta.push(...v);
  const soglia=x=>x.cat==='coscia'||x.cat==='pollo'||/pollo|tacchino/.test(norm(x.nome))?74:x.cat==='hamburger'?71:63;
  const statoPesce=scelte.statoPesce||(pesce.some(x=>/surgelat/.test(norm(x.nome)))?'surgelato':'fresco');
@@ -97,23 +152,10 @@ function analizza(pasto,persone,ids,sistema,a,scelte={}){
   for(const x of carne){passi.push('Prepara '+x.nome+(x.cat==='hamburger'?' senza aggiungere pane, uova o formaggio.':' in pezzi di spessore uniforme.')+' Usa una teglia separata dai contorni. Cuoci indicativamente '+(x.cat==='coscia'?'40-55':'20-30')+' minuti a 200 °C e verifica almeno '+soglia(x)+' °C al cuore'+(x.cat==='carne'?', poi lascia riposare almeno 3 minuti':'')+'; se i contorni richiedono più tempo, finiscili separatamente.');usa('temperature');}
   if(pasta.length||riso.length)passi.push('Cuoci '+listaNomi([...pasta,...riso])+' separatamente in una pentola sul fornello, con acqua e tempo indicati sulla confezione. Non mettere cereali crudi in forno. Unisci al contorno cotto solo dopo aver suddiviso le dosi personali.');
  }else if(sistema==='tradizionale'){
-  const cocco=usati.filter(x=>x.cat==='cocco'),albumi=usati.filter(x=>x.cat==='albume'),uova=usati.filter(x=>x.cat==='uova'),legumi=usati.filter(x=>x.cat==='legumi');
-  const quota=(xs,id)=>xs.reduce((sum,x)=>sum+(x.dosi.find(d=>d.id===id)?.q||0),0);
-  for(const x of cocco)for(const d of x.dosi)if(!quota(albumi,d.id))return no('Per i pancake di '+d.nome+' seleziona anche gli albumi previsti nel suo pasto. Non vengono aggiunte uova o dosi di altre persone.');
-  if([...cocco,...albumi,...legumi].some(x=>x.u!=='g'))return no('Questa preparazione richiede cocco, albumi e legumi con quantità espresse in grammi come nel piano.');
-
   if(pesce.length&&scelte.formatoPesce==='intero')return no('Per la cucina tradizionale questa raccolta prevede filetti e tranci. Per il pesce intero seleziona Forno oppure scegli filetti.');
   titolo=(pesce.length?listaNomi(pesce):carne.length?listaNomi(carne):pasta.length?listaNomi(pasta):riso.length?listaNomi(riso):'Verdure')+' in '+(pasta.length||riso.length?'pentola':'padella')+(patate.length?' con patate':'')+(verdure.length?' e '+listaNomi(verdure):'');
   passi.push('Prepara una pentola con coperchio e una padella antiaderente adatte al gas. Regola la fiamma senza farla uscire dal fondo. Se le dosi non stanno in un solo strato, cuoci in più riprese: non moltiplicare automaticamente i tempi per il numero di persone.');
-  if(cocco.length){
-   titolo='Pancake al cocco'+(usati.some(x=>x.cat==='ricotta')?' e ricotta':'');
-   for(const id of ids){if(!quota(cocco,id))continue;
-    const nome=persone.find(p=>p.id===id)?.nome||id,propri=usati.filter(x=>['cocco','albume','ricotta'].includes(x.cat)&&x.dosi.some(d=>d.id===id));
-    passi.push('Impasto di '+nome+': prepara in una ciotola separata '+propri.map(x=>x.nome+' '+fmt(quota([x],id))+' '+x.u).join(', ')+'. Mescola gli albumi'+(propri.some(x=>x.cat==='ricotta')?' con la ricotta fino a sciogliere i grumi':' con una frusta')+', poi incorpora la farina di cocco. Lascia idratare 5 minuti. Se il composto è troppo asciutto, aggiungi soltanto acqua un cucchiaino alla volta, fino a ottenere una pastella densa da stendere con il cucchiaio. La farina di cocco e il cocco grattugiato assorbono diversamente.');
-    passi.push('Pancake di '+nome+': scalda brevemente una padella antiaderente sul gas a fiamma bassa. Distribuisci tutto il suo impasto in piccoli dischi di circa 7-8 cm e spessore non superiore a 5 mm, in più riprese. Copri e cuoci indicativamente 3-4 minuti sul primo lato; gira solo quando il fondo è stabile e completa per altri 2-3 minuti. Abbassa la fiamma se scuriscono prima di cuocere al centro. Verifica almeno 71 °C al cuore, senza impasto umido o albume liquido. Servi tutti i pancake della sua ciotola alla stessa persona, senza dividere il totale a metà.');
-   }
-   note.push('Pancake senza aggiunta automatica di zucchero, lievito, latte, burro, miele o altra farina. L’acqua serve solo a regolare la consistenza. Per ungere, se necessario, usa soltanto la quota di olio prevista e ancora disponibile nella giornata. L’eventuale ricotta non selezionata resta nel pasto, da consumare separatamente.');usa('gz-pancake-ricotta','temperature');
-  }
+  if(cocco.length)titolo=preparaPancake({cocco,albumi,usati,ids,persone,passi,note,usa,sistema,a});
   if(patate.length){passi.push('Patate: pela e taglia a cubetti di circa 2 cm. Mettile in pentola, coprile con acqua e porta a bollore a fiamma media. Abbassa e lascia sobbollire circa 12-18 minuti dal bollore, finché una forchetta entra al centro. Scola e tieni coperte; preparale prima del pesce. Non aggiungere patate crude alla sua cottura breve.');if(pesce.some(x=>/orata/.test(norm(x.nome))))usa('gz-orata-padella');}
   for(const v of verdure){
    const n=norm(v.nome);
@@ -128,24 +170,7 @@ function analizza(pasto,persone,ids,sistema,a,scelte={}){
    else if(/fagiolin/.test(n)){passi.push(v.nome+': spunta e lava. Lessa in una pentola con acqua in ebollizione per circa 15-20 minuti, verificando che siano teneri. Scola, conserva le dosi personali e tieni coperti.');continue;}
    passi.push(v.nome+': lava, pulisci e taglia in '+taglio+'. Metti in una padella antiaderente con pochi cucchiai di acqua. Copri e cuoci a fiamma medio-bassa per circa '+tempo+' minuti, mescolando e aggiungendo poca acqua se il fondo si asciuga. Controlla la morbidezza; scopri alla fine per far evaporare l’acqua rimasta. Cuoci separatamente dagli altri contorni per rispettare i diversi tempi.');
   }
-  if(uova.length || (albumi.length&&!cocco.length)){
-   const frittata=scelte.preparazioneUova?scelte.preparazioneUova==='frittata':(pasto.piatti||[]).some(t=>/frittata/.test(norm(t)))||(pasto.voci||[]).some(v=>/frittata/.test(norm(v.piatto)));
-   if(!cocco.length)titolo=frittata?'Frittata in padella':uova.length?'Uova sode con contorno':'Albumi in padella';
-   for(const id of ids){
-    const proprie=uova.filter(x=>x.dosi.some(d=>d.id===id)),bianchi=cocco.length?[]:albumi.filter(x=>x.dosi.some(d=>d.id===id));if(!proprie.length&&!bianchi.length)continue;
-    const nome=persone.find(p=>p.id===id)?.nome||id;
-    const elenco=[...proprie,...bianchi].map(x=>x.nome+' '+fmt(quota([x],id))+' '+x.u).join(', ');
-    const aggiunte=usati.filter(x=>['parmigiano'].includes(x.cat)&&x.dosi.some(d=>d.id===id));
-    if(!frittata&&proprie.length&&!bianchi.length){
-     passi.push('Uova sode per '+nome+': usa '+elenco+'. Disponile integre in un pentolino, copri con acqua e porta al bollore sul gas. Riduci a leggero bollore e cuoci indicativamente 9-12 minuti per uova medie; raffredda in acqua fredda e sguscia. Albume e tuorlo devono essere ben rassodati: prolunga la cottura se necessario. Servi con la sola porzione di contorno della stessa persona.'+(patate.some(x=>x.dosi.some(d=>d.id===id))?' Le sue patate già lessate restano a parte.':'')+(aggiunte.length?' Il parmigiano previsto resta separato: usa solo '+aggiunte.map(x=>fmt(quota([x],id))+' '+x.u+' per '+nome).join(', ')+'.':''));
-    }else{
-     const patateProprie=patate.filter(x=>x.dosi.some(d=>d.id===id));
-     passi.push('Frittata di '+nome+': sbatti in una ciotola '+elenco+'. '+(aggiunte.length?'Unisci soltanto '+aggiunte.map(x=>x.nome+' '+fmt(quota([x],id))+' '+x.u).join(', ')+', senza convertire i cucchiaini in grammi. ':'Non aggiungere automaticamente formaggio o latte. ')+(patateProprie.length?'Incorpora la sua dose di patate già lessate e tagliate, preparate nel passaggio precedente. Non usare le patate di un’altra persona. ':'Le verdure restano un contorno separato. '));
-     passi.push('Cuoci la frittata di '+nome+' in una padellina antiaderente con coperchio, su gas a fiamma bassa, usando soltanto l’olio della quota disponibile nel piano. Mantieni uno spessore di circa 1 cm; se il composto è troppo abbondante prepara più frittatine. Cuoci indicativamente 5-8 minuti, poi gira con un piatto piano solo se la base è stabile e completa per circa 2-4 minuti. In alternativa completa coperto a calore dolce, verificando che il centro si rassodi. Deve raggiungere almeno 71 °C al cuore e non avere uovo liquido. Non sommare le porzioni personali e poi dividerle in parti uguali.');
-    }
-   }
-   usa('gz-frittata','temperature');
-  }
+  if(uova.length || (albumi.length&&!cocco.length))titolo=preparaUova({uova,albumi,cocco,patate,usati,ids,persone,passi,usa,sistema,a,scelte,pasto});
   for(const x of legumi){
    passi.push(x.nome+': usa il prodotto già cotto in scatola. Scola'+(/sottolio/.test(norm(x.nome))?'':' e risciacqua')+' secondo la confezione e pesa separatamente la dose di ogni persona al netto del liquido. Scalda in un pentolino con pochi cucchiai di acqua, a fiamma bassa, per circa 5-8 minuti, mescolando e aggiungendo acqua se si asciuga. Puoi schiacciare una parte con la forchetta per una crema, senza aggiungere altri ingredienti. Non applicare questo procedimento a legumi secchi crudi.');
   }
@@ -168,15 +193,18 @@ function analizza(pasto,persone,ids,sistema,a,scelte={}){
   if(carne.length&&legumi.length)titolo=listaNomi([...pasta,...riso,...legumi,...carne])+' e contorno, con dosi personali';
   note.push('Cucina tradizionale con pentole e padelle comuni sul gas. Preparazione originale adattata agli ingredienti e alle dosi del piano; i link sono riferimenti di tecnica e ispirazione, non la ricetta originale riprodotta. Gli ingredienti aggiuntivi delle fonti non vengono importati. Tempi indicativi per i tagli descritti; con una sola padella prepara prima i contorni.');
  }else{
+  if(cocco.length&&!a.opan&&!a.hotpan)return no('Per i pancake AMC seleziona oPan oppure HotPan nelle attrezzature. In alternativa scegli Cucina tradizionale con una padella antiaderente.');
   let metodo=scelte.metodoAMC||'automatico';
-  if(metodo==='automatico')metodo=(a.easyquick&&a.inserto&&a.navigenio&&!patate.length&&!carne.length&&!pasta.length&&!riso.length&&pesce.every(x=>/merluzzo|salmone|gamber/.test(norm(x.nome))))?'easyquick':'tradizionale';
+  if(metodo==='automatico')metodo=(a.easyquick&&a.inserto&&a.navigenio&&!patate.length&&!carne.length&&!pasta.length&&!riso.length&&!cocco.length&&!albumi.length&&!uova.length&&!legumi.length&&pesce.every(x=>/merluzzo|salmone|gamber/.test(norm(x.nome))))?'easyquick':'tradizionale';
   if(!a.navigenio&&!a.fornelloAMC)return no('Configura AMC Navigenio oppure «Uso le pentole AMC sul fornello». Non serve EasyQuick per tutte le ricette.');
+  if(metodo!=='tradizionale'&&(cocco.length||albumi.length||uova.length||legumi.length))return no('Per pancake, uova, frittate o fagioli già cotti scegli AMC tradizionale. I tempi EasyQuick e Secuquick disponibili riguardano soltanto gli ingredienti supportati.');
   if(metodo==='easyquick'&&(!a.easyquick||!a.inserto))return no('Per il vapore EasyQuick seleziona EasyQuick e inserto forato nelle attrezzature. In alternativa scegli AMC tradizionale.');
   if(metodo==='secuquick'&&!a.secuquick)return no('Per questa tecnica configura Secuquick softline nelle attrezzature.');
   if(scelte.formatoPesce==='intero'&&pesce.length)return no('Per il pesce intero scegli Forno: le tecniche AMC inserite riguardano filetti e tranci.');
   if(metodo==='secuquick'&&(pesce.length||carne.length||pasta.length||riso.length))return no('La prima raccolta Secuquick copre patate e verdure con tempi specifici. Per questo pasto scegli AMC tradizionale o prepara separatamente il contorno.');
   titolo='AMC · '+(pesce.length?listaNomi(pesce):carne.length?listaNomi(carne):pasta.length?listaNomi(pasta):riso.length?listaNomi(riso):'Contorno')+(patate.length?' con patate':'')+(verdure.length?' e '+listaNomi(verdure):'');
-  usa('amc-tempi','navigenio');if(metodo==='easyquick')usa('easyquick');
+  usa('amc-tempi','navigenio');
+  if(cocco.length)titolo='AMC · '+preparaPancake({cocco,albumi,usati,ids,persone,passi,note,usa,sistema,a});if(metodo==='easyquick')usa('easyquick');
   for(const v of [...patate,...verdure]){
    const t=verduraAMC(v.nome);if(!t)return no('Manca una tecnica verificata per '+v.nome+'. Deselezionalo per preparare gli altri ingredienti.');
    if(metodo==='easyquick'){
@@ -191,6 +219,7 @@ function analizza(pasto,persone,ids,sistema,a,scelte={}){
     passi.push(v.nome+': taglia in '+t.taglio+'. Metti nel recipiente AMC ancora bagnate dal lavaggio'+(/patat/.test(norm(v.nome))?', aggiungendo l’acqua necessaria a non far asciugare il fondo':'')+'. Chiudi con il coperchio normale, scalda fino alla finestra verdura, riduci il calore e cuoci indicativamente '+t.trad+' minuti. Controlla il fondo e la morbidezza. Tieni questo contorno separato dagli altri per rispettare il suo tempo di cottura.');
    }
   }
+  if(uova.length || (albumi.length&&!cocco.length))titolo='AMC · '+preparaUova({uova,albumi,cocco,patate,usati,ids,persone,passi,usa,sistema,a,scelte,pasto});
   if(pesce.length){preparaPesce();for(const x of pesce){
    const n=norm(x.nome);if(metodo==='easyquick'){
     const tempo=/merluzzo/.test(n)?3:/salmone/.test(n)?7:/gamber/.test(n)?4:null;
@@ -203,6 +232,11 @@ function analizza(pasto,persone,ids,sistema,a,scelte={}){
    if(x.cat==='coscia')passi.push(x.nome+': cuoci separatamente con il coperchio normale AMC. Rosola e gira i pezzi, aggiungi acqua per una cottura umida senza far asciugare il fondo, chiudi e prosegui a calore dolce indicativamente 40 minuti per la coscia di pollo; la coscia di tacchino può richiedere più tempo. Verifica almeno 74 °C al cuore, lontano dall’osso. Non usare il tempo di riposo del petto.');
    else passi.push(x.nome+': tampona e porziona in pezzi uniformi'+(x.cat==='hamburger'?', senza aggiungere pane o uova':'')+'. Preriscalda una pentola AMC separata fino alla finestra carne. Riduci, inserisci la carne e chiudi con il coperchio normale; gira al punto di girata. '+(/petto di pollo/.test(norm(x.nome))?'Per il petto di pollo, la ricetta AMC prevede circa 10 minuti coperto a fuoco spento dopo la girata. ':'Prosegui a calore dolce e verifica lo spessore dei pezzi. ')+'Controlla almeno '+soglia(x)+' °C al cuore'+(x.cat==='carne'?' e lascia riposare almeno 3 minuti':'')+'. Se necessario prolunga la cottura: non applicare il riposo del petto agli hamburger o ad altri tagli.');usa('temperature');}
   if(pasta.length||riso.length)passi.push('Prepara '+listaNomi([...pasta,...riso])+' nella pentola AMC con il coperchio normale, come cottura non in pressione: usa acqua e tempo della confezione e controlla il fondo. Per riso basmati integrale non usare il programma P del risotto: è un prodotto diverso. Suddividi le quantità prima di aggiungere eventuali contorni.');
+  for(const x of legumi)passi.push(x.nome+': usa soltanto legumi già cotti in scatola, scolati e pesati per persona. Scaldali in una pentola AMC con il coperchio normale e poca acqua, a calore basso, per circa 5-8 minuti, mescolando e controllando il fondo. Non usare Secuquick per riscaldare questi legumi e non applicare i tempi dei fagioli secchi.');
+  if(legumi.length&&(pasta.length||riso.length)){
+   passi.push('Per ogni persona unisci la sua pastina, pasta o riso già cotti soltanto ai suoi fagioli, in una pentola AMC con poca acqua di cottura, e fai insaporire per 1-2 minuti a calore basso con coperchio normale. La preparazione con fagioli in scatola è diversa dalla ricetta AMC per fagioli secchi: non trasferirne tempi, pressione o ingredienti. Chi ha gli straccetti di vitello riceve la propria carne e il contorno, senza la pastina e i fagioli dell’altra persona.');
+   titolo='AMC · '+listaNomi([...pasta,...riso,...legumi,...carne])+' con dosi personali';usa('amc-pasta-fagioli');
+  }
   note.push('Tempi AMC indicativi per il taglio descritto; ogni ingrediente viene cotto separatamente. Con una sola pentola prepara prima i contorni e tienili coperti. Le dosi del piano sono mantenute, senza importare burro, vino o altri ingredienti dalle ricette originali.');
  }
  passi.push('Usa soltanto l’olio e i condimenti previsti dal piano, considerando la quota già usata nella giornata. Servi la porzione di ogni persona con i suoi contorni: dosi diverse non sono porzioni uguali.');
@@ -210,9 +244,20 @@ function analizza(pasto,persone,ids,sistema,a,scelte={}){
  const resto=(pasto.voci||[]).filter((v,i)=>!usati.some(x=>x.indice===i)&&ids.some(id=>Number(v.q?.[id])>0)).map(v=>v.nome);
  return {ricette:[{baseId:sistema+'-specifica',titolo:titolo.slice(0,150),ingredienti:elenco,passi,note:note.join('\n'),resto,fonti:[...new Set(fontiRicetta)],sistema,preferenze:{...scelte,statoPesce},personale:false}],errore:''};
 }
+const cookidoo={ios:'https://apps.apple.com/it/app/thermomix-cookidoo/id714004506',android:'https://play.google.com/store/apps/details?id=com.vorwerk.cookidoo&hl=it',web:'https://cookidoo.it/'};
+function storeCookidoo(nav={}){
+ if(/iPhone|iPad|iPod/i.test(nav.userAgent||'')||(/Mac/i.test(nav.platform||'')&&Number(nav.maxTouchPoints)>1))return [{nome:'App Store',url:cookidoo.ios}];
+ if(/Android/i.test(nav.userAgent||''))return [{nome:'Google Play',url:cookidoo.android}];
+ return [{nome:'App Store',url:cookidoo.ios},{nome:'Google Play',url:cookidoo.android}];
+}
+function nuovaRicettaBimby(pasto,persone,ids,scelte={}){
+ if(!pasto||!ids.length)throw Error('Scegli il pasto e le persone per la ricetta Bimby.');
+ const dati=datiPasto(pasto,persone,ids,scelte);if(!dati.length)throw Error('Non ci sono dosi per le persone selezionate in questo pasto.');
+ return {baseId:'bimby-personale',titolo:'Ricetta Bimby'+(pasto.pasto?' · '+pasto.pasto:''),ingredienti:dati.map(x=>x.nome+': '+fmt(x.qty)+' '+x.u+' ('+x.dosi.map(d=>d.nome+' '+fmt(d.q)+' '+x.u).join(' · ')+')').join('\n'),passi:[],note:'Ricetta personale Bimby. Verifica compatibilità con il modello e le istruzioni ufficiali. Le quantità riportate provengono dal pasto selezionato.',resto:[],fonti:[],sistema:'bimby',personale:true};
+}
 function proponi(...args){return analizza(...args).ricette;}
 function motivo(...args){return analizza(...args).errore;}
 
 function preparabile(pasto){return !!pasto&&!pasto.libero&&(pasto.voci||[]).some(v=>{const c=categoria(v.nome);return !!c&&!['ricotta','parmigiano'].includes(c);});}
-return {categoria,preparabile,proponi,motivo,fonti};
+return {categoria,preparabile,proponi,motivo,fonti,cookidoo,storeCookidoo,nuovaRicettaBimby};
 });
