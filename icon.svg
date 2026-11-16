@@ -1,1 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#1E6A47"/><rect x="166" y="96" width="180" height="320" rx="28" fill="none" stroke="#fff" stroke-width="28"/><path d="M166 222h180" stroke="#fff" stroke-width="28"/><path d="M214 146v34M214 270v54" stroke="#6FCF97" stroke-width="28" stroke-linecap="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="titolo descrizione">
+<title id="titolo">CheManca? Carota e verdure</title>
+<desc id="descrizione">Una carota arancione con foglie verdi, broccoli e una barbabietola su sfondo verde scuro.</desc>
+<rect width="512" height="512" fill="#184B39"/>
+<circle cx="256" cy="256" r="183" fill="#205641"/>
+<!-- Broccoli, dietro alla carota -->
+<path d="M153 271 159 200 183 198 203 261 180 281Z" fill="#9CCB75" stroke="#184B39" stroke-width="11" stroke-linejoin="round"/>
+<path d="M171 246 144 217M174 228 193 210" fill="none" stroke="#5D9D60" stroke-width="9" stroke-linecap="round"/>
+<path d="M125 211C103 207 99 176 116 165 112 143 137 130 155 140 166 119 197 126 202 147 226 147 233 178 217 193 219 218 190 228 174 215 156 228 135 227 125 211Z" fill="#72B46B" stroke="#184B39" stroke-width="11" stroke-linejoin="round"/>
+<path d="M134 168C139 155 153 153 163 160M181 150C192 155 196 164 193 175" fill="none" stroke="#9CCB75" stroke-width="10" stroke-linecap="round"/>
+<!-- Barbabietola -->
+<path d="M344 252C337 222 355 202 378 197 383 223 372 240 344 252Z" fill="#85BC72" stroke="#184B39" stroke-width="10" stroke-linejoin="round"/>
+<path d="M346 250C320 236 315 214 323 195 348 202 361 220 346 250Z" fill="#B4D78C" stroke="#184B39" stroke-width="10" stroke-linejoin="round"/>
+<path d="M350 335C347 353 354 361 365 367" fill="none" stroke="#E79598" stroke-width="10" stroke-linecap="round"/>
+<path d="M310 263C321 246 339 249 349 255 368 247 391 262 392 284 396 316 371 339 348 347 324 339 302 318 301 292 300 281 303 271 310 263Z" fill="#D87782" stroke="#184B39" stroke-width="11" stroke-linejoin="round"/>
+<path d="M369 275C377 281 378 292 374 300" fill="none" stroke="#F0AFAD" stroke-width="10" stroke-linecap="round"/>
+<!-- Foglie della carota -->
+<path d="M285 190C258 172 245 142 250 111 282 124 300 153 285 190Z" fill="#9FCF79" stroke="#184B39" stroke-width="11" stroke-linejoin="round"/>
+<path d="M292 183C276 152 286 116 310 91 325 124 321 160 292 183Z" fill="#C0DF93" stroke="#184B39" stroke-width="11" stroke-linejoin="round"/>
+<path d="M295 188C303 155 329 137 359 139 351 169 328 190 295 188Z" fill="#78B66D" stroke="#184B39" stroke-width="11" stroke-linejoin="round"/>
+<!-- Carota: silhouette diagonale ampia e leggibile -->
+<path d="M270 186C286 172 316 182 330 200 344 217 338 235 324 254L188 408C180 417 165 410 169 397L232 214C239 196 251 187 270 186Z" fill="#F79237" stroke="#184B39" stroke-width="12" stroke-linejoin="round"/>
+<path d="M271 198C284 188 300 193 306 201L188 384 244 220C250 207 259 200 271 198Z" fill="#FFB54F"/>
+<path d="M245 248 270 260M222 302 242 312M283 211 302 220" fill="none" stroke="#D76828" stroke-width="11" stroke-linecap="round"/>
+</svg>

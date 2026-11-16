@@ -1,7 +1,7 @@
 /* Service worker: l'app si apre anche senza rete (i dati arrivano quando torna).
    Rete prima, copia salvata come riserva: così un aggiornamento su GitHub arriva subito. */
-const CACHE = "chemanca-v61";
-const FILE = ["./", "index.html", "style.css", "app.js", "report_pdf.js", "ricette.js", "vendor/pdf-lib.min.js", "condivisione.js", "logica.js", "catalogo.js", "importa_pdf.js", "config.js", "piano.json", "manifest.webmanifest", "icon.svg"];
+const CACHE = "chemanca-v62";
+const FILE = ["./", "index.html", "style.css", "app.js", "report_pdf.js", "ricette.js", "vendor/pdf-lib.min.js", "condivisione.js", "logica.js", "catalogo.js", "importa_pdf.js", "config.js", "piano.json", "manifest.webmanifest", "manifest.webmanifest?v=58", "icon.svg?v=58", "icon-180.png?v=58", "icon-192.png?v=58", "icon-512.png?v=58"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILE)).then(() => self.skipWaiting()));
